@@ -54,26 +54,30 @@ Every LazyCassandra module falls into one of three buckets.
    fake and a placeholder schema. The app launches, panels draw, themes,
    palette, logs and help work against the fake. Workspace deps as
    LazyCassandra minus `scylla`, `bigdecimal`, `num-bigint`.
-2. **Driver spike.** `tokio-postgres` + rustls against `docker/`: connect,
-   cancel a `pg_sleep`, page with a portal, decode every `zoo.everything`
-   column. Record the outcome and the `deny.toml` cost in architecture.md §8,
-   and settle paging (§6).
+2. **Driver.** `tokio-postgres` + rustls against `docker/`: connect,
+   cancel a `pg_sleep`, page with `LIMIT/OFFSET`, decode every
+   `zoo.everything` column. Record the `deny.toml` cost in architecture.md
+   §8.
 3. **Config.** Port config layering; Postgres connection fields; pgpass and
    `PG*`; `sslmode`. Connection picker works.
-4. **Schema model and introspection.** `pg_catalog` queries for schemas,
+4. **Schema model and introspection.** Accessible databases, then per
+   database `pg_catalog` queries for schemas,
    relations, columns, keys, foreign keys, indexes, constraints, sequences,
    functions. Integration tests against the seed, including the
    `"Edge Cases"` schema.
-5. **Pin the fixture image by digest** (conventions.md §4).
+5. **Fixture.** Pin the image by digest (conventions.md §4); add a
+   Postgres 14 service and a second seeded database for the tree.
 
 ## Phase 1 — Browse (MVP)
 
-1. **Objects panel.** Schema → relation kinds tree, system schemas hidden by
-   default, partitions folded under their parent.
+1. **Objects panel.** Database → schema → relation kinds tree, the
+   connection's database unfolded on start, a connection per database
+   opened on unfold, system schemas hidden by default, partitions folded
+   under their parent.
 2. **Structure panel.** Tabs: Columns (type, nullability, default, PK
    marker), Keys (PK, outgoing and incoming FKs), Indexes, Constraints, DDL
    (reconstructed `CREATE`, with `pg_get_*def` where Postgres provides one).
-3. **Contents grid.** Paged table browse per the paging decision; `PgValue`
+3. **Contents grid.** `LIMIT/OFFSET` paging (architecture.md §6); `PgValue`
    rendering for every type family; NULL distinct from empty; local filter
    and sort.
 4. **SQL editor.** Lexer, highlighting, statement split under the cursor,
@@ -107,10 +111,14 @@ activity from `pg_stat_activity` with cancel/terminate; lock tree and
 blocking chains; `pg_stat_statements` top queries; vacuum and analyze
 status, dead tuples, wraparound age.
 
+## Future — wanted
+
+- **Exact paging.** Keyset paging on the primary key for table browse;
+  portals (`Bind` with `max_rows`) in a `READ ONLY` transaction for ad-hoc
+  queries, with an idle timeout and a connection per open result. Replaces
+  `LIMIT/OFFSET` (architecture.md §6), which stays as the keyless fallback.
+
 ## Open questions
 
-- Paging strategy (architecture.md §6).
-- One connection per open result vs. a pool: portals pin a connection.
-- Whether the Objects tree roots at the server (list `pg_database`) or the
-  connection's database.
-- Minimum supported Postgres version. Proposal: 14+, tested on 14 and 18.
+- Connection budget: one per unfolded database, more once portals pin one
+  per open result. Cap and reuse policy undecided.

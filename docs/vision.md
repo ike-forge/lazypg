@@ -110,6 +110,8 @@ Phases, not dates. Each phase is useful on its own. Detail in
   `pg_stat_statements`, vacuum and analyze state, cancel/terminate backend.
 - **Phase 5 — Extend.** User keybindings, saved queries.
 
+Supported servers: PostgreSQL 14 and later.
+
 ## 8. Non-goals
 
 - Not a GUI or web app.
