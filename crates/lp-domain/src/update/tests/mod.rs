@@ -35,6 +35,7 @@ use crate::viewport::{Cursor, Span};
 mod columns;
 mod commit;
 mod connections;
+mod databases;
 mod drop;
 mod edit;
 mod editor;

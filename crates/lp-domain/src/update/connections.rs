@@ -164,6 +164,27 @@ fn choose_connection(state: &mut State) -> Vec<Effect> {
     connect(state, target)
 }
 
+/// Postgres scopes a session to one database, so opening another is a new
+/// connection to it under the same entry. The tree seats on it once its
+/// catalog lands.
+pub(super) fn switch_database(state: &mut State, database: &str) -> Vec<Effect> {
+    let ConnectionState::Connected(connection) = &state.connection else {
+        return Vec::new();
+    };
+    let Some(mut target) = state
+        .config
+        .connections
+        .iter()
+        .find(|entry| entry.name == connection.name)
+        .cloned()
+    else {
+        return Vec::new();
+    };
+
+    target.database = Some(database.to_owned());
+    connect(state, target)
+}
+
 /// A fresh id lets `is_current` drop a result that arrives after the user moved
 /// on.
 pub(super) fn connect(state: &mut State, target: ConnectionConfig) -> Vec<Effect> {
@@ -313,18 +334,24 @@ pub(super) fn schema_loaded(
             .map(|ks| ks.tables.len())
             .sum::<usize>(),
     );
+    // The first catalog of a connection seats the tree on its database; a
+    // re-read after DDL leaves the cursor where the user put it.
     let applied = match &mut state.connection {
         ConnectionState::Connected(connection) if connection.id == conn => {
+            let first = matches!(connection.schema, SchemaState::Loading);
             connection.schema = SchemaState::Loaded(schema);
-            true
+            Some(first)
         }
-        _ => false,
+        _ => None,
     };
-    if applied {
+    if let Some(first) = applied {
         state
             .log
             .complete(Trace::Catalog(conn), Outcome::Succeeded { detail, took });
         if let Some((tables, schema)) = state.tables_and_schema() {
+            if first {
+                tables.seat_on_current_database(schema);
+            }
             tables.clamp(schema);
         }
         state.mark_dirty();

@@ -338,3 +338,44 @@ fn a_failure_notice_is_drawn_in_the_danger_style_rather_than_dimmed() {
         "a failure must read as urgent, not as background noise"
     );
 }
+
+#[test]
+fn under_a_database_a_schemas_guide_runs_past_its_tables_until_the_last_schema() {
+    let mut schema = tabled_schema(&[("shop", &["orders"]), ("zoo", &["animal"])]);
+    schema.server = Some(lp_domain::model::Server {
+        current: "lazypg".to_owned(),
+        databases: vec!["analytics".to_owned(), "lazypg".to_owned()],
+    });
+    let mut state = State::default();
+    state.connection = ConnectionState::Connected(Connection {
+        id: ConnId::next(),
+        name: lp_domain::config::ConnectionName::try_new("local").expect("a valid name"),
+        posture: Posture::ReadOnly,
+        schema: SchemaState::Loaded(schema.clone()),
+    });
+    for row in [2, 4] {
+        state.tables.go_to(row, &schema);
+        state.tables.open(&schema);
+    }
+    state.move_tree_cursor(0);
+    state.tables.scroll.follow(0, TABLES_ROWS);
+
+    let buffer = draw_state(80, 40, &state);
+    let expected = [
+        "▌\u{f1c0} analytics",
+        " \u{f1c0} lazypg",
+        " ├─ \u{f084} shop",
+        // The guide is the same glyph as the panel's border.
+        " │  └─ \u{f0ce} orders",
+        " └─ \u{f084} zoo",
+        "    └─ \u{f0ce} animal",
+    ];
+
+    for (y, expected) in (1..).zip(expected) {
+        let drawn = row(&buffer, y);
+        assert!(
+            drawn.starts_with(&format!("│{expected} ")),
+            "row {y}: {drawn:?}"
+        );
+    }
+}

@@ -112,12 +112,15 @@ back to `PGPASSWORD`, then `~/.pgpass` (or `PGPASSFILE`), ignored when group
 or others can read it. `sslmode` follows libpq, including `require` with a
 root certificate verifying the chain.
 
-The Objects tree roots at the server and lists every database the user can
-connect to (`pg_database` with `datallowconn` and `CONNECT` privilege). A
-connection's `database`, when set, is unfolded and focused on start; when
-unset, the session connects to `postgres` for the listing. Postgres scopes a
-session to one database, so each unfolded database gets its own connection,
-opened on unfold.
+The tree roots at the server and lists every database the user can connect
+to (`pg_database` with `datallowconn`, not a template, `CONNECT` privilege),
+read with the catalog into `Catalog::server`. One database is open at a time,
+as with psql's `\c`: Postgres scopes a session to one, and one open database
+keeps the Contents grid, the editor and history unambiguous. Opening another
+reconnects the same connection entry with `database` replaced, under a fresh
+`ConnId`; the tree seats on it when its catalog lands. Unset, `database` is
+the user's name, as libpq has it. Several databases open at once is wanted
+later (plan.md, Future).
 
 ## 8. Driver — decided
 

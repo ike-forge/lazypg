@@ -106,6 +106,7 @@ fn schema_of(names: &[&str]) -> Catalog {
 
 fn tabled_schema(schemas: &[(&str, &[&str])]) -> Catalog {
     Catalog {
+        server: None,
         schemas: schemas
             .iter()
             .map(|(name, tables)| {
@@ -318,6 +319,7 @@ fn orders() -> Table {
 
 fn describing(table: Table) -> State {
     let schema = Catalog {
+        server: None,
         schemas: BTreeMap::from([(
             "shop".to_owned(),
             Schema {

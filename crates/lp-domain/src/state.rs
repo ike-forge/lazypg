@@ -164,8 +164,11 @@ impl State {
     pub fn visible_keyspace(&self) -> Option<String> {
         let schema = self.schema()?;
 
-        self.tables.selected(schema).map(|node| match node {
-            Node::Schema { keyspace, .. } | Node::Table { keyspace, .. } => keyspace.name.clone(),
+        self.tables.selected(schema).and_then(|node| match node {
+            Node::Database { .. } => None,
+            Node::Schema { keyspace, .. } | Node::Table { keyspace, .. } => {
+                Some(keyspace.name.clone())
+            }
         })
     }
 

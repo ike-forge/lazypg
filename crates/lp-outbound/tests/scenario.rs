@@ -9,7 +9,7 @@ use lp_domain::model::{
 use lp_domain::panel::Panel;
 use lp_domain::posture::Posture;
 use lp_domain::style::Token;
-use lp_domain::view::{DetailRow, Details, OverlayView, PanelBody, RowKind, Section};
+use lp_domain::view::{DetailRow, Details, Limb, OverlayView, PanelBody, RowKind, Section};
 use lp_domain::{Effect, Msg, State, init, update, view_model};
 use lp_outbound::fake::FakeCluster;
 
@@ -37,7 +37,7 @@ async fn connecting_and_describing_fills_the_tables_panel() {
     );
     assert_eq!(
         rows[0].kind,
-        RowKind::Schema,
+        RowKind::Schema { limb: None },
         "these fixtures have no tables to hang off a keyspace"
     );
     assert_eq!(*selected, 0);
@@ -96,9 +96,21 @@ async fn pressing_l_unfolds_a_keyspace_and_the_view_model_shows_its_tables() {
             .map(|row| (row.kind, row.label.as_str()))
             .collect::<Vec<_>>(),
         [
-            (RowKind::Schema, "shop"),
-            (RowKind::Table { last: false }, "orders"),
-            (RowKind::Table { last: true }, "users"),
+            (RowKind::Schema { limb: None }, "shop"),
+            (
+                RowKind::Table {
+                    limb: Limb::Middle,
+                    outer: None
+                },
+                "orders"
+            ),
+            (
+                RowKind::Table {
+                    limb: Limb::Last,
+                    outer: None
+                },
+                "users"
+            ),
         ]
     );
     assert_eq!(*selected, 0);

@@ -122,7 +122,15 @@ pub(super) fn activate(state: &mut State) -> Vec<Effect> {
         };
 
         match tables.selected(schema) {
-            Some(Node::Schema { .. }) => {
+            Some(Node::Database {
+                name,
+                current: false,
+                ..
+            }) => {
+                let name = name.to_owned();
+                return super::connections::switch_database(state, &name);
+            }
+            Some(Node::Schema { .. } | Node::Database { .. }) => {
                 tables.toggle(schema);
                 return Vec::new();
             }

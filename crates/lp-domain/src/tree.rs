@@ -17,12 +17,21 @@ pub struct TablesPanel {
     /// Private: only the transitions below write it, so no keyspace outside the
     /// schema is unfolded.
     unfolded: BTreeSet<String>,
+    /// The current database opens unfolded; this is the user folding it.
+    database_folded: bool,
     /// Private: setting it owes a cursor clamp.
     search: Option<Search>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Node<'a> {
+    /// Present only when the catalog says which server it is on. Only the
+    /// current one holds schemas: opening another switches the session.
+    Database {
+        name: &'a str,
+        current: bool,
+        unfolded: bool,
+    },
     Schema {
         keyspace: &'a Schema,
         unfolded: bool,
@@ -50,6 +59,27 @@ impl TablesPanel {
     /// fold state exactly.
     #[must_use]
     pub fn rows<'a>(&self, schema: &'a Catalog) -> Vec<Node<'a>> {
+        let Some(server) = &schema.server else {
+            return self.schema_rows(schema);
+        };
+
+        let mut rows = Vec::new();
+        for name in &server.databases {
+            let current = *name == server.current;
+            let unfolded = current && (!self.database_folded || self.search.is_some());
+            rows.push(Node::Database {
+                name,
+                current,
+                unfolded,
+            });
+            if unfolded {
+                rows.extend(self.schema_rows(schema));
+            }
+        }
+        rows
+    }
+
+    fn schema_rows<'a>(&self, schema: &'a Catalog) -> Vec<Node<'a>> {
         let mut rows = Vec::new();
 
         for keyspace in schema.schemas_in_display_order() {
@@ -115,6 +145,7 @@ impl TablesPanel {
                 Some(*at)
             })
             .find(|at| match rows[*at] {
+                Node::Database { name, .. } => search.matches(name),
                 Node::Schema { keyspace, .. } => search.matches(&keyspace.name),
                 Node::Table { table, .. } => search.matches(&table.name),
             })
@@ -156,14 +187,19 @@ impl TablesPanel {
             return;
         }
 
-        let Some(Node::Schema { keyspace, unfolded }) = self.selected(schema) else {
-            return;
-        };
-
-        if unfolded {
-            self.fold(&keyspace.name, schema);
-        } else {
-            self.unfold(keyspace);
+        match self.selected(schema) {
+            Some(Node::Schema { keyspace, unfolded }) => {
+                if unfolded {
+                    self.fold(&keyspace.name, schema);
+                } else {
+                    self.unfold(keyspace);
+                }
+            }
+            Some(Node::Database { current: true, .. }) => {
+                self.database_folded = !self.database_folded;
+                self.clamp(schema);
+            }
+            _ => {}
         }
     }
 
@@ -173,14 +209,18 @@ impl TablesPanel {
             return;
         }
 
-        let Some(Node::Schema { keyspace, unfolded }) = self.selected(schema) else {
-            return;
-        };
-
-        if unfolded {
-            self.cursor.down(self.rows(schema).len());
-        } else {
-            self.unfold(keyspace);
+        match self.selected(schema) {
+            Some(
+                Node::Schema { unfolded: true, .. }
+                | Node::Database {
+                    current: true,
+                    unfolded: true,
+                    ..
+                },
+            ) => self.cursor.down(self.rows(schema).len()),
+            Some(Node::Schema { keyspace, .. }) => self.unfold(keyspace),
+            Some(Node::Database { current: true, .. }) => self.database_folded = false,
+            _ => {}
         }
     }
 
@@ -196,6 +236,15 @@ impl TablesPanel {
                 unfolded: true,
             }) => self.fold(&keyspace.name, schema),
             Some(Node::Table { keyspace, .. }) => self.select_keyspace(&keyspace.name, schema),
+            Some(Node::Schema { .. }) => self.select_current_database(schema),
+            Some(Node::Database {
+                current: true,
+                unfolded: true,
+                ..
+            }) => {
+                self.database_folded = true;
+                self.clamp(schema);
+            }
             _ => {}
         }
     }
@@ -225,6 +274,23 @@ impl TablesPanel {
         if let Some(index) = found {
             self.cursor.go_to(index, rows.len());
         }
+    }
+
+    fn select_current_database(&mut self, schema: &Catalog) {
+        let rows = self.rows(schema);
+        let found = rows
+            .iter()
+            .position(|node| matches!(node, Node::Database { current: true, .. }));
+
+        if let Some(index) = found {
+            self.cursor.go_to(index, rows.len());
+        }
+    }
+
+    /// Where the cursor lands after a switch: on the database now open.
+    pub fn seat_on_current_database(&mut self, schema: &Catalog) {
+        self.database_folded = false;
+        self.select_current_database(schema);
     }
 
     /// `Enter` and the DDL panel act on one node.
@@ -257,6 +323,7 @@ pub(crate) mod tests_support {
 
     pub(crate) fn schema_of(schemas: &[(&str, &[&str])]) -> Catalog {
         Catalog {
+            server: None,
             schemas: schemas
                 .iter()
                 .map(|(name, tables)| {
@@ -279,6 +346,7 @@ mod tests {
             .rows(schema)
             .iter()
             .map(|node| match node {
+                Node::Database { name, .. } => (0, (*name).to_owned()),
                 Node::Schema { keyspace, .. } => (0, keyspace.name.clone()),
                 Node::Table { table, .. } => (1, table.name.clone()),
             })
@@ -501,6 +569,7 @@ mod tests {
             .rows(schema)
             .iter()
             .map(|node| match node {
+                Node::Database { name, .. } => (*name).to_owned(),
                 Node::Schema { keyspace, .. } => keyspace.name.clone(),
                 Node::Table { table, .. } => format!("  {}", table.name),
             })

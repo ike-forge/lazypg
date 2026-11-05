@@ -66,6 +66,7 @@ pub fn detail_row(row: &DetailRow) -> String {
 #[must_use]
 pub fn node(node: &Node<'_>) -> String {
     let fields = match node {
+        Node::Database { name, .. } => vec![(*name).to_owned()],
         Node::Schema { keyspace, .. } => vec![keyspace.name.clone()],
         Node::Table { keyspace, table } => {
             vec![format!("{}.{}", keyspace.name, table.name)]

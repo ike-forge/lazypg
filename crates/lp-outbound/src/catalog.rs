@@ -3,7 +3,7 @@
 
 use lp_domain::model::{
     Catalog, Column, Constraint, ConstraintKind, DbError, ForeignKey, Function, FunctionKind,
-    Index, PrimaryKey, RelationKind, RelationRef, Schema, Sequence, Table,
+    Index, PrimaryKey, RelationKind, RelationRef, Schema, Sequence, Server, Table,
 };
 use tokio_postgres::{Client, Row};
 
@@ -18,6 +18,15 @@ macro_rules! user_schemas {
         )
     };
 }
+
+/// Templates take no sessions; `datallowconn` and `CONNECT` are what a
+/// switch would be refused on.
+const SERVER: &str = "
+    SELECT current_database()::text,
+           ARRAY(SELECT datname::text FROM pg_database
+                 WHERE datallowconn AND NOT datistemplate
+                   AND has_database_privilege(datname, 'CONNECT')
+                 ORDER BY 1)";
 
 const SCHEMAS: &str = concat!(
     "SELECT n.nspname FROM pg_namespace n WHERE ",
@@ -150,7 +159,18 @@ pub(crate) async fn describe(client: &Client) -> Result<Catalog, DbError> {
             .await
             .map_err(|error| crate::postgres::db_error(&error))
     };
-    let (schemas, relations, columns, constraints, indexes, partitions, sequences, functions) = tokio::try_join!(
+    let (
+        server,
+        schemas,
+        relations,
+        columns,
+        constraints,
+        indexes,
+        partitions,
+        sequences,
+        functions,
+    ) = tokio::try_join!(
+        query(SERVER),
         query(SCHEMAS),
         query(RELATIONS),
         query(COLUMNS),
@@ -162,6 +182,7 @@ pub(crate) async fn describe(client: &Client) -> Result<Catalog, DbError> {
     )?;
 
     let mut catalog = Catalog {
+        server: server.first().map(server_of),
         schemas: schemas
             .iter()
             .map(|row| {
@@ -226,7 +247,24 @@ pub(crate) async fn describe(client: &Client) -> Result<Catalog, DbError> {
         }
     }
 
-    for row in &sequences {
+    schema_objects(&mut catalog, &sequences, &functions);
+
+    Ok(catalog)
+}
+
+fn server_of(row: &Row) -> Server {
+    let current: String = row.get(0);
+    let mut databases: Vec<String> = row.get(1);
+    // Connected, so allowed, whatever the privilege check said.
+    if !databases.contains(&current) {
+        databases.push(current.clone());
+        databases.sort();
+    }
+    Server { current, databases }
+}
+
+fn schema_objects(catalog: &mut Catalog, sequences: &[Row], functions: &[Row]) {
+    for row in sequences {
         if let Some(schema) = catalog.schemas.get_mut(&row.get::<_, String>(0)) {
             schema.sequences.push(Sequence {
                 name: row.get(1),
@@ -236,7 +274,7 @@ pub(crate) async fn describe(client: &Client) -> Result<Catalog, DbError> {
         }
     }
 
-    for row in &functions {
+    for row in functions {
         if let Some(schema) = catalog.schemas.get_mut(&row.get::<_, String>(0)) {
             schema.functions.push(Function {
                 name: row.get(1),
@@ -246,8 +284,6 @@ pub(crate) async fn describe(client: &Client) -> Result<Catalog, DbError> {
             });
         }
     }
-
-    Ok(catalog)
 }
 
 /// Rows lead with schema and relation name; a row for a relation not listed

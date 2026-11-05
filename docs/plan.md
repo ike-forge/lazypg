@@ -75,10 +75,11 @@ Every LazyCassandra module falls into one of three buckets.
 
 ## Phase 1 — Browse (MVP)
 
-1. **Objects panel.** Database → schema → relation kinds tree, the
-   connection's database unfolded on start, a connection per database
-   opened on unfold, system schemas hidden by default, partitions folded
-   under their parent.
+1. **Objects panel.** *Done.* Database → schema → relation tree, the
+   configured database open and preselected on start; opening another
+   reconnects to it (architecture.md §7). System schemas are not read;
+   partitions are listed under their parent in the Structure panel. Still
+   to do: an icon per relation kind, and naming the panel Objects.
 2. **Structure panel.** Tabs: Columns (type, nullability, default, PK
    marker), Keys (PK, outgoing and incoming FKs), Indexes, Constraints, DDL
    (reconstructed `CREATE`, with `pg_get_*def` where Postgres provides one).
@@ -123,7 +124,10 @@ status, dead tuples, wraparound age.
   queries, with an idle timeout and a connection per open result. Replaces
   `LIMIT/OFFSET` (architecture.md §6), which stays as the keyless fallback.
 
+- **Several databases open at once**, each with its own session, so
+  catalogs and results from two databases sit side by side.
+
 ## Open questions
 
-- Connection budget: one per unfolded database, more once portals pin one
-  per open result. Cap and reuse policy undecided.
+- Connection budget, once portals pin a connection per open result and
+  several databases are open: cap and reuse policy undecided.

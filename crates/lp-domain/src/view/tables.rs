@@ -17,12 +17,33 @@ pub struct TreeRow {
     pub token: Token,
 }
 
-/// A table carries whether it is the last under its keyspace, which picks its
-/// limb glyph.
+/// Each row carries the limbs that pick its glyphs: its own, and for a table
+/// under a database, its schema's, which decides whether a guide runs past it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RowKind {
-    Schema,
-    Table { last: bool },
+    Database {
+        current: bool,
+    },
+    /// `None` at the root, where a catalog read alone puts it.
+    Schema {
+        limb: Option<Limb>,
+    },
+    Table {
+        limb: Limb,
+        outer: Option<Limb>,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Limb {
+    Middle,
+    Last,
+}
+
+impl Limb {
+    const fn of(last: bool) -> Self {
+        if last { Self::Last } else { Self::Middle }
+    }
 }
 
 impl RowKind {
@@ -77,15 +98,11 @@ pub(super) fn body(state: &State) -> PanelBody {
 
 fn tree(tables: &TablesPanel, schema: &Catalog, flash: Option<&Flash>) -> PanelBody {
     let nodes = tables.rows(schema);
+    let nested = schema.server.is_some();
     let rows: Vec<TreeRow> = nodes
         .iter()
         .enumerate()
-        .map(|(index, node)| {
-            tree_row(
-                node,
-                matches!(nodes.get(index + 1), Some(Node::Table { .. })),
-            )
-        })
+        .map(|(index, node)| tree_row(node, limbs(&nodes, index, nested)))
         .collect();
 
     if rows.is_empty() {
@@ -109,22 +126,86 @@ fn tree(tables: &TablesPanel, schema: &Catalog, flash: Option<&Flash>) -> PanelB
     }
 }
 
-/// A keyspace's tables are contiguous, so `followed` is all a row needs to know
-/// it is last.
-fn tree_row(node: &Node<'_>, followed: bool) -> TreeRow {
+/// What a row's limbs are, read off its neighbours: siblings are contiguous,
+/// so a row is last when the next sibling-or-shallower row is not a sibling.
+#[derive(Debug, Clone, Copy)]
+struct Limbs {
+    own: Limb,
+    /// Under a database, everything below the root is drawn one level in.
+    nested: bool,
+    /// The schema's limb, for a table under a database.
+    outer: Option<Limb>,
+}
+
+fn depth(node: &Node<'_>) -> usize {
+    match node {
+        Node::Database { .. } => 0,
+        Node::Schema { .. } => 1,
+        Node::Table { .. } => 2,
+    }
+}
+
+fn is_last(nodes: &[Node<'_>], index: usize) -> bool {
+    let own = depth(&nodes[index]);
+    nodes[index + 1..]
+        .iter()
+        .map(depth)
+        .find(|depth| *depth <= own)
+        .is_none_or(|depth| depth < own)
+}
+
+fn limbs(nodes: &[Node<'_>], index: usize, nested: bool) -> Limbs {
+    let outer = nested
+        .then(|| {
+            nodes[..index]
+                .iter()
+                .rposition(|node| matches!(node, Node::Schema { .. }))
+        })
+        .flatten()
+        .map(|schema| Limb::of(is_last(nodes, schema)));
+
+    Limbs {
+        own: Limb::of(is_last(nodes, index)),
+        nested,
+        outer,
+    }
+}
+
+fn tree_row(node: &Node<'_>, limbs: Limbs) -> TreeRow {
     let (keyspace, label, kind) = match node {
-        Node::Schema { keyspace, .. } => (*keyspace, keyspace.name.clone(), RowKind::Schema),
+        Node::Database { name, current, .. } => {
+            return TreeRow {
+                label: (*name).to_owned(),
+                kind: RowKind::Database { current: *current },
+                // Another database is a place to go, not one on screen.
+                token: if *current {
+                    Token::Database
+                } else {
+                    Token::Muted
+                },
+            };
+        }
+        Node::Schema { keyspace, .. } => (
+            *keyspace,
+            keyspace.name.clone(),
+            RowKind::Schema {
+                limb: limbs.nested.then_some(limbs.own),
+            },
+        ),
         Node::Table { keyspace, table } => (
             *keyspace,
             table.name.clone(),
-            RowKind::Table { last: !followed },
+            RowKind::Table {
+                limb: limbs.own,
+                outer: limbs.outer,
+            },
         ),
     };
 
     let token = match (keyspace.kind(), kind) {
         (SchemaKind::System, _) => Token::Faint,
-        (SchemaKind::User, RowKind::Schema) => Token::Schema,
         (SchemaKind::User, RowKind::Table { .. }) => Token::Table,
+        (SchemaKind::User, _) => Token::Schema,
     };
 
     TreeRow { label, kind, token }
@@ -296,7 +377,7 @@ mod tests {
 
         assert_eq!(
             rows[0].kind,
-            RowKind::Schema,
+            RowKind::Schema { limb: None },
             "a keyspace with nothing under it is still a keyspace"
         );
     }
@@ -309,7 +390,7 @@ mod tests {
             panic!("a loaded schema lists its schemas");
         };
         assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].kind, RowKind::Schema);
+        assert_eq!(rows[0].kind, RowKind::Schema { limb: None });
 
         let schema = state.schema().cloned().expect("loaded");
         state.tables.open(&schema);
@@ -322,9 +403,21 @@ mod tests {
                 .map(|row| (row.kind, row.label.as_str()))
                 .collect::<Vec<_>>(),
             [
-                (RowKind::Schema, "shop"),
-                (RowKind::Table { last: false }, "orders"),
-                (RowKind::Table { last: true }, "users"),
+                (RowKind::Schema { limb: None }, "shop"),
+                (
+                    RowKind::Table {
+                        limb: Limb::Middle,
+                        outer: None
+                    },
+                    "orders"
+                ),
+                (
+                    RowKind::Table {
+                        limb: Limb::Last,
+                        outer: None
+                    },
+                    "users"
+                ),
             ]
         );
     }
@@ -430,7 +523,7 @@ mod tests {
 
         let keyspace = rows
             .iter()
-            .find(|row| row.kind == RowKind::Schema)
+            .find(|row| row.kind == RowKind::Schema { limb: None })
             .expect("a keyspace");
         let table = rows
             .iter()
@@ -471,5 +564,81 @@ mod tests {
         };
 
         assert_eq!(ranges, Ranges::of(crate::selection::Range::new(0, 0)));
+    }
+
+    fn on_server(schemas: &[(&str, &[&str])]) -> State {
+        let mut catalog = crate::tree::tests_support::schema_of(schemas);
+        catalog.server = Some(crate::model::Server {
+            current: "lazypg".to_owned(),
+            databases: vec!["analytics".to_owned(), "lazypg".to_owned()],
+        });
+        let mut state = super::super::tests_support::connected(catalog.clone());
+        state.tables.seat_on_current_database(&catalog);
+        for _ in 0..2 {
+            state.tables.go_to(2, &catalog);
+            state.tables.open(&catalog);
+        }
+        state
+    }
+
+    fn kinds(state: &State) -> Vec<(String, RowKind, Token)> {
+        let PanelBody::Tree { rows, .. } = tables_body(state) else {
+            panic!("a loaded catalog draws a tree");
+        };
+        rows.into_iter()
+            .map(|row| (row.label, row.kind, row.token))
+            .collect()
+    }
+
+    #[test]
+    fn under_a_database_schemas_and_tables_carry_the_limbs_that_draw_the_guides() {
+        let state = on_server(&[("shop", &["customer", "orders"]), ("zoo", &["animal"])]);
+
+        assert_eq!(
+            kinds(&state),
+            [
+                (
+                    "analytics".to_owned(),
+                    RowKind::Database { current: false },
+                    Token::Muted
+                ),
+                (
+                    "lazypg".to_owned(),
+                    RowKind::Database { current: true },
+                    Token::Database
+                ),
+                (
+                    "shop".to_owned(),
+                    RowKind::Schema {
+                        limb: Some(Limb::Middle)
+                    },
+                    Token::Schema
+                ),
+                (
+                    "customer".to_owned(),
+                    RowKind::Table {
+                        limb: Limb::Middle,
+                        outer: Some(Limb::Middle)
+                    },
+                    Token::Table
+                ),
+                (
+                    "orders".to_owned(),
+                    RowKind::Table {
+                        limb: Limb::Last,
+                        outer: Some(Limb::Middle)
+                    },
+                    Token::Table
+                ),
+                (
+                    "zoo".to_owned(),
+                    RowKind::Schema {
+                        limb: Some(Limb::Last)
+                    },
+                    Token::Schema
+                ),
+            ],
+            "zoo is folded; the last schema's limb ends the guide"
+        );
     }
 }

@@ -93,6 +93,7 @@ pub enum DetailRow {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IdentityKind {
+    Database,
     Schema,
     Relation(RelationKind),
 }
@@ -101,6 +102,7 @@ impl IdentityKind {
     #[must_use]
     pub const fn label(self) -> &'static str {
         match self {
+            Self::Database => "Database",
             Self::Schema => "Schema",
             Self::Relation(kind) => kind.label(),
         }
@@ -109,6 +111,7 @@ impl IdentityKind {
     #[must_use]
     pub const fn token(self) -> Token {
         match self {
+            Self::Database => Token::Database,
             Self::Schema => Token::Schema,
             Self::Relation(_) => Token::Table,
         }
@@ -171,6 +174,7 @@ pub(super) fn of(state: &State) -> Option<Details> {
         (Node::Table { keyspace, table }, DdlTab::Columns) => columns_of(keyspace, table),
         (Node::Table { keyspace, table }, DdlTab::Indexes) => indexes_of(keyspace, table),
         (Node::Schema { keyspace, .. }, _) => of_schema(keyspace),
+        (Node::Database { name, current, .. }, _) => of_database(catalog, name, current),
     };
 
     Some(details)
@@ -525,6 +529,40 @@ fn of_schema(schema: &Schema) -> Details {
     }
 }
 
+/// Another database's catalog is not read until it is opened, so it can only
+/// say how to get there.
+fn of_database(catalog: &Catalog, name: &str, current: bool) -> Details {
+    let identity = Section {
+        heading: None,
+        group: Group::Identity,
+        token: None,
+        rows: vec![DetailRow::Identity {
+            kind: IdentityKind::Database,
+            name: name.to_owned(),
+        }],
+    };
+    let contents = if current {
+        vec![
+            property("schemas", catalog.schemas.len().to_string()),
+            property(
+                "tables",
+                catalog
+                    .schemas
+                    .values()
+                    .map(|schema| schema.tables.len())
+                    .sum::<usize>()
+                    .to_string(),
+            ),
+        ]
+    } else {
+        vec![property("not open", "⏎ or l switches the session to it")]
+    };
+
+    Details {
+        sections: populated([identity, settings("Contents", contents)]),
+    }
+}
+
 fn populated<const N: usize>(sections: [Section; N]) -> Vec<Section> {
     sections
         .into_iter()
@@ -677,6 +715,7 @@ mod tests {
             shop.tables.insert(table.name.clone(), table);
         }
         Catalog {
+            server: None,
             schemas: [("shop".to_owned(), shop)].into_iter().collect(),
         }
     }
@@ -1023,5 +1062,38 @@ mod tests {
         ] {
             assert_eq!(ddl_body(&state), PanelBody::Blank);
         }
+    }
+
+    fn on_database(row: usize) -> State {
+        let mut schema = catalog(vec![customer()]);
+        schema.server = Some(crate::model::Server {
+            current: "lazypg".to_owned(),
+            databases: vec!["analytics".to_owned(), "lazypg".to_owned()],
+        });
+        let mut state = connected(schema.clone());
+        state.tables.go_to(row, &schema);
+        state
+    }
+
+    #[test]
+    fn the_open_database_counts_what_its_catalog_holds() {
+        let details = details(&on_database(1));
+
+        assert_eq!(identity_rows(&details), [("Database", "lazypg")]);
+        assert_eq!(
+            section(&details, "Contents").rows,
+            [property("schemas", "1"), property("tables", "1")]
+        );
+    }
+
+    #[test]
+    fn another_database_says_how_to_open_it_since_nothing_of_it_is_read() {
+        let details = details(&on_database(0));
+
+        assert_eq!(identity_rows(&details), [("Database", "analytics")]);
+        assert_eq!(
+            section(&details, "Contents").rows,
+            [property("not open", "⏎ or l switches the session to it")]
+        );
     }
 }

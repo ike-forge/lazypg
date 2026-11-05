@@ -104,6 +104,42 @@ async fn the_catalog_lists_user_schemas_and_relations_of_every_kind() {
 }
 
 #[tokio::test]
+async fn the_catalog_places_itself_on_a_server_of_connectable_databases() {
+    let server = catalog()
+        .await
+        .server
+        .expect("a live catalog knows its server");
+
+    assert_eq!(server.current, "lazypg");
+    assert_eq!(
+        server.databases,
+        ["analytics", "lazypg", "postgres"],
+        "templates take no sessions, so they are not listed"
+    );
+}
+
+#[tokio::test]
+async fn a_connection_naming_another_database_reads_that_one() {
+    let db = Postgres::new();
+    let target = ConnectionConfig {
+        database: Some("analytics".to_owned()),
+        ..target(Posture::ReadOnly)
+    };
+    db.connect(conn(), &target, &DriverConfig::default())
+        .await
+        .expect("analytics accepts the fixture user");
+
+    let catalog = db.describe(conn()).await.expect("describes");
+
+    assert_eq!(
+        catalog.server.map(|server| server.current).as_deref(),
+        Some("analytics")
+    );
+    assert!(catalog.schemas["metrics"].tables.contains_key("event"));
+    assert!(!catalog.schemas.contains_key("shop"), "shop is lazypg's");
+}
+
+#[tokio::test]
 async fn columns_carry_type_nullability_and_default_in_table_order() {
     let catalog = catalog().await;
     let customer = &catalog.schemas["shop"].tables["customer"];

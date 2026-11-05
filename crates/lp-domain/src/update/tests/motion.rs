@@ -545,6 +545,7 @@ fn the_ddl_cursor_clamps_when_the_selected_table_shrinks() {
     let mut shop = Schema::empty("shop");
     shop.tables.insert("orders".to_owned(), shrunk);
     let schema = Catalog {
+        server: None,
         schemas: [("shop".to_owned(), shop)].into_iter().collect(),
     };
 

@@ -6,6 +6,7 @@
 use lp_domain::style::Token;
 use lp_domain::view::{Group, RowKind};
 
+pub(crate) const DATABASE: &str = "\u{f1c0} ";
 /// The solid cut reads larger at one cell.
 pub(crate) const KEYSPACE: &str = "\u{f084} ";
 /// The outline cut: a filled table reads as noise at one cell.
@@ -20,7 +21,8 @@ pub(crate) const INDEX: &str = "\u{f002} ";
 
 pub(crate) const fn tree_row(kind: RowKind) -> &'static str {
     match kind {
-        RowKind::Schema => KEYSPACE,
+        RowKind::Database { .. } => DATABASE,
+        RowKind::Schema { .. } => KEYSPACE,
         RowKind::Table { .. } => TABLE,
     }
 }
@@ -28,13 +30,15 @@ pub(crate) const fn tree_row(kind: RowKind) -> &'static str {
 /// The icon keeps its kind's colour whatever the row wears.
 pub(crate) const fn token(kind: RowKind) -> Token {
     match kind {
-        RowKind::Schema => Token::Schema,
+        RowKind::Database { .. } => Token::Database,
+        RowKind::Schema { .. } => Token::Schema,
         RowKind::Table { .. } => Token::Table,
     }
 }
 
 pub(crate) fn identity(token: Token) -> &'static str {
     match token {
+        Token::Database => DATABASE,
         Token::Schema => KEYSPACE,
         Token::Table => TABLE,
         _ => "",

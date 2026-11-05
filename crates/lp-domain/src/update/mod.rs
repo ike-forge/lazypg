@@ -303,6 +303,7 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<Effect> {
 /// excluded: it must not scroll the panel.
 #[derive(PartialEq, Eq)]
 enum Described {
+    Database(String),
     Schema(String),
     Table { keyspace: String, table: String },
 }
@@ -311,6 +312,7 @@ fn described(state: &State) -> Option<Described> {
     let schema = state.schema()?;
 
     Some(match state.tables.selected(schema)? {
+        Node::Database { name, .. } => Described::Database(name.to_owned()),
         Node::Schema { keyspace, .. } => Described::Schema(keyspace.name.clone()),
         Node::Table { keyspace, table } => Described::Table {
             keyspace: keyspace.name.clone(),

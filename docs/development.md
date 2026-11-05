@@ -12,6 +12,7 @@ seeded from `docker/seed` on first start:
 - `zoo` — one column per type family the grid must render
 - `"Edge Cases"` — quoted and Unicode identifiers, a keyless table, a
   materialized view, a partitioned table
+- a second database, `analytics`, with a `metrics` schema, for switching
 
 `mise run db:psql` opens psql; `mise run db:down` drops the volume, so the
 next `db:up` re-seeds. [.lazypg.toml](../.lazypg.toml) points the app at it

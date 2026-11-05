@@ -202,7 +202,7 @@ impl Theme {
             Token::PrimaryKey => fg(palette.primary_key).add_modifier(Modifier::BOLD),
             Token::PrimaryKeyValue => fg(palette.primary_key),
             Token::ForeignKey | Token::ForeignKeyValue => fg(palette.foreign_key),
-            Token::Schema => fg(palette.keyspace),
+            Token::Database | Token::Schema => fg(palette.keyspace),
             Token::Table => fg(palette.table),
             Token::RegularColumn => fg(palette.text),
             // Only a writable connection is lit, so the badge is noticed when
@@ -662,11 +662,12 @@ pub(crate) mod tests {
     }
 
     /// Every token, so a new one must be decided here.
-    pub(super) const EVERY_TOKEN: [Token; 31] = [
+    pub(super) const EVERY_TOKEN: [Token; 32] = [
         Token::PrimaryKey,
         Token::PrimaryKeyValue,
         Token::ForeignKey,
         Token::ForeignKeyValue,
+        Token::Database,
         Token::Schema,
         Token::Table,
         Token::RegularColumn,

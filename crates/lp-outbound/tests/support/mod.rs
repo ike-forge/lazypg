@@ -39,6 +39,7 @@ pub(crate) fn table(name: &str) -> Table {
 
 pub(crate) fn tabled_schema_of(schemas: &[(&str, &[&str])]) -> Catalog {
     Catalog {
+        server: None,
         schemas: schemas
             .iter()
             .map(|(name, tables)| {

@@ -162,6 +162,14 @@ pub(super) fn step_in(state: &mut State) -> Vec<Effect> {
             // it is left alone.
             Some(Node::Table { .. }) if tables.selects_many() => return Vec::new(),
             Some(Node::Table { keyspace, table }) => TableRef::new(&keyspace.name, &table.name),
+            Some(Node::Database {
+                name,
+                current: false,
+                ..
+            }) => {
+                let name = name.to_owned();
+                return super::connections::switch_database(state, &name);
+            }
             _ => {
                 transition(state, Transition::Open);
                 return Vec::new();

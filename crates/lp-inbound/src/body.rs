@@ -13,7 +13,7 @@ use lp_domain::selection::Ranges;
 use lp_domain::style::Token;
 use lp_domain::style::{Segment, text};
 use lp_domain::view::{
-    Activity, CompletionView, GridCell, GridColumn, PanelBody, Position, RowKind, TreeRow,
+    Activity, CompletionView, GridCell, GridColumn, Limb, PanelBody, Position, RowKind, TreeRow,
 };
 use lp_domain::viewport::Span;
 use ratatui::Frame;
@@ -31,6 +31,9 @@ use crate::theme::Theme;
 
 const LIMB: &str = "├─ ";
 const LAST_LIMB: &str = "└─ ";
+/// Under a schema that has siblings below it, its guide runs past.
+const GUIDE: &str = "│  ";
+const NO_GUIDE: &str = "   ";
 
 const ELLIPSIS: char = '…';
 
@@ -854,10 +857,23 @@ fn item(
     theme: Theme,
 ) -> ListItem<'static> {
     // Indentation is the tree's shape; no fold marker.
+    let glyph = |limb: Limb| match limb {
+        Limb::Middle => LIMB,
+        Limb::Last => LAST_LIMB,
+    };
+    let guide = |limb: Limb| match limb {
+        Limb::Middle => GUIDE,
+        Limb::Last => NO_GUIDE,
+    };
     let limb = match row.kind {
-        RowKind::Schema => "",
-        RowKind::Table { last: false } => LIMB,
-        RowKind::Table { last: true } => LAST_LIMB,
+        RowKind::Database { .. } | RowKind::Schema { limb: None } => String::new(),
+        RowKind::Schema { limb: Some(limb) } | RowKind::Table { limb, outer: None } => {
+            glyph(limb).to_owned()
+        }
+        RowKind::Table {
+            limb,
+            outer: Some(outer),
+        } => format!("{}{}", guide(outer), glyph(limb)),
     };
 
     // Only the icon is bold, so a font without a bold Nerd cut loses nothing.

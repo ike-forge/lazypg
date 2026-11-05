@@ -13,7 +13,7 @@ pub use contents::{Footer, GridCell, GridColumn, SIZE_SHOWN_FROM};
 pub use details::{ColumnKind, DetailRow, Details, Group, Heading, IdentityKind, Section};
 pub use hints::{Binding, Hint, HintBar, Liveness, Stroke};
 pub use logs::{LogRow, RUNNING};
-pub use tables::{RowKind, TreeRow};
+pub use tables::{Limb, RowKind, TreeRow};
 use title::TabSpec;
 pub use title::{PanelTitle, TAB_SEPARATOR, Tab};
 

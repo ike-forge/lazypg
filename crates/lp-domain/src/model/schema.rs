@@ -6,8 +6,20 @@ use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Catalog {
+    /// Where this database sits. `None` for a catalog read on its own, which
+    /// the tree roots at its schemas.
+    pub server: Option<Server>,
     /// Ordered so iteration is deterministic.
     pub schemas: BTreeMap<String, Schema>,
+}
+
+/// The databases a session on this server could switch to. A session is
+/// scoped to one, so only `current` has schemas here.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Server {
+    pub current: String,
+    /// Sorted; includes `current`.
+    pub databases: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

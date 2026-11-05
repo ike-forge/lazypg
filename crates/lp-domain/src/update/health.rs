@@ -22,7 +22,7 @@ pub(crate) fn health_target(state: &State) -> Option<TableRef> {
 
     match state.tables.selected(state.schema()?)? {
         Node::Table { keyspace, table } => Some(TableRef::new(&keyspace.name, &table.name)),
-        Node::Schema { .. } => None,
+        Node::Database { .. } | Node::Schema { .. } => None,
     }
 }
 
