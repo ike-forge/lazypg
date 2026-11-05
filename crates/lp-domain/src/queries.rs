@@ -360,10 +360,10 @@ fn holding(spans: &[Span], offset: usize) -> Option<usize> {
 mod tests {
     use super::*;
     use crate::cql::suggest;
-    use crate::model::Schema;
+    use crate::model::Catalog;
     use crate::tree::tests_support::schema_of;
 
-    fn schema() -> Schema {
+    fn schema() -> Catalog {
         schema_of(&[("shop", &["orders"])])
     }
 

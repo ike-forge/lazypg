@@ -122,7 +122,7 @@ pub(super) fn activate(state: &mut State) -> Vec<Effect> {
         };
 
         match tables.selected(schema) {
-            Some(Node::Keyspace { .. }) => {
+            Some(Node::Schema { .. }) => {
                 tables.toggle(schema);
                 return Vec::new();
             }

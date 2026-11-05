@@ -14,7 +14,7 @@ fn the_columns_tab_draws_every_column_with_its_kind_and_type() {
     let table = Table {
         static_columns: vec![Column {
             name: "region".to_owned(),
-            cql_type: "text".to_owned(),
+            data_type: "text".to_owned(),
         }],
         ..orders()
     };
@@ -25,7 +25,7 @@ fn the_columns_tab_draws_every_column_with_its_kind_and_type() {
         ddl_rows(&buffer)[..9],
         [
             // The cursor opens on this row.
-            "▌  \u{f084} Keyspace       shop",
+            "▌  \u{f084} Schema         shop",
             "   \u{f0ce} Table",
             "     orders_by_customer",
             "",
@@ -78,7 +78,7 @@ fn the_indexes_tab_draws_the_primary_key_and_a_block_per_index() {
     assert_eq!(
         ddl_rows(&buffer)[..19],
         [
-            "▌  \u{f084} Keyspace       shop",
+            "▌  \u{f084} Schema         shop",
             "   \u{f0ce} Table",
             "     orders_by_customer",
             "",
@@ -281,7 +281,7 @@ fn a_selected_tables_shape_is_drawn_above_its_options() {
         ddl_rows(&buffer)[..16],
         [
             // The cursor opens on this row.
-            "▌  \u{f084} Keyspace       shop",
+            "▌  \u{f084} Schema         shop",
             "   \u{f0ce} Table",
             "     orders_by_customer",
             // Between what the panel is about and its shape.
@@ -563,7 +563,7 @@ fn a_selected_keyspace_is_described_by_its_replication() {
     assert_eq!(
         rows,
         [
-            "▌  \u{f084} Keyspace       shop",
+            "▌  \u{f084} Schema         shop",
             "",
             "\u{f013} Replication",
             "class  SimpleStrategy"

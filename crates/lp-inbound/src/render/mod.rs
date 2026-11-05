@@ -558,7 +558,7 @@ fn panel_title<'a>(
     Line::from(spans)
 }
 
-/// Schema names drop the border's bold: a name is not emphasis.
+/// Catalog names drop the border's bold: a name is not emphasis.
 fn schema_run(style: Style) -> Style {
     style.remove_modifier(Modifier::BOLD)
 }

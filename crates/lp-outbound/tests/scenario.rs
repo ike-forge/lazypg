@@ -28,7 +28,7 @@ async fn connecting_and_describing_fills_the_tables_panel() {
     run(&cluster, &mut state, effects).await;
 
     let PanelBody::Tree { rows, selected, .. } = &view_model(&state).panels[0].body else {
-        panic!("a described cluster lists its keyspaces");
+        panic!("a described cluster lists its schemas");
     };
     assert_eq!(
         rows.iter()
@@ -38,7 +38,7 @@ async fn connecting_and_describing_fills_the_tables_panel() {
     );
     assert_eq!(
         rows[0].kind,
-        RowKind::Keyspace,
+        RowKind::Schema,
         "these fixtures have no tables to hang off a keyspace"
     );
     assert_eq!(*selected, 0);
@@ -57,7 +57,7 @@ async fn a_cluster_that_cannot_be_reached_raises_a_fatal_modal() {
     assert!(overlay.message.contains("no route to host"));
     assert!(
         matches!(&view_model(&state).panels[0].body, PanelBody::Notice { text, token } if !text.contains("no route to host") && *token == Some(Token::Muted)),
-        "the modal owns the failure; the panel behind it is back to being about keyspaces"
+        "the modal owns the failure; the panel behind it is back to being about schemas"
     );
 }
 
@@ -71,7 +71,7 @@ async fn a_cluster_that_connects_but_cannot_be_described_raises_a_fatal_modal() 
     let Some(OverlayView::Fatal(overlay)) = view_model(&state).overlay else {
         panic!("the failure ends the process rather than starting a half-connected app");
     };
-    assert_eq!(overlay.title, "Schema unavailable");
+    assert_eq!(overlay.title, "Catalog unavailable");
 }
 
 #[tokio::test]
@@ -97,7 +97,7 @@ async fn pressing_l_unfolds_a_keyspace_and_the_view_model_shows_its_tables() {
             .map(|row| (row.kind, row.label.as_str()))
             .collect::<Vec<_>>(),
         [
-            (RowKind::Keyspace, "shop"),
+            (RowKind::Schema, "shop"),
             (RowKind::Table { last: false }, "orders"),
             (RowKind::Table { last: true }, "users"),
         ]
@@ -173,13 +173,13 @@ async fn on_a_table(cluster: &FakeCluster) -> State {
 async fn pressing_enter_on_a_table_fills_the_contents_panel() {
     let mut schema = tabled_schema_of(&[("shop", &["orders"])]);
     schema
-        .keyspaces
+        .schemas
         .get_mut("shop")
         .and_then(|keyspace| keyspace.tables.get_mut("orders"))
         .expect("the fixture made it")
         .regular_columns = vec![Column {
         name: "email".to_owned(),
-        cql_type: "text".to_owned(),
+        data_type: "text".to_owned(),
     }];
     let cluster = FakeCluster::new(schema, Posture::ReadOnly).returning(customers());
     let mut state = on_a_table(&cluster).await;
@@ -374,7 +374,7 @@ fn ddl_details(state: &State) -> Details {
 async fn walking_the_ddl_strip_reaches_the_indexes_of_the_selected_table() {
     let mut schema = tabled_schema_of(&[("shop", &["orders"])]);
     schema
-        .keyspaces
+        .schemas
         .get_mut("shop")
         .and_then(|keyspace| keyspace.tables.get_mut("orders"))
         .expect("the fixture has shop.orders")
@@ -405,7 +405,7 @@ async fn walking_the_ddl_strip_reaches_the_indexes_of_the_selected_table() {
         [DetailRow::KeyColumn {
             name: "id".to_owned(),
             order: None,
-            cql_type: "uuid".to_owned(),
+            data_type: "uuid".to_owned(),
         }]
     );
 }
@@ -420,7 +420,7 @@ async fn stepping_onto_a_table_describes_it_in_the_ddl_panel() {
     run(&cluster, &mut state, effects).await;
 
     let keyspace = ddl_details(&state);
-    assert_eq!(named(&keyspace), [("Keyspace", "shop")]);
+    assert_eq!(named(&keyspace), [("Schema", "shop")]);
     assert_eq!(headings(&keyspace), ["Replication"]);
 
     update(&mut state, Msg::Input(KeyPress::new(Key::Char('l'))));
@@ -433,7 +433,7 @@ async fn stepping_onto_a_table_describes_it_in_the_ddl_panel() {
     let table = ddl_details(&state);
     assert_eq!(
         named(&table),
-        [("Keyspace", "shop"), ("Table", "orders")],
+        [("Schema", "shop"), ("Table", "orders")],
         "the panel names what it describes in rows of its own"
     );
     assert_eq!(
@@ -594,7 +594,7 @@ async fn dropping_a_keyspace_takes_its_name_typed_back() {
             .map(|row| row.label.as_str())
             .collect::<Vec<_>>(),
         ["shop"],
-        "the tree draws the keyspaces the re-read schema still has"
+        "the tree draws the schemas the re-read schema still has"
     );
 }
 

@@ -68,7 +68,7 @@ fn toasted(state: &State) -> Option<(Severity, &str)> {
         .map(|toast| (toast.severity(), toast.message()))
 }
 
-fn schema_of(names: &[&str]) -> Schema {
+fn schema_of(names: &[&str]) -> Catalog {
     tabled_schema(&names.iter().map(|n| (*n, &[][..])).collect::<Vec<_>>())
 }
 
@@ -113,14 +113,14 @@ fn diagnostics_cursor(state: &State) -> usize {
     panel.selected()
 }
 
-fn browsing(keyspaces: &[&str]) -> State {
+fn browsing(schemas: &[&str]) -> State {
     let mut state = connected(Posture::ReadOnly);
     let conn = current_conn(&state);
     update(
         &mut state,
         Msg::SchemaLoaded {
             conn,
-            schema: Box::new(schema_of(keyspaces)),
+            schema: Box::new(schema_of(schemas)),
             took: Duration::ZERO,
         },
     );
@@ -141,8 +141,8 @@ fn press_stroke(state: &mut State, stroke: Stroke) -> Vec<Effect> {
 
 /// `browsing` leaves `command_rows` and `theme_rows` at zero, where no palette
 /// or picker opens.
-fn measured(keyspaces: &[&str]) -> State {
-    let mut state = browsing(keyspaces);
+fn measured(schemas: &[&str]) -> State {
+    let mut state = browsing(schemas);
     state.geometry = Geometry::new([8, 14, 20, 1], 37, 14).with_theme_rows(20);
     state
 }
@@ -223,14 +223,14 @@ fn browsing_a_table() -> State {
     state
 }
 
-fn browsing_tables(keyspaces: &[(&str, &[&str])]) -> State {
+fn browsing_tables(schemas: &[(&str, &[&str])]) -> State {
     let mut state = connected(Posture::ReadOnly);
     let conn = current_conn(&state);
     update(
         &mut state,
         Msg::SchemaLoaded {
             conn,
-            schema: Box::new(tabled_schema(keyspaces)),
+            schema: Box::new(tabled_schema(schemas)),
             took: Duration::ZERO,
         },
     );
@@ -588,16 +588,16 @@ fn open_form(state: &mut State) {
 }
 
 /// The shared fixture is all primary key, which `e` refuses.
-fn schema_with_email() -> Schema {
+fn schema_with_email() -> Catalog {
     let mut schema = tabled_schema(&[("shop", &["orders"])]);
     if let Some(table) = schema
-        .keyspaces
+        .schemas
         .get_mut("shop")
         .and_then(|keyspace| keyspace.tables.get_mut("orders"))
     {
         table.regular_columns.push(crate::model::Column {
             name: "email".to_owned(),
-            cql_type: "text".to_owned(),
+            data_type: "text".to_owned(),
         });
     }
     schema

@@ -32,7 +32,7 @@ pub(crate) struct Palette {
     pub(crate) base: Color,
     pub(crate) text: Color,
     pub(crate) dim: Color,
-    /// System keyspaces, nulls, separators, counts.
+    /// System schemas, nulls, separators, counts.
     pub(crate) faint: Color,
     /// Also a scrollbar's track.
     pub(crate) border: Color,
@@ -84,7 +84,7 @@ impl Palette {
             Role::SelectionFg => self.selection_fg = color,
             Role::SelectionBar => self.selection_bar = color,
             Role::Shortcut => self.shortcut = color,
-            Role::Keyspace => self.keyspace = color,
+            Role::Schema => self.keyspace = color,
             Role::Table => self.table = color,
             Role::Partition => self.partition = color,
             Role::Clustering => self.clustering = color,
@@ -203,7 +203,7 @@ impl Theme {
             Token::PartitionKeyValue => fg(palette.partition),
             Token::ClusteringKey | Token::ClusteringKeyValue => fg(palette.clustering),
             Token::StaticColumn => fg(palette.accent),
-            Token::Keyspace => fg(palette.keyspace),
+            Token::Schema => fg(palette.keyspace),
             Token::Table => fg(palette.table),
             Token::RegularColumn => fg(palette.text),
             // Only a writable connection is lit, so the badge is noticed when
@@ -626,8 +626,8 @@ pub(crate) mod tests {
         }
 
         assert_eq!(
-            theme.style(Token::Keyspace),
-            Theme::default().style(Token::Keyspace),
+            theme.style(Token::Schema),
+            Theme::default().style(Token::Schema),
             "dimming is not a second palette"
         );
         assert_eq!(
@@ -669,7 +669,7 @@ pub(crate) mod tests {
         Token::ClusteringKey,
         Token::ClusteringKeyValue,
         Token::StaticColumn,
-        Token::Keyspace,
+        Token::Schema,
         Token::Table,
         Token::RegularColumn,
         Token::Posture(Posture::ReadOnly),

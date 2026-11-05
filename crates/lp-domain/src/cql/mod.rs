@@ -121,7 +121,7 @@ const fn token(kind: Kind, role: Option<Role>) -> Option<Token> {
     match kind {
         Kind::Keyword => Some(Token::Keyword),
         Kind::Identifier => Some(match role {
-            Some(Role::Keyspace) => Token::Keyspace,
+            Some(Role::Schema) => Token::Schema,
             Some(Role::Table) => Token::Table,
             _ => Token::Reference,
         }),
@@ -253,7 +253,7 @@ mod tests {
                 (None, " "),
                 (Some(Token::Keyword), "FROM"),
                 (None, " "),
-                (Some(Token::Keyspace), "shop"),
+                (Some(Token::Schema), "shop"),
                 (None, "."),
                 (Some(Token::Table), "orders"),
             ]
@@ -265,7 +265,7 @@ mod tests {
         let lines = highlight("SELECT * FROM shp.ordrs");
 
         assert!(
-            tokens(&lines[0]).contains(&(Some(Token::Keyspace), "shp")),
+            tokens(&lines[0]).contains(&(Some(Token::Schema), "shp")),
             "colour says what the grammar means, not what the schema has"
         );
     }

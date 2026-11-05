@@ -6,7 +6,7 @@ use super::lex::{Kind, Piece, pieces};
 use super::resolve::{Context, Expect, Name, context_at};
 use super::templates::{TEMPLATES, Template};
 use crate::editor::Editor;
-use crate::model::{Schema, Table};
+use crate::model::{Catalog, Table};
 
 /// A cap, not a scroll: past this the prefix narrows the list.
 const MOST: usize = 12;
@@ -15,7 +15,7 @@ const MOST: usize = 12;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum CandidateKind {
     Keyword,
-    Keyspace,
+    Schema,
     Table,
     Column,
     Template,
@@ -139,7 +139,7 @@ impl Completion {
 #[must_use]
 pub fn suggest(
     editor: &Editor,
-    schema: Option<&Schema>,
+    schema: Option<&Catalog>,
     keyspace: Option<&str>,
 ) -> Option<Completion> {
     let word = word_before(editor);
@@ -163,7 +163,7 @@ pub fn suggest(
         (Some(_), _) => Vec::new(),
         (None, Expect::Column) => columns(schema, &context, keyspace, prefix),
         (None, Expect::Table) => names_first(schema, keyspace, prefix),
-        (None, Expect::Keyspace) => keyspaces(schema, prefix),
+        (None, Expect::Schema) => schemas(schema, prefix),
         (None, Expect::Type) => types(prefix),
         (None, Expect::Property) => properties(prefix),
         // Keywords only: `LIMIT` and `ALLOW` follow a value, and `GRANT SEL`
@@ -197,7 +197,7 @@ pub fn suggest(
 /// Grammar first: short prefixes mostly reach for keywords, and keywords do not
 /// depend on the panel.
 fn unqualified(
-    schema: Option<&Schema>,
+    schema: Option<&Catalog>,
     keyspace: Option<&str>,
     prefix: &str,
     at_start: bool,
@@ -208,14 +208,14 @@ fn unqualified(
         Vec::new()
     };
 
-    let keyspaces = keyspaces(schema, prefix);
+    let schemas = schemas(schema, prefix);
     let tables = keyspace
         .into_iter()
         .flat_map(|keyspace| tables_of(schema, keyspace, prefix));
 
     ahead(keywords(prefix), templates)
         .into_iter()
-        .chain(keyspaces)
+        .chain(schemas)
         .chain(tables)
         .take(MOST)
         .collect()
@@ -260,9 +260,9 @@ fn properties(prefix: &str) -> Vec<Candidate> {
         .collect()
 }
 
-fn tables_of(schema: Option<&Schema>, keyspace: &str, prefix: &str) -> Vec<Candidate> {
+fn tables_of(schema: Option<&Catalog>, keyspace: &str, prefix: &str) -> Vec<Candidate> {
     schema
-        .and_then(|schema| schema.keyspaces.get(keyspace))
+        .and_then(|schema| schema.schemas.get(keyspace))
         .into_iter()
         .flat_map(|keyspace| keyspace.tables.keys())
         .filter(|name| matches(name, prefix))
@@ -271,13 +271,13 @@ fn tables_of(schema: Option<&Schema>, keyspace: &str, prefix: &str) -> Vec<Candi
         .collect()
 }
 
-fn names_first(schema: Option<&Schema>, keyspace: Option<&str>, prefix: &str) -> Vec<Candidate> {
+fn names_first(schema: Option<&Catalog>, keyspace: Option<&str>, prefix: &str) -> Vec<Candidate> {
     let tables = keyspace
         .into_iter()
         .flat_map(|keyspace| tables_of(schema, keyspace, prefix));
 
     tables
-        .chain(keyspaces(schema, prefix))
+        .chain(schemas(schema, prefix))
         .chain(keywords(prefix))
         .take(MOST)
         .collect()
@@ -302,12 +302,12 @@ fn on_space(editor: &Editor) -> bool {
         .is_some_and(|character| character == ' ')
 }
 
-fn keyspaces(schema: Option<&Schema>, prefix: &str) -> Vec<Candidate> {
+fn schemas(schema: Option<&Catalog>, prefix: &str) -> Vec<Candidate> {
     schema
         .into_iter()
-        .flat_map(|schema| schema.keyspaces.keys())
+        .flat_map(|schema| schema.schemas.keys())
         .filter(|name| matches(name, prefix))
-        .map(|name| Candidate::plain(name.clone(), CandidateKind::Keyspace))
+        .map(|name| Candidate::plain(name.clone(), CandidateKind::Schema))
         .take(MOST)
         .collect()
 }
@@ -315,7 +315,7 @@ fn keyspaces(schema: Option<&Schema>, prefix: &str) -> Vec<Candidate> {
 /// Columns lead wherever the position takes one; the grammar behind them is
 /// [`COLUMN_WORDS`], so `SELECT up` no longer offers `UPDATE`.
 fn columns(
-    schema: Option<&Schema>,
+    schema: Option<&Catalog>,
     context: &Context,
     keyspace: Option<&str>,
     prefix: &str,
@@ -338,7 +338,7 @@ fn column_words(prefix: &str) -> impl Iterator<Item = Candidate> + '_ {
 }
 
 /// Physical layout order, as vision.md §2 reads it.
-fn columns_of(schema: Option<&Schema>, table: &Name, prefix: &str) -> Vec<Candidate> {
+fn columns_of(schema: Option<&Catalog>, table: &Name, prefix: &str) -> Vec<Candidate> {
     let Some(found) = lookup(schema, table) else {
         return Vec::new();
     };
@@ -352,11 +352,11 @@ fn columns_of(schema: Option<&Schema>, table: &Name, prefix: &str) -> Vec<Candid
 
 /// Labelled by table; accepting types the bare name. `orphaned` also writes the
 /// `FROM` that puts it in scope. Display order, not map order: `system*`
-/// keyspaces sort early and would fill the cap.
-fn every_column(schema: Option<&Schema>, prefix: &str, orphaned: bool) -> Vec<Candidate> {
+/// schemas sort early and would fill the cap.
+fn every_column(schema: Option<&Catalog>, prefix: &str, orphaned: bool) -> Vec<Candidate> {
     schema
         .into_iter()
-        .flat_map(Schema::keyspaces_in_display_order)
+        .flat_map(Catalog::schemas_in_display_order)
         .flat_map(|keyspace| keyspace.tables.values().map(move |table| (keyspace, table)))
         .flat_map(|(keyspace, table)| {
             column_names(table).map(move |name| (keyspace.name.clone(), table.name.clone(), name))
@@ -401,9 +401,9 @@ fn resolved(table: &Name, keyspace: Option<&str>) -> Name {
     }
 }
 
-fn lookup<'schema>(schema: Option<&'schema Schema>, table: &Name) -> Option<&'schema Table> {
+fn lookup<'schema>(schema: Option<&'schema Catalog>, table: &Name) -> Option<&'schema Table> {
     schema?
-        .keyspaces
+        .schemas
         .get(table.keyspace.as_deref()?)?
         .tables
         .get(&table.table)
@@ -527,23 +527,23 @@ mod tests {
         editor
     }
 
-    fn column(name: &str, cql_type: &str) -> Column {
+    fn column(name: &str, data_type: &str) -> Column {
         Column {
             name: name.to_owned(),
-            cql_type: cql_type.to_owned(),
+            data_type: data_type.to_owned(),
         }
     }
 
     /// Column names avoid sharing first letters with other tables', so a
     /// one-character prefix points at `orders` alone.
-    fn schema() -> Schema {
+    fn schema() -> Catalog {
         let mut schema = schema_of(&[
             ("shop", &["orders", "order_items", "customers"]),
             ("secrets", &["keys"]),
         ]);
 
         let orders = schema
-            .keyspaces
+            .schemas
             .get_mut("shop")
             .and_then(|keyspace| keyspace.tables.get_mut("orders"))
             .expect("orders is in the fixture");
@@ -564,7 +564,7 @@ mod tests {
             ("secrets", "keys", "fingerprint"),
         ] {
             let table = schema
-                .keyspaces
+                .schemas
                 .get_mut(keyspace)
                 .and_then(|keyspace| keyspace.tables.get_mut(table))
                 .expect("fixture table");
@@ -577,7 +577,7 @@ mod tests {
 
         // No static or regular column: pins an empty tail.
         let order_items = schema
-            .keyspaces
+            .schemas
             .get_mut("shop")
             .and_then(|keyspace| keyspace.tables.get_mut("order_items"))
             .expect("order_items is in the fixture");
@@ -588,7 +588,7 @@ mod tests {
 
         // No clustering column: pins an empty middle.
         let customers = schema
-            .keyspaces
+            .schemas
             .get_mut("shop")
             .and_then(|keyspace| keyspace.tables.get_mut("customers"))
             .expect("customers is in the fixture");
@@ -777,7 +777,7 @@ mod tests {
 
     #[test]
     fn no_more_than_a_popups_worth_is_offered() {
-        // The shortest prefix keywords, keyspaces and tables all share.
+        // The shortest prefix keywords, schemas and tables all share.
         let most = offers("s", Some("shop")).len();
 
         assert!(most <= MOST, "{most} candidates would not fit a popup");
@@ -1246,14 +1246,14 @@ mod tests {
     #[test]
     fn a_cursor_after_use_offers_keyspaces_only() {
         let schema = schema();
-        // Only the `Expect::Keyspace` branch leaves keyspaces alone.
+        // Only the `Expect::Schema` branch leaves schemas alone.
         let completion = suggest(&typed("USE se"), Some(&schema), Some("shop")).expect("offers");
 
         assert!(
             completion
                 .candidates()
                 .iter()
-                .all(|candidate| candidate.kind == CandidateKind::Keyspace),
+                .all(|candidate| candidate.kind == CandidateKind::Schema),
             "USE takes a keyspace and nothing else"
         );
         assert!(

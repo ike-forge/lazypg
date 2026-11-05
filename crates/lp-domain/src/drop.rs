@@ -3,14 +3,14 @@
 use crate::contents::TableRef;
 use crate::key::{self, RowKey};
 use crate::line::Line;
-use crate::model::{KeyspaceKind, Row, Statement, Table};
+use crate::model::{Row, SchemaKind, Statement, Table};
 use crate::posture::Posture;
 use crate::style::{Segment, Token};
 
 /// Only what a cursor can sit on.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Target {
-    Keyspace(String),
+    Schema(String),
     Table(TableRef),
     /// Never empty: the grid's cursor is always on a row.
     Rows {
@@ -49,14 +49,14 @@ impl Target {
     pub fn row_count(&self) -> Option<usize> {
         match self {
             Self::Rows { keys, .. } => Some(keys.len()),
-            Self::Keyspace(_) | Self::Table(_) => None,
+            Self::Schema(_) | Self::Table(_) => None,
         }
     }
 
     #[must_use]
     pub fn statement(&self) -> Statement {
         match self {
-            Self::Keyspace(keyspace) => Statement::drop_keyspace(keyspace),
+            Self::Schema(keyspace) => Statement::drop_keyspace(keyspace),
             Self::Table(table) => Statement::drop_table(&table.keyspace, &table.table),
             Self::Rows { table, keys } => {
                 let pairs: Vec<Vec<(String, String)>> =
@@ -72,7 +72,7 @@ impl Target {
     #[must_use]
     pub fn name(&self) -> &str {
         match self {
-            Self::Keyspace(keyspace) => keyspace,
+            Self::Schema(keyspace) => keyspace,
             Self::Table(table) | Self::Rows { table, .. } => &table.table,
         }
     }
@@ -80,7 +80,7 @@ impl Target {
     #[must_use]
     pub fn qualified(&self) -> String {
         match self {
-            Self::Keyspace(keyspace) => keyspace.clone(),
+            Self::Schema(keyspace) => keyspace.clone(),
             Self::Table(table) => table.qualified(),
             Self::Rows { table, keys } => {
                 format!(
@@ -96,10 +96,10 @@ impl Target {
     #[must_use]
     pub fn title(&self) -> Vec<Segment> {
         match self {
-            Self::Keyspace(keyspace) => {
-                let token = match KeyspaceKind::of(keyspace) {
-                    KeyspaceKind::System => Token::Faint,
-                    KeyspaceKind::User => Token::Keyspace,
+            Self::Schema(keyspace) => {
+                let token = match SchemaKind::of(keyspace) {
+                    SchemaKind::System => Token::Faint,
+                    SchemaKind::User => Token::Schema,
                 };
 
                 vec![
@@ -153,8 +153,8 @@ impl DropPrompt {
         // Read off the statement: `Protected` is about destructive statements,
         // and a row delete is a `Write`.
         let destructive = target.statement().kind.is_destructive();
-        let typed = matches!(target, Target::Keyspace(_))
-            || (posture.requires_confirmation() && destructive);
+        let typed =
+            matches!(target, Target::Schema(_)) || (posture.requires_confirmation() && destructive);
         let answer = if typed {
             Answer::Typed(Line::default())
         } else {
@@ -218,7 +218,7 @@ mod tests {
     use crate::style;
 
     fn keyspace() -> Target {
-        Target::Keyspace("shop".to_owned())
+        Target::Schema("shop".to_owned())
     }
 
     fn table() -> Target {
@@ -263,7 +263,7 @@ mod tests {
     #[test]
     fn a_name_is_matched_verbatim_rather_than_folded() {
         // The field asks for what the tree draws, not the folded name.
-        let mut prompt = DropPrompt::opened(Target::Keyspace("MyKs".to_owned()), Posture::Writable);
+        let mut prompt = DropPrompt::opened(Target::Schema("MyKs".to_owned()), Posture::Writable);
         typing(&mut prompt, "myks");
 
         assert!(!prompt.confirmed());

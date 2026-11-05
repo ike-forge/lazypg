@@ -205,7 +205,7 @@ fn a_reload_that_shrinks_the_tree_pulls_the_selection_inside_it() {
     assert_eq!(
         state.tables.cursor().index(),
         1,
-        "the clamp must count tree rows, not keyspaces"
+        "the clamp must count tree rows, not schemas"
     );
 }
 
@@ -518,7 +518,7 @@ fn a_measurement_pulls_a_stale_scroll_offset_back_inside_the_panel() {
 
 #[test]
 fn the_ddl_cursor_clamps_when_the_selected_table_shrinks() {
-    use crate::model::{Column, Keyspace, PrimaryKey, Replication, TableOptions};
+    use crate::model::{Column, PrimaryKey, Replication, Schema, TableOptions};
 
     let mut state = browsing_tables(&[("shop", &["orders"])]);
     let conn = current_conn(&state);
@@ -538,7 +538,7 @@ fn the_ddl_cursor_clamps_when_the_selected_table_shrinks() {
         primary_key: PrimaryKey {
             partition: vec![Column {
                 name: "id".to_owned(),
-                cql_type: "uuid".to_owned(),
+                data_type: "uuid".to_owned(),
             }],
             clustering: Vec::new(),
         },
@@ -547,10 +547,10 @@ fn the_ddl_cursor_clamps_when_the_selected_table_shrinks() {
         indexes: Vec::new(),
         options: TableOptions::default(),
     };
-    let schema = Schema {
-        keyspaces: [(
+    let schema = Catalog {
+        schemas: [(
             "shop".to_owned(),
-            Keyspace {
+            Schema {
                 name: "shop".to_owned(),
                 replication: Replication::SimpleStrategy { factor: 1 },
                 tables: [("orders".to_owned(), shrunk)].into_iter().collect(),

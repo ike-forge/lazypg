@@ -8,8 +8,8 @@ use crate::model::CqlValue;
 /// `inet` all arrive as [`CqlValue::Text`], and quoting is right for four of
 /// them only.
 #[must_use]
-pub fn of(cql_type: &str, value: &CqlValue) -> Option<String> {
-    match (normalised(cql_type).as_str(), value) {
+pub fn of(data_type: &str, value: &CqlValue) -> Option<String> {
+    match (normalised(data_type).as_str(), value) {
         // Types whose string form CQL parses back to the same value.
         (
             "text" | "varchar" | "ascii" | "inet" | "date" | "time" | "timestamp",
@@ -32,8 +32,8 @@ pub fn of(cql_type: &str, value: &CqlValue) -> Option<String> {
 }
 
 /// Lower case, `frozen<…>` removed: `system_schema` reports the declared case.
-pub(crate) fn normalised(cql_type: &str) -> String {
-    let trimmed = cql_type.trim().to_ascii_lowercase();
+pub(crate) fn normalised(data_type: &str) -> String {
+    let trimmed = data_type.trim().to_ascii_lowercase();
 
     trimmed
         .strip_prefix("frozen<")
@@ -137,7 +137,7 @@ mod tests {
 
     #[test]
     fn a_type_and_a_variant_that_disagree_spell_nothing() {
-        // Schema and page disagree: guessing is what this module refuses.
+        // Catalog and page disagree: guessing is what this module refuses.
         assert_eq!(of("int", &CqlValue::Text("7".to_owned())), None);
         assert_eq!(of("text", &CqlValue::Int(7)), None);
     }

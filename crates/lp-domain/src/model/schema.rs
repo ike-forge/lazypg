@@ -1,17 +1,17 @@
-//! Schema, with the physical layout made structural: partition and clustering
+//! Catalog, with the physical layout made structural: partition and clustering
 //! columns are separate types, not one list re-read at render time (vision.md
 //! §2).
 
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct Schema {
+pub struct Catalog {
     /// Ordered so iteration is deterministic.
-    pub keyspaces: BTreeMap<String, Keyspace>,
+    pub schemas: BTreeMap<String, Schema>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Keyspace {
+pub struct Schema {
     pub name: String,
     pub replication: Replication,
     pub tables: BTreeMap<String, Table>,
@@ -228,7 +228,7 @@ pub enum ClusteringOrder {
 pub struct Column {
     pub name: String,
     /// As the cluster reports it, e.g. `frozen<list<text>>`.
-    pub cql_type: String,
+    pub data_type: String,
 }
 
 impl Table {
@@ -250,12 +250,12 @@ impl Table {
 
 /// Derived from the name, so an adapter cannot report a contradicting kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum KeyspaceKind {
+pub enum SchemaKind {
     User,
     System,
 }
 
-impl KeyspaceKind {
+impl SchemaKind {
     /// The separator matters: `system_auth` is Cassandra's, `systematic` is
     /// not.
     #[must_use]
@@ -268,24 +268,24 @@ impl KeyspaceKind {
     }
 }
 
-impl Keyspace {
+impl Schema {
     #[must_use]
-    pub fn kind(&self) -> KeyspaceKind {
-        KeyspaceKind::of(&self.name)
+    pub fn kind(&self) -> SchemaKind {
+        SchemaKind::of(&self.name)
     }
 }
 
-impl Schema {
-    /// User keyspaces first, then the cluster's, each alphabetical.
-    pub fn keyspaces_in_display_order(&self) -> impl Iterator<Item = &Keyspace> {
+impl Catalog {
+    /// User schemas first, then the cluster's, each alphabetical.
+    pub fn schemas_in_display_order(&self) -> impl Iterator<Item = &Schema> {
         let user = self
-            .keyspaces
+            .schemas
             .values()
-            .filter(|keyspace| keyspace.kind() == KeyspaceKind::User);
+            .filter(|keyspace| keyspace.kind() == SchemaKind::User);
         let system = self
-            .keyspaces
+            .schemas
             .values()
-            .filter(|keyspace| keyspace.kind() == KeyspaceKind::System);
+            .filter(|keyspace| keyspace.kind() == SchemaKind::System);
 
         user.chain(system)
     }
@@ -295,27 +295,27 @@ impl Schema {
 mod tests {
     use super::*;
 
-    fn keyspace(name: &str) -> Keyspace {
-        Keyspace {
+    fn keyspace(name: &str) -> Schema {
+        Schema {
             name: name.to_owned(),
             replication: Replication::SimpleStrategy { factor: 1 },
             tables: BTreeMap::new(),
         }
     }
 
-    fn schema(names: &[&str]) -> Schema {
-        Schema {
-            keyspaces: names
+    fn schema(names: &[&str]) -> Catalog {
+        Catalog {
+            schemas: names
                 .iter()
                 .map(|name| ((*name).to_owned(), keyspace(name)))
                 .collect(),
         }
     }
 
-    fn column(name: &str, cql_type: &str) -> Column {
+    fn column(name: &str, data_type: &str) -> Column {
         Column {
             name: name.to_owned(),
-            cql_type: cql_type.to_owned(),
+            data_type: data_type.to_owned(),
         }
     }
 
@@ -517,24 +517,21 @@ mod tests {
 
     #[test]
     fn the_clusters_own_keyspaces_are_system_and_the_system_prefixed_ones() {
-        assert_eq!(KeyspaceKind::of("system"), KeyspaceKind::System);
-        assert_eq!(KeyspaceKind::of("system_schema"), KeyspaceKind::System);
-        assert_eq!(
-            KeyspaceKind::of("system_virtual_schema"),
-            KeyspaceKind::System
-        );
+        assert_eq!(SchemaKind::of("system"), SchemaKind::System);
+        assert_eq!(SchemaKind::of("system_schema"), SchemaKind::System);
+        assert_eq!(SchemaKind::of("system_virtual_schema"), SchemaKind::System);
     }
 
     #[test]
     fn a_user_keyspace_merely_starting_with_system_is_not_the_clusters() {
-        assert_eq!(KeyspaceKind::of("systematic"), KeyspaceKind::User);
-        assert_eq!(KeyspaceKind::of("shop"), KeyspaceKind::User);
+        assert_eq!(SchemaKind::of("systematic"), SchemaKind::User);
+        assert_eq!(SchemaKind::of("shop"), SchemaKind::User);
     }
 
     #[test]
     fn a_keyspaces_kind_follows_its_name() {
-        assert_eq!(keyspace("shop").kind(), KeyspaceKind::User);
-        assert_eq!(keyspace("system_auth").kind(), KeyspaceKind::System);
+        assert_eq!(keyspace("shop").kind(), SchemaKind::User);
+        assert_eq!(keyspace("system_auth").kind(), SchemaKind::System);
     }
 
     #[test]
@@ -542,7 +539,7 @@ mod tests {
         let schema = schema(&["system_schema", "typezoo", "system", "shop"]);
 
         let order: Vec<&str> = schema
-            .keyspaces_in_display_order()
+            .schemas_in_display_order()
             .map(|keyspace| keyspace.name.as_str())
             .collect();
 
@@ -551,6 +548,6 @@ mod tests {
 
     #[test]
     fn display_order_of_an_empty_schema_is_empty() {
-        assert_eq!(Schema::default().keyspaces_in_display_order().count(), 0);
+        assert_eq!(Catalog::default().schemas_in_display_order().count(), 0);
     }
 }

@@ -33,7 +33,7 @@ pub(super) fn tree_target(state: &State) -> Option<Target> {
     }
 
     match state.tables.selected(state.schema()?)? {
-        Node::Keyspace { keyspace, .. } => Some(Target::Keyspace(keyspace.name.clone())),
+        Node::Schema { keyspace, .. } => Some(Target::Schema(keyspace.name.clone())),
         Node::Table { keyspace, table } => {
             Some(Target::Table(TableRef::new(&keyspace.name, &table.name)))
         }
@@ -52,7 +52,7 @@ pub(super) fn rows_target(state: &State) -> Option<Target> {
     };
     let described = state
         .schema()?
-        .keyspaces
+        .schemas
         .get(&table.keyspace)?
         .tables
         .get(&table.table)?;
@@ -221,7 +221,7 @@ pub(super) fn finish_drop(
         Severity::Info,
         match dropped.target() {
             Target::Rows { .. } => format!("deleted {}", dropped.target().qualified()),
-            Target::Keyspace(_) | Target::Table(_) => {
+            Target::Schema(_) | Target::Table(_) => {
                 format!("dropped {}", dropped.target().qualified())
             }
         },
@@ -234,7 +234,7 @@ pub(super) fn finish_drop(
 
             submit_into_contents(state, Subject::Table(table), stmt)
         }
-        Target::Keyspace(_) | Target::Table(_) => {
+        Target::Schema(_) | Target::Table(_) => {
             let Some(conn) = state.conn_id() else {
                 return Vec::new();
             };
@@ -242,7 +242,7 @@ pub(super) fn finish_drop(
                 state,
                 sentence("Reading schema"),
                 Outcome::Pending {
-                    trace: Trace::Schema(conn),
+                    trace: Trace::Catalog(conn),
                 },
             );
 

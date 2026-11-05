@@ -9,20 +9,20 @@ use async_trait::async_trait;
 use lp_domain::config::PageSize;
 use lp_domain::contents::TableRef;
 use lp_domain::health::Health;
-use lp_domain::model::{ConnId, DbError, Page, PagingState, Schema, Statement};
+use lp_domain::model::{Catalog, ConnId, DbError, Page, PagingState, Statement};
 use lp_domain::ports::{Cluster, ExportError, Sink, Writer};
 use lp_domain::posture::Posture;
 
 #[derive(Debug, Default)]
 pub struct FakeCluster {
-    schema: Schema,
+    schema: Catalog,
     posture: Posture,
     page: Page,
     connect_error: Option<DbError>,
     describe_error: Option<DbError>,
     /// From the second call on, for sessions that change the schema and re-read
     /// it. `None` keeps one shape.
-    re_described: Option<Schema>,
+    re_described: Option<Catalog>,
     /// Atomic: the port takes `&self`.
     describes: AtomicUsize,
     execute_error: Option<DbError>,
@@ -38,7 +38,7 @@ pub struct FakeCluster {
 
 impl FakeCluster {
     #[must_use]
-    pub fn new(schema: Schema, posture: Posture) -> Self {
+    pub fn new(schema: Catalog, posture: Posture) -> Self {
         Self {
             schema,
             posture,
@@ -52,7 +52,7 @@ impl FakeCluster {
     }
 
     #[must_use]
-    pub fn re_describing(self, schema: Schema) -> Self {
+    pub fn re_describing(self, schema: Catalog) -> Self {
         Self {
             re_described: Some(schema),
             ..self
@@ -135,7 +135,7 @@ impl Cluster for FakeCluster {
         self.connect_error.clone().map_or(Ok(self.posture), Err)
     }
 
-    async fn describe(&self, _conn: ConnId) -> Result<Schema, DbError> {
+    async fn describe(&self, _conn: ConnId) -> Result<Catalog, DbError> {
         if let Some(error) = self.describe_error.clone() {
             return Err(error);
         }

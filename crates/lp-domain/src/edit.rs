@@ -31,9 +31,9 @@ impl Edited {
 
 /// Asked before a field opens.
 #[must_use]
-pub fn editable(cql_type: &str) -> bool {
+pub fn editable(data_type: &str) -> bool {
     matches!(
-        literal::normalised(cql_type).as_str(),
+        literal::normalised(data_type).as_str(),
         "text"
             | "varchar"
             | "ascii"
@@ -58,9 +58,9 @@ pub fn editable(cql_type: &str) -> bool {
 
 /// Only the free-text types; an empty `date` is the cluster's to reject.
 #[must_use]
-pub fn takes_empty(cql_type: &str) -> bool {
+pub fn takes_empty(data_type: &str) -> bool {
     matches!(
-        literal::normalised(cql_type).as_str(),
+        literal::normalised(data_type).as_str(),
         "text" | "varchar" | "ascii"
     )
 }
@@ -68,8 +68,8 @@ pub fn takes_empty(cql_type: &str) -> bool {
 /// [`editable`] has already been asked, so `None` always means "not a
 /// `<type>`".
 #[must_use]
-pub fn parse(cql_type: &str, text: &str) -> Option<Edited> {
-    let (value, literal) = match literal::normalised(cql_type).as_str() {
+pub fn parse(data_type: &str, text: &str) -> Option<Edited> {
+    let (value, literal) = match literal::normalised(data_type).as_str() {
         // Not validated beyond being text: the cluster owns those formats.
         "text" | "varchar" | "ascii" | "inet" | "date" | "time" | "timestamp" => {
             (CqlValue::Text(text.to_owned()), literal::quoted(text))
@@ -236,7 +236,7 @@ impl Edits {
 pub struct Field {
     column: usize,
     name: String,
-    cql_type: String,
+    data_type: String,
     line: Line,
     /// Tells a field typed to empty from one never touched.
     touched: bool,
@@ -245,11 +245,11 @@ pub struct Field {
 impl Field {
     /// Seeded with the cell's text, so an immediate `⏎` is a no-op.
     #[must_use]
-    pub fn opened(column: usize, name: &str, cql_type: &str, text: String) -> Self {
+    pub fn opened(column: usize, name: &str, data_type: &str, text: String) -> Self {
         Self {
             column,
             name: name.to_owned(),
-            cql_type: cql_type.to_owned(),
+            data_type: data_type.to_owned(),
             line: Line::new(text),
             touched: false,
         }
@@ -275,8 +275,8 @@ impl Field {
     }
 
     #[must_use]
-    pub fn cql_type(&self) -> &str {
-        &self.cql_type
+    pub fn data_type(&self) -> &str {
+        &self.data_type
     }
 
     #[must_use]
@@ -290,14 +290,14 @@ impl Field {
 
     #[must_use]
     pub fn parsed(&self) -> Option<Edited> {
-        parse(&self.cql_type, self.line.text())
+        parse(&self.data_type, self.line.text())
     }
 
     #[must_use]
     pub fn error(&self) -> Option<String> {
         self.parsed()
             .is_none()
-            .then(|| format!("Not a {}.", literal::normalised(&self.cql_type)))
+            .then(|| format!("Not a {}.", literal::normalised(&self.data_type)))
     }
 }
 
@@ -305,8 +305,8 @@ impl Field {
 mod tests {
     use super::*;
 
-    fn parsed(cql_type: &str, text: &str) -> Option<(CqlValue, String)> {
-        parse(cql_type, text).map(|edited| (edited.value, edited.literal))
+    fn parsed(data_type: &str, text: &str) -> Option<(CqlValue, String)> {
+        parse(data_type, text).map(|edited| (edited.value, edited.literal))
     }
 
     #[test]
@@ -413,7 +413,7 @@ mod tests {
 
     #[test]
     fn the_types_a_one_line_field_is_the_wrong_instrument_for_are_refused() {
-        for cql_type in [
+        for data_type in [
             "list<text>",
             "set<int>",
             "map<text, int>",
@@ -421,15 +421,15 @@ mod tests {
             "tuple<int, text>",
             "address",
         ] {
-            assert!(!editable(cql_type), "{cql_type}");
-            assert_eq!(parse(cql_type, "x"), None, "{cql_type}");
+            assert!(!editable(data_type), "{data_type}");
+            assert_eq!(parse(data_type, "x"), None, "{data_type}");
         }
     }
 
     #[test]
     fn the_four_numbers_literal_of_refuses_are_editable_here() {
-        for cql_type in ["float", "double", "varint", "decimal"] {
-            assert!(editable(cql_type), "{cql_type}");
+        for data_type in ["float", "double", "varint", "decimal"] {
+            assert!(editable(data_type), "{data_type}");
         }
     }
 

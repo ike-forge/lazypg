@@ -463,7 +463,7 @@ fn completion(completion: &Completion) -> CompletionView {
             .map(|candidate| CompletionRow {
                 text: candidate.label.clone(),
                 token: match candidate.kind {
-                    CandidateKind::Keyspace => Token::Keyspace,
+                    CandidateKind::Schema => Token::Schema,
                     CandidateKind::Table => Token::Table,
                     // A shape is grammar with holes; a `WITH` option is a name
                     // the schema holds.
@@ -688,7 +688,7 @@ pub(crate) fn waiting(text: &str) -> PanelBody {
 #[cfg(test)]
 pub(crate) mod tests_support {
     use crate::connection::{Connection, ConnectionState, SchemaState};
-    use crate::model::{ConnId, Schema};
+    use crate::model::{Catalog, ConnId};
     use crate::posture::Posture;
     use crate::state::State;
     use crate::tree::tests_support::schema_of as tabled_schema;
@@ -701,7 +701,7 @@ pub(crate) mod tests_support {
         state
     }
 
-    pub(crate) fn connected(schema: Schema) -> State {
+    pub(crate) fn connected(schema: Catalog) -> State {
         state_with(ConnectionState::Connected(Connection {
             id: ConnId::next(),
             name: crate::config::ConnectionName::try_new("local").expect("a valid name"),
@@ -716,8 +716,8 @@ pub(crate) mod tests_support {
         ))
     }
 
-    pub(crate) fn tabled(keyspaces: &[(&str, &[&str])]) -> State {
-        connected(tabled_schema(keyspaces))
+    pub(crate) fn tabled(schemas: &[(&str, &[&str])]) -> State {
+        connected(tabled_schema(schemas))
     }
 
     pub(crate) fn panel_body(state: &State, index: usize) -> PanelBody {

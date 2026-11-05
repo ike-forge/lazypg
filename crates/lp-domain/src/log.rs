@@ -64,7 +64,7 @@ pub enum Outcome {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Trace {
     Connect(ConnId),
-    Schema(ConnId),
+    Catalog(ConnId),
     Query(QueryId),
     Export(JobId),
 }
@@ -398,7 +398,7 @@ mod tests {
         let conn = ConnId::next();
         let mut log = Log::default();
         log.push(pending("Connecting", Trace::Connect(conn)));
-        log.push(pending("Reading schema", Trace::Schema(conn)));
+        log.push(pending("Reading schema", Trace::Catalog(conn)));
 
         log.complete(
             Trace::Connect(conn),

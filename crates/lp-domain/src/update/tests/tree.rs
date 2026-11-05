@@ -231,7 +231,7 @@ fn j_walks_into_an_unfolded_keyspaces_tables() {
     assert_eq!(
         state.tables.cursor().index(),
         3,
-        "motion counts tree rows, not keyspaces"
+        "motion counts tree rows, not schemas"
     );
 }
 

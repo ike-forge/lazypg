@@ -13,9 +13,9 @@ impl RowKey {
     #[must_use]
     pub fn of(key: &[(&str, &str)], columns: &[String], row: &Row) -> Option<Self> {
         key.iter()
-            .map(|(name, cql_type)| {
+            .map(|(name, data_type)| {
                 let at = columns.iter().position(|column| column == name)?;
-                let literal = crate::literal::of(cql_type, row.values.get(at)?)?;
+                let literal = crate::literal::of(data_type, row.values.get(at)?)?;
 
                 Some(((*name).to_owned(), literal))
             })
@@ -36,11 +36,11 @@ pub fn columns(table: &Table) -> Vec<(&str, &str)> {
         .primary_key
         .partition
         .iter()
-        .map(|column| (column.name.as_str(), column.cql_type.as_str()))
+        .map(|column| (column.name.as_str(), column.data_type.as_str()))
         .chain(table.primary_key.clustering.iter().map(|clustering| {
             (
                 clustering.column.name.as_str(),
-                clustering.column.cql_type.as_str(),
+                clustering.column.data_type.as_str(),
             )
         }))
         .collect()

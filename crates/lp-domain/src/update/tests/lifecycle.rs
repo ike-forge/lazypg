@@ -188,7 +188,7 @@ fn connecting_logs_the_schema_read_it_starts() {
     assert!(matches!(
         entry.outcome(),
         Outcome::Pending {
-            trace: Trace::Schema(_)
+            trace: Trace::Catalog(_)
         }
     ));
 }
@@ -218,7 +218,7 @@ fn a_loaded_schema_reports_what_it_found() {
     let Outcome::Succeeded { detail, .. } = entry.outcome() else {
         panic!("the schema loaded");
     };
-    assert!(detail.contains("keyspace"), "{detail}");
+    assert!(detail.contains("schemas"), "{detail}");
 }
 
 #[test]
@@ -474,7 +474,7 @@ fn schema_for_a_stale_connection_is_ignored() {
         &mut state,
         Msg::SchemaLoaded {
             conn: ConnId::next(),
-            schema: Box::new(Schema::default()),
+            schema: Box::new(Catalog::default()),
             took: Duration::ZERO,
         },
     );

@@ -13,7 +13,7 @@ use std::time::Duration;
 use lp_domain::config::{ConnectionConfig, ConnectionName, PageSize};
 use lp_domain::export::{Destination, Encoder, Exported, Format};
 use lp_domain::model::{
-    Column, ConnId, JobId, Key, KeyPress, Keyspace, Page, PrimaryKey, Replication, Schema,
+    Catalog, Column, ConnId, JobId, Key, KeyPress, Page, PrimaryKey, Replication, Schema,
     Statement, Table, TableOptions,
 };
 use lp_domain::ports::{Cluster, ExportError, Sink, Writer};
@@ -21,7 +21,7 @@ use lp_domain::posture::Posture;
 use lp_domain::{Effect, Msg, Source, State, update};
 use lp_outbound::buffer::Buffer;
 
-pub(crate) fn schema_of(names: &[&str]) -> Schema {
+pub(crate) fn schema_of(names: &[&str]) -> Catalog {
     tabled_schema_of(&names.iter().map(|n| (*n, &[][..])).collect::<Vec<_>>())
 }
 
@@ -31,7 +31,7 @@ pub(crate) fn table(name: &str) -> Table {
         primary_key: PrimaryKey {
             partition: vec![Column {
                 name: "id".to_owned(),
-                cql_type: "uuid".to_owned(),
+                data_type: "uuid".to_owned(),
             }],
             clustering: Vec::new(),
         },
@@ -45,14 +45,14 @@ pub(crate) fn table(name: &str) -> Table {
     }
 }
 
-pub(crate) fn tabled_schema_of(keyspaces: &[(&str, &[&str])]) -> Schema {
-    Schema {
-        keyspaces: keyspaces
+pub(crate) fn tabled_schema_of(schemas: &[(&str, &[&str])]) -> Catalog {
+    Catalog {
+        schemas: schemas
             .iter()
             .map(|(name, tables)| {
                 (
                     (*name).to_owned(),
-                    Keyspace {
+                    Schema {
                         name: (*name).to_owned(),
                         replication: Replication::SimpleStrategy { factor: 1 },
                         tables: tables

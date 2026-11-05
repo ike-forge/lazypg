@@ -855,7 +855,7 @@ fn item(
 ) -> ListItem<'static> {
     // Indentation is the tree's shape; no fold marker.
     let limb = match row.kind {
-        RowKind::Keyspace => "",
+        RowKind::Schema => "",
         RowKind::Table { last: false } => LIMB,
         RowKind::Table { last: true } => LAST_LIMB,
     };

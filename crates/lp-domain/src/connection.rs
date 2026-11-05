@@ -1,7 +1,7 @@
 //! The one connection and how far along it is.
 
 use crate::config::ConnectionName;
-use crate::model::{ConnId, DbError, Schema};
+use crate::model::{Catalog, ConnId, DbError};
 use crate::posture::Posture;
 
 /// `Option<Connection>` could not say "connecting" or "failed".
@@ -36,7 +36,7 @@ pub enum SchemaState {
     #[default]
     Loading,
     Failed(DbError),
-    Loaded(Schema),
+    Loaded(Catalog),
 }
 
 impl ConnectionState {

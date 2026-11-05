@@ -378,7 +378,7 @@ mod tests {
     }
 
     fn keyspace() -> DropPrompt {
-        DropPrompt::opened(Target::Keyspace("shop".to_owned()), Posture::Writable)
+        DropPrompt::opened(Target::Schema("shop".to_owned()), Posture::Writable)
     }
 
     #[test]
@@ -462,12 +462,12 @@ mod tests {
             primary_key: PrimaryKey {
                 partition: vec![Column {
                     name: "id".to_owned(),
-                    cql_type: "uuid".to_owned(),
+                    data_type: "uuid".to_owned(),
                 }],
                 clustering: vec![ClusteringColumn {
                     column: Column {
                         name: "placed".to_owned(),
-                        cql_type: "date".to_owned(),
+                        data_type: "date".to_owned(),
                     },
                     order: ClusteringOrder::Ascending,
                 }],

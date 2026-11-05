@@ -74,7 +74,7 @@ fn a_panel_whose_content_overflows_grows_a_bar_on_its_border() {
 
     assert!(
         tables_border(&buffer).contains(THUMB),
-        "the thumb says how far through twelve keyspaces three rows are"
+        "the thumb says how far through twelve schemas three rows are"
     );
 }
 
@@ -102,7 +102,7 @@ fn the_track_is_the_border_itself_rather_than_a_second_bar_beside_it() {
     let border = tables_border(&draw_state(40, 12, &browsing(&refs, 0)));
     let track: String = border.chars().skip_while(|c| *c == '▐').collect();
 
-    assert!(!track.is_empty(), "twelve keyspaces do not fit three rows");
+    assert!(!track.is_empty(), "twelve schemas do not fit three rows");
     assert!(
         track.chars().all(|c| c == '│'),
         "the track has to be the border glyph, or the panel grows a second \
@@ -148,7 +148,7 @@ fn a_panel_whose_content_fits_keeps_its_border_intact() {
 
 #[test]
 fn the_selection_stays_visible_when_the_list_outgrows_the_panel() {
-    // Three content rows; twelve keyspaces force a scroll.
+    // Three content rows; twelve schemas force a scroll.
     let names: Vec<String> = (0..12).map(|i| format!("ks{i:02}")).collect();
     let refs: Vec<&str> = names.iter().map(String::as_str).collect();
 

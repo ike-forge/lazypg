@@ -5,7 +5,7 @@ use std::time::Duration;
 use crate::config::{Config, ConnectionConfig};
 use crate::connection::{Connection, ConnectionState, SchemaState};
 use crate::log::{Entry, Outcome, Trace};
-use crate::model::{ConnId, DbError, Key, Schema};
+use crate::model::{Catalog, ConnId, DbError, Key};
 use crate::overlay::{Message, Overlay};
 use crate::posture::Posture;
 use crate::search::Sift;
@@ -246,7 +246,7 @@ pub(super) fn connected(
         state,
         sentence("Reading schema"),
         Outcome::Pending {
-            trace: Trace::Schema(conn),
+            trace: Trace::Catalog(conn),
         },
     );
     state.mark_dirty();
@@ -283,13 +283,13 @@ pub(super) fn schema_failed(state: &mut State, conn: ConnId, error: &DbError) ->
     };
     if applied {
         state.log.complete(
-            Trace::Schema(conn),
+            Trace::Catalog(conn),
             Outcome::Failed {
                 detail: error.to_string(),
             },
         );
         state.overlay = Some(Overlay::Fatal(Message {
-            title: "Schema unavailable".to_owned(),
+            title: "Catalog unavailable".to_owned(),
             message: error.to_string(),
             severity: Severity::Danger,
         }));
@@ -301,14 +301,14 @@ pub(super) fn schema_failed(state: &mut State, conn: ConnId, error: &DbError) ->
 pub(super) fn schema_loaded(
     state: &mut State,
     conn: ConnId,
-    schema: Schema,
+    schema: Catalog,
     took: Duration,
 ) -> Vec<Effect> {
     let detail = format!(
-        "{} keyspaces, {} tables",
-        schema.keyspaces.len(),
+        "{} schemas, {} tables",
+        schema.schemas.len(),
         schema
-            .keyspaces
+            .schemas
             .values()
             .map(|ks| ks.tables.len())
             .sum::<usize>(),
@@ -323,7 +323,7 @@ pub(super) fn schema_loaded(
     if applied {
         state
             .log
-            .complete(Trace::Schema(conn), Outcome::Succeeded { detail, took });
+            .complete(Trace::Catalog(conn), Outcome::Succeeded { detail, took });
         if let Some((tables, schema)) = state.tables_and_schema() {
             tables.clamp(schema);
         }

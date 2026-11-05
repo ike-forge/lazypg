@@ -13,7 +13,7 @@ use crate::config::{
 use crate::contents::TableRef;
 use crate::health::Health;
 use crate::history::Histories;
-use crate::model::{ConnId, DbError, Page, PagingState, Schema, Statement};
+use crate::model::{Catalog, ConnId, DbError, Page, PagingState, Statement};
 use crate::posture::Posture;
 use crate::theme::ThemeChoice;
 
@@ -28,7 +28,7 @@ pub trait Cluster: Send + Sync {
         target: &ConnectionConfig,
         driver: &DriverConfig,
     ) -> Result<Posture, DbError>;
-    async fn describe(&self, conn: ConnId) -> Result<Schema, DbError>;
+    async fn describe(&self, conn: ConnId) -> Result<Catalog, DbError>;
     async fn execute(&self, conn: ConnId, stmt: &Statement) -> Result<Page, DbError>;
 
     /// Needs the statement as well as the cursor: a paging state alone resumes

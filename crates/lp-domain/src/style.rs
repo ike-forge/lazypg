@@ -79,7 +79,7 @@ pub enum Token {
     Dirty,
     /// Only while in force; an idle mark is [`Token::Faint`].
     Marker,
-    Keyspace,
+    Schema,
     Table,
     Keyword,
     Reference,

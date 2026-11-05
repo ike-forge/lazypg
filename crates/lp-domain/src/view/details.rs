@@ -3,7 +3,7 @@
 
 use crate::ddl::DdlTab;
 use crate::model::{
-    ClassKind, ClassOption, ClusteringOrder, Column, Index, IndexKind, Keyspace, Replication,
+    ClassKind, ClassOption, ClusteringOrder, Column, Index, IndexKind, Replication, Schema,
     Setting, Table,
 };
 use crate::panel::Panel;
@@ -77,13 +77,13 @@ pub enum DetailRow {
         name: String,
         /// `None` for a partition column.
         order: Option<ClusteringOrder>,
-        cql_type: String,
+        data_type: String,
     },
     /// Carries its own kind: nothing above it in the Columns tab says what part
     /// it plays.
     Column {
         name: String,
-        cql_type: String,
+        data_type: String,
         kind: ColumnKind,
     },
     Property {
@@ -106,7 +106,7 @@ pub enum DetailRow {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IdentityKind {
-    Keyspace,
+    Schema,
     Table,
 }
 
@@ -114,7 +114,7 @@ impl IdentityKind {
     #[must_use]
     pub const fn label(self) -> &'static str {
         match self {
-            Self::Keyspace => "Keyspace",
+            Self::Schema => "Schema",
             Self::Table => "Table",
         }
     }
@@ -122,7 +122,7 @@ impl IdentityKind {
     #[must_use]
     pub const fn token(self) -> Token {
         match self {
-            Self::Keyspace => Token::Keyspace,
+            Self::Schema => Token::Schema,
             Self::Table => Token::Table,
         }
     }
@@ -174,7 +174,7 @@ pub(super) fn of(state: &State) -> Option<Details> {
         (Node::Table { keyspace, table }, DdlTab::Ddl) => of_table(keyspace, table),
         (Node::Table { keyspace, table }, DdlTab::Columns) => columns_of(keyspace, table),
         (Node::Table { keyspace, table }, DdlTab::Indexes) => indexes_of(keyspace, table),
-        (Node::Keyspace { keyspace, .. }, _) => of_keyspace(keyspace),
+        (Node::Schema { keyspace, .. }, _) => of_keyspace(keyspace),
     };
 
     Some(details)
@@ -233,9 +233,12 @@ impl DetailRow {
     #[must_use]
     pub(crate) fn matches(&self, search: &Search) -> bool {
         match self {
-            Self::KeyColumn { name, cql_type, .. } | Self::Column { name, cql_type, .. } => {
-                search.matches(name) || search.matches(cql_type)
+            Self::KeyColumn {
+                name, data_type, ..
             }
+            | Self::Column {
+                name, data_type, ..
+            } => search.matches(name) || search.matches(data_type),
             Self::Property { name, value } => search.matches(name) || search.matches(value),
             // Against the reported map: a term the abbreviation dropped is
             // still in the option.
@@ -282,7 +285,7 @@ fn option_row((name, value): (&str, &str)) -> DetailRow {
     )
 }
 
-fn identity(keyspace: &Keyspace, table: Option<&Table>) -> Section {
+fn identity(keyspace: &Schema, table: Option<&Table>) -> Section {
     let row = |kind: IdentityKind, name: &str| DetailRow::Identity {
         kind,
         name: name.to_owned(),
@@ -292,7 +295,7 @@ fn identity(keyspace: &Keyspace, table: Option<&Table>) -> Section {
         heading: None,
         group: Group::Identity,
         token: None,
-        rows: std::iter::once(row(IdentityKind::Keyspace, &keyspace.name))
+        rows: std::iter::once(row(IdentityKind::Schema, &keyspace.name))
             .chain(table.map(|table| row(IdentityKind::Table, &table.name)))
             .collect(),
     }
@@ -310,7 +313,7 @@ fn partition_section(table: &Table) -> Section {
             .map(|column| DetailRow::KeyColumn {
                 name: column.name.clone(),
                 order: None,
-                cql_type: column.cql_type.clone(),
+                data_type: column.data_type.clone(),
             })
             .collect(),
     }
@@ -328,13 +331,13 @@ fn clustering_section(table: &Table) -> Section {
             .map(|clustering| DetailRow::KeyColumn {
                 name: clustering.column.name.clone(),
                 order: Some(clustering.order),
-                cql_type: clustering.column.cql_type.clone(),
+                data_type: clustering.column.data_type.clone(),
             })
             .collect(),
     }
 }
 
-fn of_table(keyspace: &Keyspace, table: &Table) -> Details {
+fn of_table(keyspace: &Schema, table: &Table) -> Details {
     let options = Section {
         heading: Some(Heading::new("Options", Token::Section)),
         group: Group::Settings,
@@ -354,7 +357,7 @@ fn of_table(keyspace: &Keyspace, table: &Table) -> Details {
 
 /// The primary key leads, drawn as the DDL tab draws it, so the tab reads as
 /// one list of ways in.
-fn indexes_of(keyspace: &Keyspace, table: &Table) -> Details {
+fn indexes_of(keyspace: &Schema, table: &Table) -> Details {
     let mut sections = populated([
         identity(keyspace, Some(table)),
         partition_section(table),
@@ -388,9 +391,9 @@ fn index_rows(table: &Table, index: &Index) -> Vec<DetailRow> {
     let target = DetailRow::KeyColumn {
         name: index.target.text(),
         order: None,
-        cql_type: table
+        data_type: table
             .column(&index.target.column)
-            .map(|column| column.cql_type.clone())
+            .map(|column| column.data_type.clone())
             .unwrap_or_default(),
     };
 
@@ -420,10 +423,10 @@ fn no_indexes() -> Section {
 }
 
 /// Flat: headings would repeat the DDL tab; the kind travels with each row.
-fn columns_of(keyspace: &Keyspace, table: &Table) -> Details {
+fn columns_of(keyspace: &Schema, table: &Table) -> Details {
     let row = |column: &Column, kind: ColumnKind| DetailRow::Column {
         name: column.name.clone(),
-        cql_type: column.cql_type.clone(),
+        data_type: column.data_type.clone(),
         kind,
     };
 
@@ -469,7 +472,7 @@ fn columns_of(keyspace: &Keyspace, table: &Table) -> Details {
     }
 }
 
-fn of_keyspace(keyspace: &Keyspace) -> Details {
+fn of_keyspace(keyspace: &Schema) -> Details {
     let replication = Section {
         heading: Some(Heading::new("Replication", Token::Section)),
         group: Group::Settings,
@@ -482,7 +485,7 @@ fn of_keyspace(keyspace: &Keyspace) -> Details {
     }
 }
 
-/// Named as `system_schema.keyspaces.replication` names them.
+/// Named as `system_schema.schemas.replication` names them.
 fn replication_rows(replication: &Replication) -> Vec<DetailRow> {
     let property = |name: &str, value: String| DetailRow::Property {
         name: name.to_owned(),
@@ -520,8 +523,8 @@ mod tests {
 
     use crate::connection::{Connection, ConnectionState, SchemaState};
     use crate::model::{
-        ClusteringColumn, Column, ConnId, DbError, Index, IndexKind, IndexTarget, PrimaryKey,
-        Replication, Schema, TableOptions,
+        Catalog, ClusteringColumn, Column, ConnId, DbError, Index, IndexKind, IndexTarget,
+        PrimaryKey, Replication, TableOptions,
     };
     use crate::search::{Search, Searched};
     use crate::state::State;
@@ -577,10 +580,10 @@ mod tests {
             .unwrap_or_else(|| panic!("{heading} is missing"))
     }
 
-    fn column(name: &str, cql_type: &str) -> Column {
+    fn column(name: &str, data_type: &str) -> Column {
         Column {
             name: name.to_owned(),
-            cql_type: cql_type.to_owned(),
+            data_type: data_type.to_owned(),
         }
     }
 
@@ -612,13 +615,13 @@ mod tests {
     }
 
     fn browsing(table: Table) -> State {
-        let keyspace = Keyspace {
+        let keyspace = Schema {
             name: "shop".to_owned(),
             replication: Replication::SimpleStrategy { factor: 1 },
             tables: BTreeMap::from([(table.name.clone(), table)]),
         };
-        let schema = Schema {
-            keyspaces: BTreeMap::from([(keyspace.name.clone(), keyspace)]),
+        let schema = Catalog {
+            schemas: BTreeMap::from([(keyspace.name.clone(), keyspace)]),
         };
 
         let mut state = connected(schema.clone());
@@ -692,7 +695,7 @@ mod tests {
             [DetailRow::KeyColumn {
                 name: "values(tags)".to_owned(),
                 order: None,
-                cql_type: "set<text>".to_owned(),
+                data_type: "set<text>".to_owned(),
             }],
             "the modality is part of what the index covers, the type is the column's"
         );
@@ -736,7 +739,7 @@ mod tests {
             [DetailRow::KeyColumn {
                 name: "gone".to_owned(),
                 order: None,
-                cql_type: String::new(),
+                data_type: String::new(),
             }]
         );
     }
@@ -791,27 +794,27 @@ mod tests {
             [
                 DetailRow::Column {
                     name: "customer_id".to_owned(),
-                    cql_type: "uuid".to_owned(),
+                    data_type: "uuid".to_owned(),
                     kind: ColumnKind::Partition,
                 },
                 DetailRow::Column {
                     name: "order_date".to_owned(),
-                    cql_type: "date".to_owned(),
+                    data_type: "date".to_owned(),
                     kind: ColumnKind::Clustering,
                 },
                 DetailRow::Column {
                     name: "order_id".to_owned(),
-                    cql_type: "timeuuid".to_owned(),
+                    data_type: "timeuuid".to_owned(),
                     kind: ColumnKind::Clustering,
                 },
                 DetailRow::Column {
                     name: "region".to_owned(),
-                    cql_type: "text".to_owned(),
+                    data_type: "text".to_owned(),
                     kind: ColumnKind::Static,
                 },
                 DetailRow::Column {
                     name: "status".to_owned(),
-                    cql_type: "text".to_owned(),
+                    data_type: "text".to_owned(),
                     kind: ColumnKind::Regular,
                 },
             ],
@@ -880,13 +883,13 @@ mod tests {
     fn a_selected_table_is_named_by_its_keyspace_and_its_own_name() {
         assert_eq!(
             identity_rows(&details(&browsing(orders()))),
-            [("Keyspace", "shop"), ("Table", "orders_by_customer")],
+            [("Schema", "shop"), ("Table", "orders_by_customer")],
             "one row each, so the panel can label them and the tree's colours \
              say which is which"
         );
         assert_eq!(
             identity_rows(&details(&columns_tab(&browsing(orders())))),
-            [("Keyspace", "shop"), ("Table", "orders_by_customer")],
+            [("Schema", "shop"), ("Table", "orders_by_customer")],
             "the other tab describes the same table"
         );
     }
@@ -895,7 +898,7 @@ mod tests {
     fn a_selected_keyspace_names_only_itself() {
         assert_eq!(
             identity_rows(&details(&tabled(&[("shop", &["orders"])]))),
-            [("Keyspace", "shop")],
+            [("Schema", "shop")],
             "there is no table selected to name"
         );
     }
@@ -908,7 +911,7 @@ mod tests {
             matches!(
                 details.rows().next(),
                 Some(DetailRow::Identity {
-                    kind: IdentityKind::Keyspace,
+                    kind: IdentityKind::Schema,
                     ..
                 })
             ),
@@ -946,7 +949,7 @@ mod tests {
             [DetailRow::KeyColumn {
                 name: "customer_id".to_owned(),
                 order: None,
-                cql_type: "uuid".to_owned(),
+                data_type: "uuid".to_owned(),
             }]
         );
         assert_eq!(
@@ -955,12 +958,12 @@ mod tests {
                 DetailRow::KeyColumn {
                     name: "order_date".to_owned(),
                     order: Some(ClusteringOrder::Descending),
-                    cql_type: "date".to_owned(),
+                    data_type: "date".to_owned(),
                 },
                 DetailRow::KeyColumn {
                     name: "order_id".to_owned(),
                     order: Some(ClusteringOrder::Ascending),
-                    cql_type: "timeuuid".to_owned(),
+                    data_type: "timeuuid".to_owned(),
                 },
             ]
         );
@@ -1151,10 +1154,10 @@ mod tests {
             id: ConnId::next(),
             name: crate::config::ConnectionName::try_new("local").expect("a valid name"),
             posture: crate::posture::Posture::ReadOnly,
-            schema: SchemaState::Loaded(Schema {
-                keyspaces: BTreeMap::from([(
+            schema: SchemaState::Loaded(Catalog {
+                schemas: BTreeMap::from([(
                     "shop".to_owned(),
-                    Keyspace {
+                    Schema {
                         name: "shop".to_owned(),
                         replication: Replication::NetworkTopologyStrategy {
                             factors: BTreeMap::from([
@@ -1170,7 +1173,7 @@ mod tests {
 
         let details = details(&state);
 
-        assert_eq!(identity_rows(&details), [("Keyspace", "shop")]);
+        assert_eq!(identity_rows(&details), [("Schema", "shop")]);
         assert_eq!(
             section(&details, "Replication").rows,
             [
@@ -1302,7 +1305,7 @@ mod tests {
         let search = Search::new("timeuuid").expect("non-empty");
         let row = DetailRow::Column {
             name: "created_at".to_owned(),
-            cql_type: "timeuuid".to_owned(),
+            data_type: "timeuuid".to_owned(),
             kind: ColumnKind::Regular,
         };
 
@@ -1350,7 +1353,7 @@ mod tests {
         let row = DetailRow::KeyColumn {
             name: "customer_id".to_owned(),
             order: None,
-            cql_type: "uuid".to_owned(),
+            data_type: "uuid".to_owned(),
         };
 
         assert!(row.matches(&search));
@@ -1362,7 +1365,7 @@ mod tests {
         let row = DetailRow::KeyColumn {
             name: "order_id".to_owned(),
             order: Some(ClusteringOrder::Ascending),
-            cql_type: "timeuuid".to_owned(),
+            data_type: "timeuuid".to_owned(),
         };
 
         assert!(row.matches(&search), "the name does not carry the term");
@@ -1383,7 +1386,7 @@ mod tests {
             Some(&DetailRow::KeyColumn {
                 name: "order_date".to_owned(),
                 order: Some(ClusteringOrder::Descending),
-                cql_type: "date".to_owned(),
+                data_type: "date".to_owned(),
             }),
             "down from the last partition column lands on the first clustering one"
         );

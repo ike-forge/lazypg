@@ -65,7 +65,7 @@ fn editable(state: &State) -> Result<Field, String> {
     };
     let Some(described) = state
         .schema()
-        .and_then(|schema| schema.keyspaces.get(&table.keyspace))
+        .and_then(|schema| schema.schemas.get(&table.keyspace))
         .and_then(|keyspace| keyspace.tables.get(&table.table))
     else {
         return Err(format!(
@@ -88,10 +88,10 @@ fn editable(state: &State) -> Result<Field, String> {
             "{name} is part of the primary key. A key column cannot be updated."
         ));
     }
-    if !crate::edit::editable(&declared.cql_type) {
+    if !crate::edit::editable(&declared.data_type) {
         return Err(format!(
             "A column of type {} cannot be edited here.",
-            declared.cql_type
+            declared.data_type
         ));
     }
     if !inserting && row_key(state, described).is_none() {
@@ -108,7 +108,7 @@ fn editable(state: &State) -> Result<Field, String> {
             }
         });
 
-    Ok(Field::opened(column, name, &declared.cql_type, value))
+    Ok(Field::opened(column, name, &declared.data_type, value))
 }
 
 fn row_key(state: &State, described: &crate::model::Table) -> Option<RowKey> {

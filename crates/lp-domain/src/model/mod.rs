@@ -16,8 +16,8 @@ pub use ids::{ConnId, JobId, QueryId};
 pub use input::{Key, KeyPress, Modifiers};
 pub use page::{Page, PagingState, Row};
 pub use schema::{
-    ClusteringColumn, ClusteringOrder, CollectionPart, Column, Index, IndexKind, IndexTarget,
-    Keyspace, KeyspaceKind, PrimaryKey, Replication, Schema, Table, TableOptions,
+    Catalog, ClusteringColumn, ClusteringOrder, CollectionPart, Column, Index, IndexKind,
+    IndexTarget, PrimaryKey, Replication, Schema, SchemaKind, Table, TableOptions,
 };
 pub use statement::{Statement, StatementKind, UpdatedRow};
 pub use value::CqlValue;

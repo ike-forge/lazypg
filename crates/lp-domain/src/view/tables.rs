@@ -1,6 +1,6 @@
 use crate::connection::{ConnectionState, SchemaState};
 use crate::feedback::Flash;
-use crate::model::{KeyspaceKind, Schema};
+use crate::model::{Catalog, SchemaKind};
 use crate::panel::Panel;
 use crate::state::State;
 use crate::style::{Segment, Token};
@@ -21,7 +21,7 @@ pub struct TreeRow {
 /// limb glyph.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RowKind {
-    Keyspace,
+    Schema,
     Table { last: bool },
 }
 
@@ -75,7 +75,7 @@ pub(super) fn body(state: &State) -> PanelBody {
     }
 }
 
-fn tree(tables: &TablesPanel, schema: &Schema, flash: Option<&Flash>) -> PanelBody {
+fn tree(tables: &TablesPanel, schema: &Catalog, flash: Option<&Flash>) -> PanelBody {
     let nodes = tables.rows(schema);
     let rows: Vec<TreeRow> = nodes
         .iter()
@@ -93,7 +93,7 @@ fn tree(tables: &TablesPanel, schema: &Schema, flash: Option<&Flash>) -> PanelBo
         return waiting(if tables.search().is_some() {
             "No match"
         } else {
-            "No keyspaces"
+            "No schemas"
         });
     }
 
@@ -113,7 +113,7 @@ fn tree(tables: &TablesPanel, schema: &Schema, flash: Option<&Flash>) -> PanelBo
 /// it is last.
 fn tree_row(node: &Node<'_>, followed: bool) -> TreeRow {
     let (keyspace, label, kind) = match node {
-        Node::Keyspace { keyspace, .. } => (*keyspace, keyspace.name.clone(), RowKind::Keyspace),
+        Node::Schema { keyspace, .. } => (*keyspace, keyspace.name.clone(), RowKind::Schema),
         Node::Table { keyspace, table } => (
             *keyspace,
             table.name.clone(),
@@ -122,9 +122,9 @@ fn tree_row(node: &Node<'_>, followed: bool) -> TreeRow {
     };
 
     let token = match (keyspace.kind(), kind) {
-        (KeyspaceKind::System, _) => Token::Faint,
-        (KeyspaceKind::User, RowKind::Keyspace) => Token::Keyspace,
-        (KeyspaceKind::User, RowKind::Table { .. }) => Token::Table,
+        (SchemaKind::System, _) => Token::Faint,
+        (SchemaKind::User, RowKind::Schema) => Token::Schema,
+        (SchemaKind::User, RowKind::Table { .. }) => Token::Table,
     };
 
     TreeRow { label, kind, token }
@@ -268,7 +268,7 @@ mod tests {
         let state = loaded(&["system_schema", "typezoo", "shop"]);
 
         let PanelBody::Tree { rows, selected, .. } = tables_body(&state) else {
-            panic!("a loaded schema lists its keyspaces");
+            panic!("a loaded schema lists its schemas");
         };
 
         assert_eq!(
@@ -279,7 +279,7 @@ mod tests {
         );
         assert_eq!(
             rows[0].token,
-            Token::Keyspace,
+            Token::Schema,
             "a user keyspace is told apart from a user table"
         );
         assert_eq!(rows[2].token, Token::Faint);
@@ -291,12 +291,12 @@ mod tests {
         let state = loaded(&["shop"]);
 
         let PanelBody::Tree { rows, .. } = tables_body(&state) else {
-            panic!("a loaded schema lists its keyspaces");
+            panic!("a loaded schema lists its schemas");
         };
 
         assert_eq!(
             rows[0].kind,
-            RowKind::Keyspace,
+            RowKind::Schema,
             "a keyspace with nothing under it is still a keyspace"
         );
     }
@@ -306,23 +306,23 @@ mod tests {
         let mut state = tabled(&[("shop", &["orders", "users"])]);
 
         let PanelBody::Tree { rows, .. } = tables_body(&state) else {
-            panic!("a loaded schema lists its keyspaces");
+            panic!("a loaded schema lists its schemas");
         };
         assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].kind, RowKind::Keyspace);
+        assert_eq!(rows[0].kind, RowKind::Schema);
 
         let schema = state.schema().cloned().expect("loaded");
         state.tables.open(&schema);
 
         let PanelBody::Tree { rows, .. } = tables_body(&state) else {
-            panic!("a loaded schema lists its keyspaces");
+            panic!("a loaded schema lists its schemas");
         };
         assert_eq!(
             rows.iter()
                 .map(|row| (row.kind, row.label.as_str()))
                 .collect::<Vec<_>>(),
             [
-                (RowKind::Keyspace, "shop"),
+                (RowKind::Schema, "shop"),
                 (RowKind::Table { last: false }, "orders"),
                 (RowKind::Table { last: true }, "users"),
             ]
@@ -336,7 +336,7 @@ mod tests {
         state.tables.open(&schema);
 
         let PanelBody::Tree { rows, .. } = tables_body(&state) else {
-            panic!("a loaded schema lists its keyspaces");
+            panic!("a loaded schema lists its schemas");
         };
 
         assert_eq!(rows[0].token, Token::Faint);
@@ -353,7 +353,7 @@ mod tests {
         state.move_tree_cursor(1);
 
         let PanelBody::Tree { selected, .. } = tables_body(&state) else {
-            panic!("a loaded schema lists its keyspaces");
+            panic!("a loaded schema lists its schemas");
         };
 
         assert_eq!(selected, 1);
@@ -364,7 +364,7 @@ mod tests {
         assert_eq!(
             tables_body(&loaded(&[])),
             PanelBody::Notice {
-                text: "No keyspaces".to_owned(),
+                text: "No schemas".to_owned(),
                 token: Some(Token::Muted),
             }
         );
@@ -430,14 +430,14 @@ mod tests {
 
         let keyspace = rows
             .iter()
-            .find(|row| row.kind == RowKind::Keyspace)
+            .find(|row| row.kind == RowKind::Schema)
             .expect("a keyspace");
         let table = rows
             .iter()
             .find(|row| row.kind.is_table())
             .expect("a table");
 
-        assert_eq!(keyspace.token, Token::Keyspace);
+        assert_eq!(keyspace.token, Token::Schema);
         assert_eq!(table.token, Token::Table);
         assert_ne!(
             keyspace.token, table.token,

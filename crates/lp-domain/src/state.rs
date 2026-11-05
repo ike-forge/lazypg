@@ -14,7 +14,7 @@ use crate::geometry::Geometry;
 use crate::history::Histories;
 use crate::jobs::{Committing, Dropping, ExportJob};
 use crate::log::{Log, Outcome};
-use crate::model::{ConnId, QueryId, Schema, Statement};
+use crate::model::{Catalog, ConnId, QueryId, Statement};
 use crate::overlay::Overlay;
 use crate::panel::Panel;
 use crate::posture::Posture;
@@ -148,7 +148,7 @@ impl State {
     }
 
     #[must_use]
-    pub const fn schema(&self) -> Option<&Schema> {
+    pub const fn schema(&self) -> Option<&Catalog> {
         match &self.connection {
             ConnectionState::Connected(Connection {
                 schema: SchemaState::Loaded(schema),
@@ -165,13 +165,13 @@ impl State {
         let schema = self.schema()?;
 
         self.tables.selected(schema).map(|node| match node {
-            Node::Keyspace { keyspace, .. } | Node::Table { keyspace, .. } => keyspace.name.clone(),
+            Node::Schema { keyspace, .. } | Node::Table { keyspace, .. } => keyspace.name.clone(),
         })
     }
 
     /// One method: the borrow checker cannot split `&mut self` across two
     /// accessors.
-    pub fn tables_and_schema(&mut self) -> Option<(&mut TablesPanel, &Schema)> {
+    pub fn tables_and_schema(&mut self) -> Option<(&mut TablesPanel, &Catalog)> {
         match &self.connection {
             ConnectionState::Connected(Connection {
                 schema: SchemaState::Loaded(schema),
@@ -244,7 +244,7 @@ impl State {
     }
 
     /// Repairs what a search invalidates. Only Tables needs a clamp: forcing
-    /// keyspaces open changes its row count.
+    /// schemas open changes its row count.
     pub fn apply_search(&mut self, target: Searched, search: Option<Search>) {
         match target {
             Searched::Tables => {
@@ -326,7 +326,7 @@ mod tests {
                 .is_none()
         );
         assert!(
-            connected(SchemaState::Loaded(Schema::default()))
+            connected(SchemaState::Loaded(Catalog::default()))
                 .schema()
                 .is_some()
         );

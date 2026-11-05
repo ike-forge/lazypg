@@ -3,7 +3,7 @@
 
 use std::collections::BTreeSet;
 
-use crate::model::{Keyspace, Schema, Table};
+use crate::model::{Catalog, Schema, Table};
 use crate::search::{Direction, Search};
 use crate::selection::Selection;
 use crate::viewport::{Cursor, Scroll};
@@ -23,12 +23,12 @@ pub struct TablesPanel {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Node<'a> {
-    Keyspace {
-        keyspace: &'a Keyspace,
+    Schema {
+        keyspace: &'a Schema,
         unfolded: bool,
     },
     Table {
-        keyspace: &'a Keyspace,
+        keyspace: &'a Schema,
         table: &'a Table,
     },
 }
@@ -45,20 +45,20 @@ impl TablesPanel {
         self.search = search;
     }
 
-    /// A search keeps keyspaces it reaches, drawn open, holding only the tables
+    /// A search keeps schemas it reaches, drawn open, holding only the tables
     /// it reaches. The unfold set is never written, so clearing restores the
     /// fold state exactly.
     #[must_use]
-    pub fn rows<'a>(&self, schema: &'a Schema) -> Vec<Node<'a>> {
+    pub fn rows<'a>(&self, schema: &'a Catalog) -> Vec<Node<'a>> {
         let mut rows = Vec::new();
 
-        for keyspace in schema.keyspaces_in_display_order() {
+        for keyspace in schema.schemas_in_display_order() {
             if !self.retains(keyspace) {
                 continue;
             }
 
             let unfolded = self.is_unfolded(keyspace) || self.holds_a_match(keyspace);
-            rows.push(Node::Keyspace { keyspace, unfolded });
+            rows.push(Node::Schema { keyspace, unfolded });
 
             if unfolded {
                 rows.extend(
@@ -74,7 +74,7 @@ impl TablesPanel {
         rows
     }
 
-    fn retains(&self, keyspace: &Keyspace) -> bool {
+    fn retains(&self, keyspace: &Schema) -> bool {
         let Some(search) = &self.search else {
             return true;
         };
@@ -88,7 +88,7 @@ impl TablesPanel {
 
     /// A term matching the keyspace keeps every table in it: `l` and `⏎` are
     /// swallowed under a search, so nothing else could open it.
-    fn reaches(&self, keyspace: &Keyspace, table: &Table) -> bool {
+    fn reaches(&self, keyspace: &Schema, table: &Table) -> bool {
         let Some(search) = &self.search else {
             return true;
         };
@@ -97,14 +97,14 @@ impl TablesPanel {
     }
 
     /// A keyspace with no tables has nothing to open.
-    fn holds_a_match(&self, keyspace: &Keyspace) -> bool {
+    fn holds_a_match(&self, keyspace: &Schema) -> bool {
         self.search.is_some() && !keyspace.tables.is_empty() && self.retains(keyspace)
     }
 
     /// `from` is exclusive. Derived from `rows`, not a stored match list, which
     /// every reload, fold and term change would invalidate.
     #[must_use]
-    pub fn next_match(&self, schema: &Schema, from: usize, direction: Direction) -> Option<usize> {
+    pub fn next_match(&self, schema: &Catalog, from: usize, direction: Direction) -> Option<usize> {
         let search = self.search.as_ref()?;
         let rows = self.rows(schema);
         let len = rows.len();
@@ -115,7 +115,7 @@ impl TablesPanel {
                 Some(*at)
             })
             .find(|at| match rows[*at] {
-                Node::Keyspace { keyspace, .. } => search.matches(&keyspace.name),
+                Node::Schema { keyspace, .. } => search.matches(&keyspace.name),
                 Node::Table { table, .. } => search.matches(&table.name),
             })
     }
@@ -136,27 +136,27 @@ impl TablesPanel {
         (&mut self.selection, &mut self.cursor)
     }
 
-    pub fn go_to(&mut self, row: usize, schema: &Schema) {
+    pub fn go_to(&mut self, row: usize, schema: &Catalog) {
         self.cursor.go_to(row, self.rows(schema).len());
     }
 
-    pub fn clamp(&mut self, schema: &Schema) {
+    pub fn clamp(&mut self, schema: &Catalog) {
         self.cursor.clamp_to(self.rows(schema).len());
     }
 
     #[must_use]
-    pub fn selected<'a>(&self, schema: &'a Schema) -> Option<Node<'a>> {
+    pub fn selected<'a>(&self, schema: &'a Catalog) -> Option<Node<'a>> {
         self.rows(schema).into_iter().nth(self.cursor.index())
     }
 
     /// Swallowed under a search: the keyspace is drawn open regardless, so
     /// folding would only write `unfolded`. Every caller goes through here.
-    pub fn toggle(&mut self, schema: &Schema) {
+    pub fn toggle(&mut self, schema: &Catalog) {
         if self.search.is_some() {
             return;
         }
 
-        let Some(Node::Keyspace { keyspace, unfolded }) = self.selected(schema) else {
+        let Some(Node::Schema { keyspace, unfolded }) = self.selected(schema) else {
             return;
         };
 
@@ -168,12 +168,12 @@ impl TablesPanel {
     }
 
     /// Swallowed under a search, as [`Self::toggle`] is.
-    pub fn open(&mut self, schema: &Schema) {
+    pub fn open(&mut self, schema: &Catalog) {
         if self.search.is_some() {
             return;
         }
 
-        let Some(Node::Keyspace { keyspace, unfolded }) = self.selected(schema) else {
+        let Some(Node::Schema { keyspace, unfolded }) = self.selected(schema) else {
             return;
         };
 
@@ -185,13 +185,13 @@ impl TablesPanel {
     }
 
     /// Swallowed under a search, as [`Self::toggle`] is.
-    pub fn close(&mut self, schema: &Schema) {
+    pub fn close(&mut self, schema: &Catalog) {
         if self.search.is_some() {
             return;
         }
 
         match self.selected(schema) {
-            Some(Node::Keyspace {
+            Some(Node::Schema {
                 keyspace,
                 unfolded: true,
             }) => self.fold(&keyspace.name, schema),
@@ -201,25 +201,25 @@ impl TablesPanel {
     }
 
     /// Never for a keyspace with no tables, which also makes stale names inert.
-    fn is_unfolded(&self, keyspace: &Keyspace) -> bool {
+    fn is_unfolded(&self, keyspace: &Schema) -> bool {
         !keyspace.tables.is_empty() && self.unfolded.contains(&keyspace.name)
     }
 
-    fn unfold(&mut self, keyspace: &Keyspace) {
+    fn unfold(&mut self, keyspace: &Schema) {
         if !keyspace.tables.is_empty() {
             self.unfolded.insert(keyspace.name.clone());
         }
     }
 
-    fn fold(&mut self, name: &str, schema: &Schema) {
+    fn fold(&mut self, name: &str, schema: &Catalog) {
         self.unfolded.remove(name);
         self.clamp(schema);
     }
 
-    fn select_keyspace(&mut self, name: &str, schema: &Schema) {
+    fn select_keyspace(&mut self, name: &str, schema: &Catalog) {
         let rows = self.rows(schema);
         let found = rows.iter().position(
-            |node| matches!(node, Node::Keyspace { keyspace, .. } if keyspace.name == name),
+            |node| matches!(node, Node::Schema { keyspace, .. } if keyspace.name == name),
         );
 
         if let Some(index) = found {
@@ -248,12 +248,12 @@ pub(crate) mod tests_support {
             primary_key: PrimaryKey {
                 partition: vec![Column {
                     name: "id".to_owned(),
-                    cql_type: "uuid".to_owned(),
+                    data_type: "uuid".to_owned(),
                 }],
                 clustering: vec![ClusteringColumn {
                     column: Column {
                         name: "created_at".to_owned(),
-                        cql_type: "timestamp".to_owned(),
+                        data_type: "timestamp".to_owned(),
                     },
                     order: ClusteringOrder::Ascending,
                 }],
@@ -279,14 +279,14 @@ pub(crate) mod tests_support {
         )
     }
 
-    pub(crate) fn schema_of(keyspaces: &[(&str, &[&str])]) -> Schema {
-        Schema {
-            keyspaces: keyspaces
+    pub(crate) fn schema_of(schemas: &[(&str, &[&str])]) -> Catalog {
+        Catalog {
+            schemas: schemas
                 .iter()
                 .map(|(name, tables)| {
                     (
                         (*name).to_owned(),
-                        Keyspace {
+                        Schema {
                             name: (*name).to_owned(),
                             replication: Replication::SimpleStrategy { factor: 1 },
                             tables: tables
@@ -306,12 +306,12 @@ mod tests {
     use super::tests_support::schema_of;
     use super::*;
 
-    fn labels(panel: &TablesPanel, schema: &Schema) -> Vec<(u8, String)> {
+    fn labels(panel: &TablesPanel, schema: &Catalog) -> Vec<(u8, String)> {
         panel
             .rows(schema)
             .iter()
             .map(|node| match node {
-                Node::Keyspace { keyspace, .. } => (0, keyspace.name.clone()),
+                Node::Schema { keyspace, .. } => (0, keyspace.name.clone()),
                 Node::Table { table, .. } => (1, table.name.clone()),
             })
             .collect()
@@ -390,7 +390,7 @@ mod tests {
         );
         assert!(matches!(
             panel.selected(&schema),
-            Some(Node::Keyspace {
+            Some(Node::Schema {
                 unfolded: false,
                 ..
             })
@@ -521,32 +521,30 @@ mod tests {
         assert_eq!(cursor.index(), 2);
     }
 
-    fn shop_and_logs() -> Schema {
+    fn shop_and_logs() -> Catalog {
         schema_of(&[
             ("shop", &["orders", "users"][..]),
             ("logs", &["order_events", "spans"][..]),
         ])
     }
 
-    fn search_labels(panel: &TablesPanel, schema: &Schema) -> Vec<String> {
+    fn search_labels(panel: &TablesPanel, schema: &Catalog) -> Vec<String> {
         panel
             .rows(schema)
             .iter()
             .map(|node| match node {
-                Node::Keyspace { keyspace, .. } => keyspace.name.clone(),
+                Node::Schema { keyspace, .. } => keyspace.name.clone(),
                 Node::Table { table, .. } => format!("  {}", table.name),
             })
             .collect()
     }
 
-    fn unfolded_on(name: &str, schema: &Schema) -> TablesPanel {
+    fn unfolded_on(name: &str, schema: &Catalog) -> TablesPanel {
         let mut panel = TablesPanel::default();
         let index = panel
             .rows(schema)
             .iter()
-            .position(
-                |node| matches!(node, Node::Keyspace { keyspace, .. } if keyspace.name == name),
-            )
+            .position(|node| matches!(node, Node::Schema { keyspace, .. } if keyspace.name == name))
             .expect("the keyspace is in the schema");
         panel.cursor.go_to(index, panel.rows(schema).len());
         panel.open(schema);
@@ -613,7 +611,7 @@ mod tests {
         assert!(
             matches!(
                 panel.rows(&schema).first(),
-                Some(Node::Keyspace { unfolded: true, .. })
+                Some(Node::Schema { unfolded: true, .. })
             ),
             "a search that hid its own matches would be no search at all"
         );
@@ -644,7 +642,7 @@ mod tests {
 
         assert!(matches!(
             panel.rows(&schema).as_slice(),
-            [Node::Keyspace {
+            [Node::Schema {
                 unfolded: false,
                 ..
             }]
@@ -677,7 +675,7 @@ mod tests {
         );
     }
 
-    fn schema() -> Schema {
+    fn schema() -> Catalog {
         schema_of(&[
             ("shop", &["orders", "orders_by_customer"][..]),
             ("logs", &["order_events"][..]),

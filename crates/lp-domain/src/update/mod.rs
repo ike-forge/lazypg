@@ -13,7 +13,7 @@ use crate::geometry::Geometry;
 use crate::health::Health;
 use crate::log::{Entry, Outcome, Subject as LogSubject, Trace};
 use crate::model::{
-    ConnId, DbError, JobId, KeyPress, Page, PagingState, QueryId, Row, Schema, Statement,
+    Catalog, ConnId, DbError, JobId, KeyPress, Page, PagingState, QueryId, Row, Statement,
 };
 use crate::overlay::{DiagnosticsPanel, Message, Overlay};
 use crate::pointer::Pointer;
@@ -110,7 +110,7 @@ pub enum Msg {
     },
     SchemaLoaded {
         conn: ConnId,
-        schema: Box<Schema>,
+        schema: Box<Catalog>,
         took: Duration,
     },
     PageReady {
@@ -303,7 +303,7 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<Effect> {
 /// excluded: it must not scroll the panel.
 #[derive(PartialEq, Eq)]
 enum Described {
-    Keyspace(String),
+    Schema(String),
     Table { keyspace: String, table: String },
 }
 
@@ -311,7 +311,7 @@ fn described(state: &State) -> Option<Described> {
     let schema = state.schema()?;
 
     Some(match state.tables.selected(schema)? {
-        Node::Keyspace { keyspace, .. } => Described::Keyspace(keyspace.name.clone()),
+        Node::Schema { keyspace, .. } => Described::Schema(keyspace.name.clone()),
         Node::Table { keyspace, table } => Described::Table {
             keyspace: keyspace.name.clone(),
             table: table.name.clone(),

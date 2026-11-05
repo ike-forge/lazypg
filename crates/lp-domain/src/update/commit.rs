@@ -107,7 +107,7 @@ pub(super) fn pending_commit(
     }
     let described = state
         .schema()?
-        .keyspaces
+        .schemas
         .get(&table.keyspace)?
         .tables
         .get(&table.table)?;

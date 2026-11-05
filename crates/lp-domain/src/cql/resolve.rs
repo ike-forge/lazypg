@@ -6,7 +6,7 @@ use super::lex::{Kind, Piece};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Role {
-    Keyspace,
+    Schema,
     Table,
     Column,
     /// Stands for a selector, not anything the schema holds.
@@ -25,7 +25,7 @@ pub enum Statement {
     Other,
 }
 
-/// Folded to lower case where unquoted: `Schema` is indexed by the folded name.
+/// Folded to lower case where unquoted: `Catalog` is indexed by the folded name.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Name {
     pub keyspace: Option<String>,
@@ -36,7 +36,7 @@ pub struct Name {
 pub enum Expect {
     #[default]
     Keyword,
-    Keyspace,
+    Schema,
     Table,
     Column,
     Value,
@@ -174,8 +174,8 @@ enum Verb {
     /// No clause table: every name is left without a role.
     Uncovered,
     Data,
-    Schema,
-    /// Apart from [`Verb::Schema`]: `CREATE INDEX … ON t (c)` takes a plain
+    Catalog,
+    /// Apart from [`Verb::Catalog`]: `CREATE INDEX … ON t (c)` takes a plain
     /// column after `(`.
     SchemaTable,
 }
@@ -261,7 +261,7 @@ impl Machine {
                 "SELECT" | "INSERT" | "UPDATE" | "DELETE" | "TRUNCATE" | "USE" | "DROP" => {
                     Verb::Data
                 }
-                "CREATE" | "ALTER" => Verb::Schema,
+                "CREATE" | "ALTER" => Verb::Catalog,
                 _ => Verb::Uncovered,
             };
         }
@@ -271,7 +271,7 @@ impl Machine {
             return;
         }
 
-        if word == "TABLE" && self.verb == Verb::Schema {
+        if word == "TABLE" && self.verb == Verb::Catalog {
             self.verb = Verb::SchemaTable;
         }
 
@@ -283,7 +283,7 @@ impl Machine {
                 }
                 self.enter(Expect::Table)
             }
-            "USE" | "KEYSPACE" | "SCHEMA" => self.enter(Expect::Keyspace),
+            "USE" | "KEYSPACE" | "SCHEMA" => self.enter(Expect::Schema),
             "SELECT" | "DELETE" | "WHERE" | "SET" | "BY" | "TOKEN" | "PRIMARY" | "RENAME"
             | "DROP" => self.enter(Expect::Column),
             // `AND` continues the open clause: in `WITH` it chains options.
@@ -299,7 +299,7 @@ impl Machine {
             "VALUES" | "USING" | "LIMIT" | "IN" | "CONTAINS" => self.enter(Expect::Value),
             // Before a pending table or keyspace name, `IF [NOT] EXISTS`
             // modifies it and opens no clause.
-            "IF" if !matches!(self.expect, Expect::Table | Expect::Keyspace) => {
+            "IF" if !matches!(self.expect, Expect::Table | Expect::Schema) => {
                 self.enter(Expect::Column)
             }
             // Interrupts rather than opens a clause, so `base` is left alone.
@@ -343,12 +343,12 @@ impl Machine {
         let name = fold(text);
 
         match self.expect {
-            Expect::Keyspace => {
+            Expect::Schema => {
                 self.record(Name {
                     keyspace: None,
                     table: name,
                 });
-                Some(Role::Keyspace)
+                Some(Role::Schema)
             }
             Expect::Table => {
                 // Only an adjacent `.` qualifies: `FROM shop orders` stays two
@@ -356,7 +356,7 @@ impl Machine {
                 let qualified = self.pending_keyspace.take().filter(|_| self.dot_before);
 
                 if let Some((index, keyspace)) = qualified {
-                    self.roles[index] = Some(Role::Keyspace);
+                    self.roles[index] = Some(Role::Schema);
                     self.record(Name {
                         keyspace: Some(keyspace),
                         table: name,
@@ -470,7 +470,7 @@ mod tests {
             vec![
                 ("id".to_owned(), Some(Role::Column)),
                 ("total".to_owned(), Some(Role::Column)),
-                ("shop".to_owned(), Some(Role::Keyspace)),
+                ("shop".to_owned(), Some(Role::Schema)),
                 ("orders".to_owned(), Some(Role::Table)),
                 ("id".to_owned(), Some(Role::Column)),
             ]
@@ -620,7 +620,7 @@ mod tests {
         assert_eq!(
             roles("INSERT INTO shop.orders (id, total) VALUES (7, 'x')"),
             vec![
-                ("shop".to_owned(), Some(Role::Keyspace)),
+                ("shop".to_owned(), Some(Role::Schema)),
                 ("orders".to_owned(), Some(Role::Table)),
                 ("id".to_owned(), Some(Role::Column)),
                 ("total".to_owned(), Some(Role::Column)),
@@ -634,7 +634,7 @@ mod tests {
         assert_eq!(
             roles("UPDATE shop.orders SET total = 3 WHERE id = 7 IF total = 2"),
             vec![
-                ("shop".to_owned(), Some(Role::Keyspace)),
+                ("shop".to_owned(), Some(Role::Schema)),
                 ("orders".to_owned(), Some(Role::Table)),
                 ("total".to_owned(), Some(Role::Column)),
                 ("id".to_owned(), Some(Role::Column)),
@@ -648,7 +648,7 @@ mod tests {
         assert_eq!(
             roles("UPDATE shop.orders SET total = 3, price = 5 WHERE id = 7"),
             vec![
-                ("shop".to_owned(), Some(Role::Keyspace)),
+                ("shop".to_owned(), Some(Role::Schema)),
                 ("orders".to_owned(), Some(Role::Table)),
                 ("total".to_owned(), Some(Role::Column)),
                 ("price".to_owned(), Some(Role::Column)),
@@ -663,7 +663,7 @@ mod tests {
         assert_eq!(
             roles("INSERT INTO shop.orders (id, total) VALUES (7, 8)"),
             vec![
-                ("shop".to_owned(), Some(Role::Keyspace)),
+                ("shop".to_owned(), Some(Role::Schema)),
                 ("orders".to_owned(), Some(Role::Table)),
                 ("id".to_owned(), Some(Role::Column)),
                 ("total".to_owned(), Some(Role::Column)),
@@ -679,7 +679,7 @@ mod tests {
             roles("DELETE total FROM shop.orders WHERE id = 7"),
             vec![
                 ("total".to_owned(), Some(Role::Column)),
-                ("shop".to_owned(), Some(Role::Keyspace)),
+                ("shop".to_owned(), Some(Role::Schema)),
                 ("orders".to_owned(), Some(Role::Table)),
                 ("id".to_owned(), Some(Role::Column)),
             ]
@@ -691,14 +691,14 @@ mod tests {
         assert_eq!(
             roles("TRUNCATE shop.orders"),
             vec![
-                ("shop".to_owned(), Some(Role::Keyspace)),
+                ("shop".to_owned(), Some(Role::Schema)),
                 ("orders".to_owned(), Some(Role::Table))
             ]
         );
         assert_eq!(
             roles("TRUNCATE TABLE shop.orders"),
             vec![
-                ("shop".to_owned(), Some(Role::Keyspace)),
+                ("shop".to_owned(), Some(Role::Schema)),
                 ("orders".to_owned(), Some(Role::Table))
             ]
         );
@@ -708,7 +708,7 @@ mod tests {
     fn use_takes_a_keyspace_and_nothing_else() {
         assert_eq!(
             roles("USE shop"),
-            vec![("shop".to_owned(), Some(Role::Keyspace))]
+            vec![("shop".to_owned(), Some(Role::Schema))]
         );
     }
 
@@ -722,10 +722,10 @@ mod tests {
                  APPLY BATCH"
             ),
             vec![
-                ("shop".to_owned(), Some(Role::Keyspace)),
+                ("shop".to_owned(), Some(Role::Schema)),
                 ("orders".to_owned(), Some(Role::Table)),
                 ("id".to_owned(), Some(Role::Column)),
-                ("shop".to_owned(), Some(Role::Keyspace)),
+                ("shop".to_owned(), Some(Role::Schema)),
                 ("customers".to_owned(), Some(Role::Table)),
                 ("name".to_owned(), Some(Role::Column)),
                 ("id".to_owned(), Some(Role::Column)),
@@ -787,7 +787,7 @@ mod tests {
         assert_eq!(
             roles("CREATE TABLE shop.orders (id uuid, total int, PRIMARY KEY (id))"),
             vec![
-                ("shop".to_owned(), Some(Role::Keyspace)),
+                ("shop".to_owned(), Some(Role::Schema)),
                 ("orders".to_owned(), Some(Role::Table)),
                 ("id".to_owned(), Some(Role::Column)),
                 ("total".to_owned(), Some(Role::Column)),
@@ -813,7 +813,7 @@ mod tests {
         assert_eq!(
             roles("CREATE KEYSPACE shop WITH replication = {'class': 'SimpleStrategy'}"),
             vec![
-                ("shop".to_owned(), Some(Role::Keyspace)),
+                ("shop".to_owned(), Some(Role::Schema)),
                 ("replication".to_owned(), Some(Role::Property)),
             ]
         );
@@ -824,7 +824,7 @@ mod tests {
         assert_eq!(
             roles("DROP TABLE IF EXISTS shop.orders"),
             vec![
-                ("shop".to_owned(), Some(Role::Keyspace)),
+                ("shop".to_owned(), Some(Role::Schema)),
                 ("orders".to_owned(), Some(Role::Table)),
             ]
         );
@@ -832,14 +832,14 @@ mod tests {
             // `text` lexes as a keyword.
             roles("ALTER TABLE shop.orders ADD note text"),
             vec![
-                ("shop".to_owned(), Some(Role::Keyspace)),
+                ("shop".to_owned(), Some(Role::Schema)),
                 ("orders".to_owned(), Some(Role::Table)),
                 ("note".to_owned(), Some(Role::Column)),
             ]
         );
         assert_eq!(
             roles("DROP KEYSPACE shop"),
-            vec![("shop".to_owned(), Some(Role::Keyspace))]
+            vec![("shop".to_owned(), Some(Role::Schema))]
         );
     }
 
@@ -861,7 +861,7 @@ mod tests {
                  AND replication = {'class': 'SimpleStrategy'}"
             ),
             vec![
-                ("k".to_owned(), Some(Role::Keyspace)),
+                ("k".to_owned(), Some(Role::Schema)),
                 ("durable_writes".to_owned(), Some(Role::Property)),
                 ("replication".to_owned(), Some(Role::Property)),
             ]
@@ -874,7 +874,7 @@ mod tests {
             roles("CREATE INDEX orders_by_total ON shop.orders (total)"),
             vec![
                 ("orders_by_total".to_owned(), None),
-                ("shop".to_owned(), Some(Role::Keyspace)),
+                ("shop".to_owned(), Some(Role::Schema)),
                 ("orders".to_owned(), Some(Role::Table)),
                 ("total".to_owned(), Some(Role::Column)),
             ]
@@ -1030,7 +1030,7 @@ mod tests {
 
     #[test]
     fn a_cursor_after_use_expects_a_keyspace() {
-        assert_eq!(context("USE |").expects, Expect::Keyspace);
+        assert_eq!(context("USE |").expects, Expect::Schema);
     }
 
     #[test]

@@ -49,7 +49,7 @@ fn the_ddl_identity_rows_wear_the_tree_icons_and_each_heading_its_own() {
     let rows = ddl_rows(&buffer);
 
     assert!(
-        rows[0].starts_with(&format!("▌  {}Keyspace", crate::icons::KEYSPACE)),
+        rows[0].starts_with(&format!("▌  {}Schema", crate::icons::KEYSPACE)),
         "the panel names its keyspace as the tree does, got {:?}",
         rows[0]
     );
@@ -79,7 +79,7 @@ fn a_name_with_no_room_beside_its_label_wraps_rather_than_abbreviating() {
         ddl_rows(&buffer)[..3],
         [
             // The cursor opens on this row.
-            format!("▌  {}Keyspace       shop", crate::icons::KEYSPACE),
+            format!("▌  {}Schema         shop", crate::icons::KEYSPACE),
             format!("   {}Table", crate::icons::TABLE),
             "     orders_by_customer".to_owned(),
         ]
@@ -207,7 +207,7 @@ fn a_dimmed_rows_icon_keeps_the_colour_of_what_it_names() {
     let theme = Theme::default();
     let faint = theme.style(Token::Faint).fg.expect("faint spends a colour");
     let keyspace = theme
-        .style(Token::Keyspace)
+        .style(Token::Schema)
         .fg
         .expect("a keyspace spends a colour");
 

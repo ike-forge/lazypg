@@ -108,7 +108,7 @@ fn a_contents_title_draws_its_table_in_the_schemas_colours() {
     };
     let fg = |x: u16| Some(buffer.cell((x, 0)).expect("inside the border").fg);
 
-    assert_eq!(fg(at("shop")), theme.style(Token::Keyspace).fg);
+    assert_eq!(fg(at("shop")), theme.style(Token::Schema).fg);
     assert_eq!(fg(at("orders")), theme.style(Token::Table).fg);
     assert_eq!(fg(at("shop") + 4), theme.style(Token::Faint).fg, "the dot");
 }

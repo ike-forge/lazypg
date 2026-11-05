@@ -20,7 +20,7 @@ pub(crate) const INDEX: &str = "\u{f002} ";
 
 pub(crate) const fn tree_row(kind: RowKind) -> &'static str {
     match kind {
-        RowKind::Keyspace => KEYSPACE,
+        RowKind::Schema => KEYSPACE,
         RowKind::Table { .. } => TABLE,
     }
 }
@@ -28,14 +28,14 @@ pub(crate) const fn tree_row(kind: RowKind) -> &'static str {
 /// The icon keeps its kind's colour whatever the row wears.
 pub(crate) const fn token(kind: RowKind) -> Token {
     match kind {
-        RowKind::Keyspace => Token::Keyspace,
+        RowKind::Schema => Token::Schema,
         RowKind::Table { .. } => Token::Table,
     }
 }
 
 pub(crate) fn identity(token: Token) -> &'static str {
     match token {
-        Token::Keyspace => KEYSPACE,
+        Token::Schema => KEYSPACE,
         Token::Table => TABLE,
         _ => "",
     }

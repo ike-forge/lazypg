@@ -10,7 +10,7 @@ use crate::contents::{
     TableRef,
 };
 use crate::inspect::{Inspected, Inspector};
-use crate::model::{CqlValue, Schema};
+use crate::model::{Catalog, CqlValue};
 use crate::panel::Panel;
 use crate::search::Search;
 use crate::selection::Ranges;
@@ -306,10 +306,10 @@ const fn key_token(column: Option<Token>) -> Option<Token> {
 
 /// A typed statement is coloured when the resolver names exactly one table. A
 /// column the table lacks (alias, aggregate, `writetime(x)`) stays plain.
-fn column_token(schema: Option<&Schema>, table: Option<&TableRef>, column: &str) -> Option<Token> {
+fn column_token(schema: Option<&Catalog>, table: Option<&TableRef>, column: &str) -> Option<Token> {
     let table = table?;
     let found = schema
-        .and_then(|schema| schema.keyspaces.get(&table.keyspace))
+        .and_then(|schema| schema.schemas.get(&table.keyspace))
         .and_then(|keyspace| keyspace.tables.get(&table.table))?;
 
     let key = &found.primary_key;
@@ -427,7 +427,7 @@ fn grid_table(state: &State, subject: &Subject) -> Option<TableRef> {
 mod tests {
     use crate::connection::{Connection, ConnectionState, SchemaState};
     use crate::model::{
-        ClusteringColumn, ClusteringOrder, Column, ConnId, Page, QueryId, Row, Schema,
+        Catalog, ClusteringColumn, ClusteringOrder, Column, ConnId, Page, QueryId, Row,
     };
     use crate::posture::Posture;
     use crate::search::{Search, Searched};
@@ -482,13 +482,13 @@ mod tests {
         let mut state = tabled(&[("shop", &["orders", "customers"])]);
         let mut schema = state.schema().cloned().expect("loaded");
         let orders = schema
-            .keyspaces
+            .schemas
             .get_mut("shop")
             .and_then(|keyspace| keyspace.tables.get_mut("orders"))
             .expect("the builder made it");
         orders.regular_columns = vec![Column {
             name: "total".to_owned(),
-            cql_type: "int".to_owned(),
+            data_type: "int".to_owned(),
         }];
         state.connection = ConnectionState::Connected(Connection {
             id: ConnId::next(),
@@ -583,7 +583,7 @@ mod tests {
             title_segments(&state),
             vec![
                 Segment::plain("Table contents — "),
-                Segment::styled("shop", Token::Keyspace),
+                Segment::styled("shop", Token::Schema),
                 Segment::styled(".", Token::Faint),
                 Segment::styled("orders", Token::Table),
             ]
@@ -722,20 +722,20 @@ mod tests {
         // Clusters on `at` too.
         let mut schema = state.schema().cloned().expect("loaded");
         let table = schema
-            .keyspaces
+            .schemas
             .get_mut("shop")
             .and_then(|keyspace| keyspace.tables.get_mut("orders"))
             .expect("the builder made it");
         table.primary_key.clustering = vec![ClusteringColumn {
             column: Column {
                 name: "at".to_owned(),
-                cql_type: "timestamp".to_owned(),
+                data_type: "timestamp".to_owned(),
             },
             order: ClusteringOrder::Ascending,
         }];
         table.regular_columns = vec![Column {
             name: "total".to_owned(),
-            cql_type: "int".to_owned(),
+            data_type: "int".to_owned(),
         }];
         state.connection = ConnectionState::Connected(Connection {
             id: ConnId::next(),
@@ -867,7 +867,7 @@ mod tests {
             id: ConnId::next(),
             name: crate::config::ConnectionName::try_new("local").expect("a valid name"),
             posture: Posture::ReadOnly,
-            schema: SchemaState::Loaded(Schema::default()),
+            schema: SchemaState::Loaded(Catalog::default()),
         });
 
         let PanelBody::Grid { columns, .. } = contents_body(&state) else {
@@ -884,14 +884,14 @@ mod tests {
         let mut state = tabled(&[("shop", &["orders"])]);
         let mut schema = state.schema().cloned().expect("loaded");
         let table = schema
-            .keyspaces
+            .schemas
             .get_mut("shop")
             .and_then(|keyspace| keyspace.tables.get_mut("orders"))
             .expect("the builder made it");
         table.primary_key.clustering = vec![ClusteringColumn {
             column: Column {
                 name: "at".to_owned(),
-                cql_type: "timestamp".to_owned(),
+                data_type: "timestamp".to_owned(),
             },
             order: ClusteringOrder::Ascending,
         }];
@@ -939,7 +939,7 @@ mod tests {
             id: ConnId::next(),
             name: crate::config::ConnectionName::try_new("local").expect("a valid name"),
             posture: Posture::ReadOnly,
-            schema: SchemaState::Loaded(Schema::default()),
+            schema: SchemaState::Loaded(Catalog::default()),
         });
 
         let PanelBody::Grid { rows, .. } = contents_body(&state) else {

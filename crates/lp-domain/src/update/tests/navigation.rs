@@ -75,7 +75,7 @@ fn motion_belongs_to_the_focused_panel_only() {
 fn escape_dismisses_the_overlay() {
     let mut state = browsing(&["a"]);
     state.overlay = Some(Overlay::Message(Message {
-        title: "Schema unavailable".to_owned(),
+        title: "Catalog unavailable".to_owned(),
         message: "boom".to_owned(),
         severity: Severity::Danger,
     }));

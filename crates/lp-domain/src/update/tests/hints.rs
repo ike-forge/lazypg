@@ -155,7 +155,7 @@ fn sweep_fixtures() -> Vec<State> {
     covered.geometry = geometry;
     press(&mut covered, Key::Char('l'));
     covered.overlay = Some(Overlay::Message(Message {
-        title: "Schema unavailable".to_owned(),
+        title: "Catalog unavailable".to_owned(),
         message: "boom".to_owned(),
         severity: Severity::Danger,
     }));

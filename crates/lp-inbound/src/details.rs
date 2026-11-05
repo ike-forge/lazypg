@@ -187,16 +187,16 @@ fn row_lines(
         DetailRow::KeyColumn {
             name,
             order,
-            cql_type,
-        } => key_column_lines(name, *order, cql_type, width)
+            data_type,
+        } => key_column_lines(name, *order, data_type, width)
             .into_iter()
             .map(|text| Line::from(crate::highlight::spans(&text, search, style, theme)))
             .collect(),
         DetailRow::Column {
             name,
-            cql_type,
+            data_type,
             kind,
-        } => column_lines(name, cql_type, *kind, width, search, theme),
+        } => column_lines(name, data_type, *kind, width, search, theme),
         DetailRow::Property { name, value } => {
             property_lines(name, value, width, style, search, theme)
         }
@@ -245,7 +245,7 @@ fn identity_lines(
 fn key_column_lines(
     name: &str,
     order: Option<ClusteringOrder>,
-    cql_type: &str,
+    data_type: &str,
     width: usize,
 ) -> Vec<String> {
     let arrow = match order {
@@ -256,7 +256,7 @@ fn key_column_lines(
 
     laid_out(
         &format!("{}{name}{arrow}", " ".repeat(INDENT)),
-        cql_type,
+        data_type,
         width,
     )
 }
@@ -264,7 +264,7 @@ fn key_column_lines(
 /// The whole row wears the kind's colour: the glyph only says key or not.
 fn column_lines(
     name: &str,
-    cql_type: &str,
+    data_type: &str,
     kind: ColumnKind,
     width: usize,
     search: Option<&Search>,
@@ -277,7 +277,7 @@ fn column_lines(
     };
     let style = theme.style(kind.token());
 
-    laid_out(&format!("{marker}{name}"), cql_type, width)
+    laid_out(&format!("{marker}{name}"), data_type, width)
         .into_iter()
         .map(|text| Line::from(crate::highlight::spans(&text, search, style, theme)))
         .collect()
@@ -578,10 +578,10 @@ mod tests {
         );
     }
 
-    fn listed(name: &str, cql_type: &str, kind: ColumnKind, width: usize) -> Vec<String> {
+    fn listed(name: &str, data_type: &str, kind: ColumnKind, width: usize) -> Vec<String> {
         texts(&column_lines(
             name,
-            cql_type,
+            data_type,
             kind,
             width,
             None,
@@ -651,8 +651,8 @@ mod tests {
     #[test]
     fn an_identity_row_puts_the_name_at_the_margin_behind_a_labelled_icon() {
         assert_eq!(
-            named(IdentityKind::Keyspace, "shop", 23),
-            [format!("  {}Keyspace       shop", crate::icons::KEYSPACE)]
+            named(IdentityKind::Schema, "shop", 23),
+            [format!("  {}Schema         shop", crate::icons::KEYSPACE)]
         );
         assert_eq!(
             named(IdentityKind::Table, "orders", 23),
@@ -674,13 +674,13 @@ mod tests {
     #[test]
     fn an_identity_row_carries_the_kinds_colour_over_both_its_halves() {
         let theme = Theme::default();
-        let lines = identity_lines(IdentityKind::Keyspace, "shop", 23, None, theme);
-        let keyspace = theme.style(Token::Keyspace).fg;
+        let lines = identity_lines(IdentityKind::Schema, "shop", 23, None, theme);
+        let keyspace = theme.style(Token::Schema).fg;
 
         assert!(keyspace.is_some(), "the token has to spend a colour");
         assert_eq!(
             lines[0].spans[0].content,
-            format!("  {}Keyspace", crate::icons::KEYSPACE)
+            format!("  {}Schema", crate::icons::KEYSPACE)
         );
 
         for span in &lines[0].spans {
@@ -709,8 +709,8 @@ mod tests {
     #[test]
     fn a_panel_too_narrow_for_the_icon_keeps_the_whole_label() {
         assert_eq!(
-            named(IdentityKind::Keyspace, "shop", 9),
-            ["  Keyspa…", "    shop"],
+            named(IdentityKind::Schema, "shop", 8),
+            ["  Schema", "    shop"],
             "the icon goes before a label this panel promises to draw whole"
         );
     }
@@ -858,7 +858,7 @@ mod tests {
                     rows: vec![DetailRow::KeyColumn {
                         name: "customer_id".to_owned(),
                         order: None,
-                        cql_type: "uuid".to_owned(),
+                        data_type: "uuid".to_owned(),
                     }],
                 },
                 Section {
@@ -920,12 +920,12 @@ mod tests {
                 rows: vec![
                     DetailRow::Column {
                         name: "id".to_owned(),
-                        cql_type: "uuid".to_owned(),
+                        data_type: "uuid".to_owned(),
                         kind: ColumnKind::Partition,
                     },
                     DetailRow::Column {
                         name: "email".to_owned(),
-                        cql_type: "text".to_owned(),
+                        data_type: "text".to_owned(),
                         kind: ColumnKind::Regular,
                     },
                 ],

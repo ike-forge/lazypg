@@ -1,4 +1,4 @@
-use crate::model::KeyspaceKind;
+use crate::model::SchemaKind;
 use crate::style::{Segment, Token};
 
 /// Owned: a result outlives the schema reload that dropped its table.
@@ -25,9 +25,9 @@ impl TableRef {
     /// A system keyspace is faint on both halves, as in the tree.
     #[must_use]
     pub fn segments(&self) -> Vec<Segment> {
-        let (keyspace, table) = match KeyspaceKind::of(&self.keyspace) {
-            KeyspaceKind::System => (Token::Faint, Token::Faint),
-            KeyspaceKind::User => (Token::Keyspace, Token::Table),
+        let (keyspace, table) = match SchemaKind::of(&self.keyspace) {
+            SchemaKind::System => (Token::Faint, Token::Faint),
+            SchemaKind::User => (Token::Schema, Token::Table),
         };
 
         vec![

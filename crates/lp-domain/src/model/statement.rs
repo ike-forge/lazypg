@@ -15,13 +15,13 @@ pub enum StatementKind {
     Write,
     /// Gated by posture and by typed confirmation (vision.md §4, principle 6).
     Destructive,
-    Schema,
+    Catalog,
 }
 
 impl StatementKind {
     #[must_use]
     pub const fn mutates(self) -> bool {
-        matches!(self, Self::Write | Self::Destructive | Self::Schema)
+        matches!(self, Self::Write | Self::Destructive | Self::Catalog)
     }
 
     #[must_use]
@@ -218,7 +218,7 @@ fn kind_of_verb(verb: &str) -> StatementKind {
     } else if DESTRUCTIVE.contains(&verb) {
         StatementKind::Destructive
     } else if SCHEMA.contains(&verb) {
-        StatementKind::Schema
+        StatementKind::Catalog
     } else {
         // Includes every verb this table has not learned.
         StatementKind::Write
@@ -230,7 +230,7 @@ const fn severity(kind: StatementKind) -> u8 {
     match kind {
         StatementKind::Read => 0,
         StatementKind::Write => 1,
-        StatementKind::Schema => 2,
+        StatementKind::Catalog => 2,
         StatementKind::Destructive => 3,
     }
 }
@@ -307,11 +307,11 @@ mod tests {
     fn creating_and_altering_are_schema_changes() {
         assert_eq!(
             Statement::typed("CREATE TABLE t (a int PRIMARY KEY)").kind,
-            StatementKind::Schema
+            StatementKind::Catalog
         );
         assert_eq!(
             Statement::typed("ALTER TABLE t ADD b int").kind,
-            StatementKind::Schema
+            StatementKind::Catalog
         );
     }
 
@@ -373,7 +373,7 @@ mod tests {
             "GRANT SELECT ON KEYSPACE shop TO reader",
             "REVOKE MODIFY ON KEYSPACE shop FROM reader",
         ] {
-            assert_eq!(Statement::typed(cql).kind, StatementKind::Schema, "{cql}");
+            assert_eq!(Statement::typed(cql).kind, StatementKind::Catalog, "{cql}");
         }
     }
 
@@ -409,7 +409,7 @@ mod tests {
         );
         assert_eq!(
             Statement::typed("CREATE TABLE t (a int PRIMARY KEY); SELECT * FROM t").kind,
-            StatementKind::Schema
+            StatementKind::Catalog
         );
     }
 

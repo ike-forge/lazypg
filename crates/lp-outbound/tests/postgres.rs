@@ -65,7 +65,7 @@ async fn the_schema_reads_keys_in_key_order_and_skips_partitions() {
     let db = connected(Posture::ReadOnly, DriverConfig::default()).await;
     let schema = db.describe(conn()).await.unwrap();
 
-    let shop = &schema.keyspaces["shop"];
+    let shop = &schema.schemas["shop"];
     let line = &shop.tables["order_line"];
     let key: Vec<_> = line
         .primary_key
@@ -80,16 +80,16 @@ async fn the_schema_reads_keys_in_key_order_and_skips_partitions() {
         "views are listed"
     );
 
-    let edge = &schema.keyspaces["Edge Cases"];
+    let edge = &schema.schemas["Edge Cases"];
     assert!(edge.tables["no_pk"].primary_key.partition.is_empty());
     assert!(edge.tables.contains_key("measurement"));
     assert!(!edge.tables.contains_key("measurement_2026"));
     assert_eq!(
-        edge.tables["Mixed Case"].primary_key.partition[0].cql_type,
+        edge.tables["Mixed Case"].primary_key.partition[0].data_type,
         "integer"
     );
-    assert!(schema.keyspaces.contains_key("public"));
-    assert!(!schema.keyspaces.contains_key("pg_catalog"));
+    assert!(schema.schemas.contains_key("public"));
+    assert!(!schema.schemas.contains_key("pg_catalog"));
 }
 
 #[tokio::test]

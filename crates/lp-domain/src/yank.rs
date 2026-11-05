@@ -54,9 +54,9 @@ pub fn detail_row(row: &DetailRow) -> String {
         DetailRow::KeyColumn {
             name,
             order,
-            cql_type,
+            data_type,
         } => {
-            let mut fields = vec![name.clone(), cql_type.clone()];
+            let mut fields = vec![name.clone(), data_type.clone()];
             // A partition column has no ordering field.
             if let Some(order) = order {
                 fields.push(ordering(*order).to_owned());
@@ -65,9 +65,9 @@ pub fn detail_row(row: &DetailRow) -> String {
         }
         DetailRow::Column {
             name,
-            cql_type,
+            data_type,
             kind,
-        } => vec![name.clone(), cql_type.clone(), part(*kind).to_owned()],
+        } => vec![name.clone(), data_type.clone(), part(*kind).to_owned()],
         DetailRow::Property { name, value } => vec![name.clone(), value.clone()],
         // The raw map: a yank is pasted back into CQL.
         DetailRow::ClassProperty { name, raw, .. } => vec![name.clone(), raw.clone()],
@@ -79,7 +79,7 @@ pub fn detail_row(row: &DetailRow) -> String {
 #[must_use]
 pub fn node(node: &Node<'_>) -> String {
     let fields = match node {
-        Node::Keyspace { keyspace, .. } => vec![keyspace.name.clone()],
+        Node::Schema { keyspace, .. } => vec![keyspace.name.clone()],
         Node::Table { keyspace, table } => {
             vec![format!("{}.{}", keyspace.name, table.name)]
         }
@@ -163,7 +163,7 @@ mod tests {
     use crate::clock::Stamp;
     use crate::log::{Outcome, Subject};
     use crate::model::{
-        ClusteringOrder, CqlValue, Keyspace, Page, PrimaryKey, Replication, Row, Setting, Table,
+        ClusteringOrder, CqlValue, Page, PrimaryKey, Replication, Row, Schema, Setting, Table,
         TableOptions,
     };
     use crate::selection::Range;
@@ -262,7 +262,7 @@ mod tests {
     fn a_column_row_carries_the_part_it_plays() {
         let row = DetailRow::Column {
             name: "created_at".to_owned(),
-            cql_type: "timestamp".to_owned(),
+            data_type: "timestamp".to_owned(),
             kind: ColumnKind::Clustering,
         };
 
@@ -274,12 +274,12 @@ mod tests {
         let partition = DetailRow::KeyColumn {
             name: "id".to_owned(),
             order: None,
-            cql_type: "uuid".to_owned(),
+            data_type: "uuid".to_owned(),
         };
         let clustering = DetailRow::KeyColumn {
             name: "created_at".to_owned(),
             order: Some(ClusteringOrder::Descending),
-            cql_type: "timestamp".to_owned(),
+            data_type: "timestamp".to_owned(),
         };
 
         assert_eq!(detail_row(&partition), "id,uuid");
@@ -326,7 +326,7 @@ mod tests {
 
     #[test]
     fn a_keyspace_yanks_its_name_and_a_table_its_qualified_one() {
-        let keyspace = Keyspace {
+        let keyspace = Schema {
             name: "demo".to_owned(),
             replication: Replication::SimpleStrategy { factor: 1 },
             tables: BTreeMap::new(),
@@ -334,7 +334,7 @@ mod tests {
         let users = table("users");
 
         assert_eq!(
-            node(&Node::Keyspace {
+            node(&Node::Schema {
                 keyspace: &keyspace,
                 unfolded: false
             }),

@@ -93,7 +93,7 @@ fn escape_leaves_the_palettes_sift_before_the_palette() {
 fn opening_the_palette_replaces_the_message_it_covers() {
     let mut state = measured(&["a"]);
     state.overlay = Some(Overlay::Message(Message {
-        title: "Schema unavailable".to_owned(),
+        title: "Catalog unavailable".to_owned(),
         message: "boom".to_owned(),
         severity: Severity::Danger,
     }));

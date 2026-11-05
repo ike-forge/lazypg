@@ -15,7 +15,7 @@ use lp_domain::config::{ConnectionConfig, DriverConfig, PageSize, SslMode};
 use lp_domain::contents::TableRef;
 use lp_domain::health::Health;
 use lp_domain::model::{
-    Column, ConnId, CqlValue, DbError, Keyspace, Page, PagingState, PrimaryKey, Replication, Row,
+    Catalog, Column, ConnId, CqlValue, DbError, Page, PagingState, PrimaryKey, Replication, Row,
     Schema, Statement, StatementKind, Table, TableOptions,
 };
 use lp_domain::ports::{Cluster, SecretResolver as _};
@@ -157,7 +157,7 @@ impl Cluster for Postgres {
         Ok(target.posture)
     }
 
-    async fn describe(&self, conn: ConnId) -> Result<Schema, DbError> {
+    async fn describe(&self, conn: ConnId) -> Result<Catalog, DbError> {
         let open = self.session(conn).await?;
         describe(&open.client).await
     }
@@ -465,16 +465,16 @@ const COLUMNS: &str = "
     ORDER BY 1, 2, a.attnum";
 
 /// Mapped onto the Cassandra-shaped model until plan.md Phase 0 step 4: the
-/// primary key fills `partition`, schemas fill keyspaces.
-async fn describe(client: &Client) -> Result<Schema, DbError> {
-    let mut keyspaces: BTreeMap<String, Keyspace> = client
+/// primary key fills `partition`, schemas fill schemas.
+async fn describe(client: &Client) -> Result<Catalog, DbError> {
+    let mut schemas: BTreeMap<String, Schema> = client
         .query(SCHEMAS, &[])
         .await
         .map_err(|error| db_error(&error))?
         .iter()
         .map(|row| {
             let name: String = row.get(0);
-            let keyspace = Keyspace {
+            let keyspace = Schema {
                 name: name.clone(),
                 replication: Replication::Other {
                     class: "postgres".to_owned(),
@@ -496,11 +496,11 @@ async fn describe(client: &Client) -> Result<Schema, DbError> {
         let relation: String = row.get(1);
         let column = Column {
             name: row.get(2),
-            cql_type: row.get(3),
+            data_type: row.get(3),
         };
         let key_position: Option<i32> = row.get(4);
 
-        let Some(keyspace) = keyspaces.get_mut(&schema) else {
+        let Some(keyspace) = schemas.get_mut(&schema) else {
             continue;
         };
         let table = keyspace
@@ -529,7 +529,7 @@ async fn describe(client: &Client) -> Result<Schema, DbError> {
 
     for ((schema, relation), mut key) in keyed {
         key.sort_by_key(|(position, _)| *position);
-        if let Some(table) = keyspaces
+        if let Some(table) = schemas
             .get_mut(&schema)
             .and_then(|keyspace| keyspace.tables.get_mut(&relation))
         {
@@ -537,7 +537,7 @@ async fn describe(client: &Client) -> Result<Schema, DbError> {
         }
     }
 
-    Ok(Schema { keyspaces })
+    Ok(Catalog { schemas })
 }
 
 #[cfg(test)]

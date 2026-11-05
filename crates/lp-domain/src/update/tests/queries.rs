@@ -209,7 +209,7 @@ fn escape_leaves_every_panel_for_tables() {
 fn escape_dismisses_the_overlay_before_it_leaves_the_editor() {
     let mut state = editing("SELECT");
     state.overlay = Some(Overlay::Message(Message {
-        title: "Schema unavailable".to_owned(),
+        title: "Catalog unavailable".to_owned(),
         message: "boom".to_owned(),
         severity: Severity::Danger,
     }));

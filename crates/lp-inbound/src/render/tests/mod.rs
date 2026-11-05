@@ -7,8 +7,9 @@ use lp_domain::feedback::Flash;
 use lp_domain::geometry::Geometry;
 use lp_domain::grid::{BAR, COLUMN_SPACING};
 use lp_domain::model::{
-    ClusteringColumn, ClusteringOrder, Column, ConnId, CqlValue, Index, IndexKind, IndexTarget,
-    Key, Keyspace, Page, PrimaryKey, QueryId, Replication, Schema, Statement, Table, TableOptions,
+    Catalog, ClusteringColumn, ClusteringOrder, Column, ConnId, CqlValue, Index, IndexKind,
+    IndexTarget, Key, Page, PrimaryKey, QueryId, Replication, Schema, Statement, Table,
+    TableOptions,
 };
 use lp_domain::overlay::{Message, Overlay};
 use lp_domain::panel::Panel;
@@ -92,25 +93,25 @@ fn table(name: &str) -> Table {
     }
 }
 
-fn column(name: &str, cql_type: &str) -> Column {
+fn column(name: &str, data_type: &str) -> Column {
     Column {
         name: name.to_owned(),
-        cql_type: cql_type.to_owned(),
+        data_type: data_type.to_owned(),
     }
 }
 
-fn schema_of(names: &[&str]) -> Schema {
+fn schema_of(names: &[&str]) -> Catalog {
     tabled_schema(&names.iter().map(|n| (*n, &[][..])).collect::<Vec<_>>())
 }
 
-fn tabled_schema(keyspaces: &[(&str, &[&str])]) -> Schema {
-    Schema {
-        keyspaces: keyspaces
+fn tabled_schema(schemas: &[(&str, &[&str])]) -> Catalog {
+    Catalog {
+        schemas: schemas
             .iter()
             .map(|(name, tables)| {
                 (
                     (*name).to_owned(),
-                    Keyspace {
+                    Schema {
                         name: (*name).to_owned(),
                         replication: Replication::SimpleStrategy { factor: 1 },
                         tables: tables
@@ -318,10 +319,10 @@ fn orders() -> Table {
 }
 
 fn describing(table: Table) -> State {
-    let schema = Schema {
-        keyspaces: BTreeMap::from([(
+    let schema = Catalog {
+        schemas: BTreeMap::from([(
             "shop".to_owned(),
-            Keyspace {
+            Schema {
                 name: "shop".to_owned(),
                 replication: Replication::SimpleStrategy { factor: 1 },
                 tables: BTreeMap::from([(table.name.clone(), table)]),

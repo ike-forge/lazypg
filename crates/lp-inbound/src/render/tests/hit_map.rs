@@ -24,7 +24,7 @@ fn the_map_resolves_every_drawn_keyspace_to_the_row_that_drew_it() {
 
 #[test]
 fn the_map_resolves_a_scrolled_tree_to_the_rows_that_were_drawn() {
-    // Twelve keyspaces in five rows force a scroll.
+    // Twelve schemas in five rows force a scroll.
     let names: Vec<String> = (0..12).map(|i| format!("ks{i:02}")).collect();
     let refs: Vec<&str> = names.iter().map(String::as_str).collect();
 
@@ -273,7 +273,7 @@ fn the_map_resolves_every_line_of_a_wrapped_ddl_row_to_that_row() {
         ddl_rows(&buffer)[..6],
         [
             // The cursor opens on this row.
-            "▌  \u{f084} Keyspace       shop",
+            "▌  \u{f084} Schema         shop",
             "   \u{f0ce} Table",
             "     orders_by_customer",
             "",

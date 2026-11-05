@@ -528,7 +528,7 @@ fn y_yanks_a_ddl_row() {
 
     assert_eq!(
         press(&mut state, Key::Char('y')),
-        vec![Effect::Yank("Keyspace,shop".to_owned())]
+        vec![Effect::Yank("Schema,shop".to_owned())]
     );
 }
 
