@@ -21,6 +21,36 @@ lp-domain = { path = "crates/lp-domain" }
 lp-inbound = { path = "crates/lp-inbound" }
 lp-outbound = { path = "crates/lp-outbound" }
 
+anyhow = "1.0.104"
+async-trait = "0.1.91"
+# `osc52` puts `crossterm::clipboard::CopyToClipboard` in reach: a yank is an
+# escape sequence, so no display server is needed.
+crossterm = { version = "0.29.0", features = ["osc52"] }
+ratatui = "0.30.2"
+serde = { version = "1.0.229", features = ["derive"] }
+thiserror = "2.0.19"
+# The grid measures its own column widths; `chars().count()` is wrong for
+# real data.
+unicode-width = "0.2.2"
+# NFC makes a decomposed accent measure the same in every terminal.
+unicode-normalization = "0.1.26"
+# `process` and `io-util` are the clipboard helper, reaped by the runtime.
+tokio = { version = "1.54.1", features = [
+    "fs",
+    "io-util",
+    "macros",
+    "process",
+    "rt-multi-thread",
+    "sync",
+    "time",
+] }
+# Read-only TOML; dropping `display` drops `toml_writer`.
+toml = { version = "1.1.4", default-features = false, features = [
+    "std",
+    "serde",
+    "parse",
+] }
+
 [workspace.lints.rust]
 unsafe_code = "forbid"
 missing_debug_implementations = "warn"

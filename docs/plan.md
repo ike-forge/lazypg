@@ -50,14 +50,16 @@ Every LazyCassandra module falls into one of three buckets.
 
 ## Phase 0 — Foundations
 
-1. **Shell port.** Copy bucket into the workspace with a stub `Database`
-   fake and a placeholder schema. The app launches, panels draw, themes,
-   palette, logs and help work against the fake. Workspace deps as
-   LazyCassandra minus `scylla`, `bigdecimal`, `num-bigint`.
+1. **Shell port.** *Done.* The whole LazyCassandra workspace, renamed, with
+   the scylla adapter, its TLS setup and node health reads removed. The app
+   runs against `lp_outbound::demo`. Domain and config keep the Cassandra
+   vocabulary (`Keyspace`, `Cluster`, `hosts`) until steps 3–4 and Phase 1
+   replace it; every step keeps the app running and the tests green.
 2. **Driver.** `tokio-postgres` + rustls against `docker/`: connect,
    cancel a `pg_sleep`, page with `LIMIT/OFFSET`, decode every
-   `zoo.everything` column. Record the `deny.toml` cost in architecture.md
-   §8.
+   `zoo.everything` column. TLS from LazyCassandra's
+   `lc-outbound/src/tls.rs` via `tokio-postgres-rustls`. Record the
+   `deny.toml` cost in architecture.md §8.
 3. **Config.** Port config layering; Postgres connection fields; pgpass and
    `PG*`; `sslmode`. Connection picker works.
 4. **Schema model and introspection.** Accessible databases, then per

@@ -4,7 +4,8 @@ Companion to [vision.md](vision.md). The structure is LazyCassandra's; this
 document records what is the same, what differs for Postgres, and what is
 still open.
 
-**Status:** Phase 0 not started; workspace skeleton only.
+**Status:** Phase 0 step 1 done: LazyCassandra shell ported, running against
+an in-memory demo database.
 **Last updated:** 2026-11-05
 
 ---

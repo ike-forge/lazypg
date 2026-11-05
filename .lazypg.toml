@@ -1,12 +1,11 @@
 # The docker/compose.yaml fixture. See docs/development.md.
+#
+# LazyCassandra's connection shape until Postgres fields land
+# (docs/plan.md, Phase 0 step 3); the app runs against lp_outbound::demo.
 default_connection = "local"
 
 [[connections]]
 name = "local"
-host = "localhost"
-port = 5432
-database = "lazypg"
-user = "lazypg"
-password = "lazypg"
+hosts = ["127.0.0.1:5432"]
 # Scratch fixture; `posture` defaults to read-only.
 posture = "writable"

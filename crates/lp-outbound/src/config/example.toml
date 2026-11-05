@@ -1,0 +1,142 @@
+# LazyPg — user-level configuration.
+#
+# Written on first run; every line is commented, so this file changes nothing
+# until you uncomment something. Each key states its default.
+#
+# A project may override any of this from a `.lazypg.toml` in the
+# repository. Uncomment a key and its `[section]` header together — a key
+# without its header lands in the wrong table and is reported as unknown.
+
+# ── appearance ────────────────────────────────────────────────
+# theme      = "default-dark"   # default-dark | default-light | ash-dark |
+#                               # ash-light | beacon-dark | beacon-light |
+#                               # quill-dark | quill-light | catppuccin-latte |
+#                               # catppuccin-frappe | catppuccin-macchiato |
+#                               # catppuccin-mocha | solarized-dark |
+#                               # solarized-light | dracula | a [[themes]] name
+# background = "theme"          # "theme" | "terminal" | a hex such as "#0b0d12".
+#                               # "terminal" paints nothing, which is what lets
+#                               # a translucent or blurred terminal show
+#                               # through. A hex overrides the `base` role only.
+# icons      = true
+
+# ── input ─────────────────────────────────────────────────────
+# mouse = true
+
+# ── connections ───────────────────────────────────────────────
+# Unset by default. Stated here, ahead of the first [section] below,
+# because a root key uncommented after a table header lands in that
+# table instead and is reported as unknown.
+# default_connection = "prod"
+
+# ── panels ────────────────────────────────────────────────────
+# Percentage shares, each 5..=95.
+# [layout]
+# sidebar = 25   # the sidebar's share of the frame width
+# ddl     = 60   # Ddl's share of the sidebar's height
+# queries = 10   # Queries' share of the main column's height
+
+# ── the results grid ──────────────────────────────────────────
+# [grid]
+# max_column_width = 30    # 1..=512, in cells
+# page_rows        = 200   # 1..=100000; rows per page read into the grid
+
+# ── query history ─────────────────────────────────────────────
+# Kept per connection, between runs, in $XDG_STATE_HOME/lazypg.
+# ctrl-g in Queries opens it.
+# [history]
+# limit = 100   # 0..=10000; statements remembered per connection. 0 turns
+#               # the history off: nothing is read, kept or written.
+
+# ── the driver ────────────────────────────────────────────────
+# [driver]
+# page_size          = 5000    # 1..=100000; rows per round trip
+# request_timeout_ms = 5000    # 1..=600000
+# connect_timeout_ms = 5000    # 1..=600000
+# consistency        = "local-quorum"   # any | one | two | three | quorum |
+#                                       # all | local-quorum | each-quorum |
+#                                       # local-one
+# compression        = "lz4"            # none | lz4 | snappy
+
+# ── export ────────────────────────────────────────────────────
+# path and prefix are unset by default; an export then asks for a destination.
+# [export]
+# path         = "~/exports"
+# prefix       = "lc-"
+# clipboard_mb = 10   # 1..=1024; a larger copy fails rather than truncates
+
+# [[connections]]
+# name       = "prod"                        # required; no whitespace
+# hosts      = ["10.0.0.1:9042", "10.0.0.2:9042"]
+# posture    = "read-only"                   # read-only | writable | protected
+# discovery  = "cluster"                     # cluster | contact-points
+# datacenter = "eu-west-1"                   # without this the driver will
+#                                            # happily cross a region
+# username   = "cassandra"                   # both, or neither: a cluster is
+#                                            # sent the pair
+# password   = "hunter2"                     # or { env = "CASSANDRA_PW" }
+#                                            # or { file = "~/.cassandra/pw" }
+# tls        = true                          # or a table, below; unset = plaintext
+
+# `tls = true` verifies the server against the system's root certificates.
+# The table form states what differs:
+#   `tls = { ca = "~/ca.pem" }`                trust this PEM bundle instead
+#   `tls = { cert = "c.pem", key = "k.pem" }`  present a client certificate
+#                                              (`require_client_auth`); both
+#   `tls = { verify = "chain" }`               full | chain | none
+#   `tls = { server_name = "cass.internal" }`  check this name, not the address
+# Cassandra node certificates often carry no SAN for the address you dial:
+# `chain` still checks the chain and expiry, only the name is skipped. `none`
+# checks nothing, so the traffic is encrypted but the peer unauthenticated.
+# `server_name` is for `verify = "full"` and is refused beside the others.
+
+# `discovery = "contact-points"` is for a cluster reached through a tunnel —
+# a `kubectl port-forward`, an SSH forward, a bastion. Left at "cluster" the
+# driver reads system.peers and pools to every node it names, and those are
+# `inet` columns: raw in-cluster addresses no /etc/hosts entry can redirect.
+# Through a tunnel they are unreachable, so every peer but the forwarded one
+# sits permanently down. "contact-points" folds every address the cluster
+# reports onto the single host stated above, so `hosts` must name exactly one.
+# The cost is token-aware routing, which is worth less than a session that
+# works.
+
+# `cqlshrc` takes both halves from a file cqlsh already owns, so a password
+# lives in one place rather than two. The username comes from
+# `[auth_provider]` — or `[authentication]`, on older cqlsh — and the password
+# from the mode-600 credentials file, under `[PlainTextAuthProvider]`. It
+# replaces `username` and `password` rather than defaulting them: stating it
+# beside either is reported, not silently resolved one way.
+#
+# TLS comes from the same file, as cqlsh reads it: `[connection] ssl = true`
+# turns it on, and `[ssl]` gives `certfile` (the CA), `usercert` and `userkey`
+# (a client certificate) and `validate`. Like cqlsh, the chain is checked and
+# the hostname is not; `validate = false` checks nothing. A `tls` key stated
+# beside `cqlshrc` replaces all of it.
+#
+# The credentials path is cqlsh's own rule and nothing more: the one the file
+# states, or `~/.cassandra/credentials` when it states none. A cqlshrc written
+# for cqlsh running in a container names a path this host does not have, and
+# that is a configuration to fix where it is written — mount the directory at
+# the same path inside and out, and the one file serves both.
+# [[connections]]
+# name      = "preprod"
+# hosts     = ["127.0.0.1:9043"]
+# discovery = "contact-points"
+# cqlshrc   = "~/.cassandra/preprod/cqlshrc"
+
+# ── custom themes ─────────────────────────────────────────────
+# [[themes]]
+# name    = "midnight"          # may not shadow a built-in slug
+# extends = "default-dark"      # a built-in slug; a custom theme may not
+#                               # extend another custom theme
+
+# Any subset of the roles; what you leave out comes from `extends`.
+# [themes.colors]
+# base   = "#0b0d12"
+# focus  = "#7aa2f7"
+# danger = "#f7768e"
+#
+# The roles: base, text, dim, faint, border, focus, selection_bg,
+# crosshair, ranged, selection_fg, selection_bar, shortcut, keyspace, table,
+# partition, clustering, column, label, section, accent, match, success,
+# warning, danger, info, keyword, reference, literal, comment.

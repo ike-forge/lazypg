@@ -8,7 +8,10 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+crossterm.workspace = true
 lp-domain.workspace = true
+ratatui.workspace = true
+unicode-width.workspace = true
 
 [lints]
 workspace = true
