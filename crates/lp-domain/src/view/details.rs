@@ -147,8 +147,8 @@ impl ColumnKind {
     #[must_use]
     pub const fn token(self) -> Token {
         match self {
-            Self::Partition => Token::PartitionKey,
-            Self::Clustering => Token::ClusteringKey,
+            Self::Partition => Token::PrimaryKey,
+            Self::Clustering => Token::ForeignKey,
             Self::Static => Token::StaticColumn,
             Self::Regular => Token::RegularColumn,
         }
@@ -303,9 +303,9 @@ fn identity(keyspace: &Schema, table: Option<&Table>) -> Section {
 
 fn partition_section(table: &Table) -> Section {
     Section {
-        heading: Some(Heading::new("Partition Key", Token::PartitionKey)),
+        heading: Some(Heading::new("Partition Key", Token::PrimaryKey)),
         group: Group::Shape,
-        token: Some(Token::PartitionKey),
+        token: Some(Token::PrimaryKey),
         rows: table
             .primary_key
             .partition
@@ -321,9 +321,9 @@ fn partition_section(table: &Table) -> Section {
 
 fn clustering_section(table: &Table) -> Section {
     Section {
-        heading: Some(Heading::new("Clustering Key", Token::ClusteringKey)),
+        heading: Some(Heading::new("Clustering Key", Token::ForeignKey)),
         group: Group::Shape,
-        token: Some(Token::ClusteringKey),
+        token: Some(Token::ForeignKey),
         rows: table
             .primary_key
             .clustering
@@ -991,11 +991,11 @@ mod tests {
 
         assert_eq!(
             section(&details, "Partition Key").token,
-            Some(Token::PartitionKey)
+            Some(Token::PrimaryKey)
         );
         assert_eq!(
             section(&details, "Clustering Key").token,
-            Some(Token::ClusteringKey)
+            Some(Token::ForeignKey)
         );
         assert_eq!(
             section(&details, "Options").token,
@@ -1024,8 +1024,8 @@ mod tests {
         }
 
         for (heading, expected) in [
-            ("Partition Key", Token::PartitionKey),
-            ("Clustering Key", Token::ClusteringKey),
+            ("Partition Key", Token::PrimaryKey),
+            ("Clustering Key", Token::ForeignKey),
         ] {
             assert_eq!(
                 token(&table, heading).map(|heading| heading.token),

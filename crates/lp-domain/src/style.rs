@@ -39,12 +39,12 @@ pub fn text(segments: &[Segment]) -> String {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Token {
-    PartitionKey,
-    ClusteringKey,
-    /// Apart from [`Token::PartitionKey`]: a bold column of values would steal
+    PrimaryKey,
+    ForeignKey,
+    /// Apart from [`Token::PrimaryKey`]: a bold column of values would steal
     /// the emphasis a matched cell spends.
-    PartitionKeyValue,
-    ClusteringKeyValue,
+    PrimaryKeyValue,
+    ForeignKeyValue,
     /// Static-ness changes what a write means.
     StaticColumn,
     RegularColumn,

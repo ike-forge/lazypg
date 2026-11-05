@@ -45,7 +45,7 @@ pub(crate) fn identity(token: Token) -> &'static str {
 /// its rows instead.
 pub(crate) fn section(token: Token, group: Group) -> &'static str {
     match (token, group) {
-        (Token::PartitionKey | Token::ClusteringKey, _) => KEY,
+        (Token::PrimaryKey | Token::ForeignKey, _) => KEY,
         (_, Group::Indexes) => INDEX,
         (_, Group::Settings) => SETTINGS,
         _ => "",

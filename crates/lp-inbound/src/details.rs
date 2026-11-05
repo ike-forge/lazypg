@@ -616,8 +616,8 @@ mod tests {
         let theme = Theme::default();
 
         for (kind, token) in [
-            (ColumnKind::Partition, Token::PartitionKey),
-            (ColumnKind::Clustering, Token::ClusteringKey),
+            (ColumnKind::Partition, Token::PrimaryKey),
+            (ColumnKind::Clustering, Token::ForeignKey),
             (ColumnKind::Static, Token::StaticColumn),
             (ColumnKind::Regular, Token::RegularColumn),
         ] {
@@ -851,10 +851,10 @@ mod tests {
                 Section {
                     heading: Some(Heading {
                         text: "Partition Key".to_owned(),
-                        token: Token::PartitionKey,
+                        token: Token::PrimaryKey,
                     }),
                     group: Group::Shape,
-                    token: Some(Token::PartitionKey),
+                    token: Some(Token::PrimaryKey),
                     rows: vec![DetailRow::KeyColumn {
                         name: "customer_id".to_owned(),
                         order: None,

@@ -1,5 +1,5 @@
 //! Two hues, warm amber and cool blue, over a neutral ramp; green and red mean
-//! only success and danger. Hence `clustering` is warm here and cool elsewhere,
+//! only success and danger. Hence `foreign_key` is warm here and cool elsewhere,
 //! and `shortcut` is the blue, since `focus` is the amber.
 
 use crate::theme::{Palette, rgb};
@@ -23,8 +23,8 @@ pub(crate) const DARK: Palette = Palette {
     shortcut: rgb(0x84cfec),
     keyspace: rgb(0xe1e7ee),
     table: rgb(0x84cfec),
-    partition: rgb(0xfcbf76),
-    clustering: rgb(0xc2a585),
+    primary_key: rgb(0xfcbf76),
+    foreign_key: rgb(0xc2a585),
     column: rgb(0xe1e7ee),
     label: rgb(0xb5bdc8),
     section: rgb(0xb5bdc8),
@@ -59,8 +59,8 @@ pub(crate) const LIGHT: Palette = Palette {
     shortcut: rgb(0x006888),
     keyspace: rgb(0x272c31),
     table: rgb(0x006888),
-    partition: rgb(0x8c5500),
-    clustering: rgb(0x81613a),
+    primary_key: rgb(0x8c5500),
+    foreign_key: rgb(0x81613a),
     column: rgb(0x272c31),
     label: rgb(0x49505a),
     section: rgb(0x49505a),

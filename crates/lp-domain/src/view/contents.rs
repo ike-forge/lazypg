@@ -298,8 +298,8 @@ fn grid_cell(
 /// Regular columns stay plain, so keys stand out.
 const fn key_token(column: Option<Token>) -> Option<Token> {
     match column {
-        Some(Token::PartitionKey) => Some(Token::PartitionKeyValue),
-        Some(Token::ClusteringKey) => Some(Token::ClusteringKeyValue),
+        Some(Token::PrimaryKey) => Some(Token::PrimaryKeyValue),
+        Some(Token::ForeignKey) => Some(Token::ForeignKeyValue),
         _ => None,
     }
 }
@@ -314,9 +314,9 @@ fn column_token(schema: Option<&Catalog>, table: Option<&TableRef>, column: &str
 
     let key = &found.primary_key;
     if key.partition.iter().any(|c| c.name == column) {
-        Some(Token::PartitionKey)
+        Some(Token::PrimaryKey)
     } else if key.clustering.iter().any(|c| c.column.name == column) {
-        Some(Token::ClusteringKey)
+        Some(Token::ForeignKey)
     } else if found.static_columns.iter().any(|c| c.name == column)
         || found.regular_columns.iter().any(|c| c.name == column)
     {
@@ -712,7 +712,7 @@ mod tests {
         let PanelBody::Grid { rows, .. } = contents_body(&state) else {
             panic!("a loaded page draws a grid");
         };
-        assert_eq!(rows[0][0].token, Some(Token::PartitionKeyValue));
+        assert_eq!(rows[0][0].token, Some(Token::PrimaryKeyValue));
         assert_eq!(rows[0][1].token, Some(Token::Faint));
     }
 
@@ -765,8 +765,8 @@ mod tests {
         assert_eq!(
             columns.iter().map(|c| c.token).collect::<Vec<_>>(),
             [
-                Some(Token::PartitionKey),
-                Some(Token::ClusteringKey),
+                Some(Token::PrimaryKey),
+                Some(Token::ForeignKey),
                 Some(Token::RegularColumn),
             ]
         );
@@ -783,7 +783,7 @@ mod tests {
             panic!("a loaded page is a grid");
         };
 
-        assert_eq!(columns[0].token, Some(Token::PartitionKey));
+        assert_eq!(columns[0].token, Some(Token::PrimaryKey));
         assert_eq!(columns[1].token, Some(Token::RegularColumn));
     }
 
@@ -798,7 +798,7 @@ mod tests {
             panic!("a loaded page is a grid");
         };
 
-        assert_eq!(columns[0].token, Some(Token::PartitionKey));
+        assert_eq!(columns[0].token, Some(Token::PrimaryKey));
         assert_eq!(columns[1].token, Some(Token::RegularColumn));
     }
 
@@ -846,7 +846,7 @@ mod tests {
             panic!("a loaded page is a grid");
         };
 
-        assert_eq!(columns[0].token, Some(Token::PartitionKey));
+        assert_eq!(columns[0].token, Some(Token::PrimaryKey));
     }
 
     #[test]
@@ -923,8 +923,8 @@ mod tests {
         assert_eq!(
             rows[0].iter().map(|cell| cell.token).collect::<Vec<_>>(),
             [
-                Some(Token::PartitionKeyValue),
-                Some(Token::ClusteringKeyValue),
+                Some(Token::PrimaryKeyValue),
+                Some(Token::ForeignKeyValue),
                 None
             ],
             "a regular column's values stay body text, which is what the keys \
@@ -1228,10 +1228,10 @@ mod tests {
                 fields: vec![
                     InspectField {
                         name: "id".to_owned(),
-                        token: Some(Token::PartitionKey),
+                        token: Some(Token::PrimaryKey),
                         value: InspectValue {
                             lines: vec!["7".to_owned()],
-                            token: Some(Token::PartitionKeyValue),
+                            token: Some(Token::PrimaryKeyValue),
                             dirty: false,
                         },
                     },

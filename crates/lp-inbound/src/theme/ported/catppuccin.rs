@@ -49,15 +49,15 @@ impl Flavour {
             shortcut: self.yellow,
             keyspace: self.mauve,
             table: self.blue,
-            partition: self.yellow,
-            clustering: self.teal,
+            primary_key: self.yellow,
+            foreign_key: self.teal,
             column: self.text,
             label: self.subtext1,
             section: self.pink,
             accent: self.peach,
             match_: self.flamingo,
             success: self.green,
-            // Same yellow as `partition` and `shortcut`; the three never share
+            // Same yellow as `primary_key` and `shortcut`; the three never share
             // a surface.
             warning: self.yellow,
             danger: self.red,

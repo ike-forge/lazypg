@@ -214,7 +214,7 @@ async fn pressing_enter_on_a_table_fills_the_contents_panel() {
             .map(|column| (column.name.as_str(), column.token))
             .collect::<Vec<_>>(),
         [
-            ("id", Some(Token::PartitionKey)),
+            ("id", Some(Token::PrimaryKey)),
             ("email", Some(Token::RegularColumn)),
         ]
     );

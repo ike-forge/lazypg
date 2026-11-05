@@ -516,11 +516,11 @@ fn the_key_columns_are_drawn_in_the_tokens_that_mark_them_as_the_key() {
     let colour = |y: u16| buffer.cell((2, y)).expect("inside the panel").fg;
     let theme = Theme::default();
     let partition = theme
-        .style(Token::PartitionKey)
+        .style(Token::PrimaryKey)
         .fg
         .expect("the partition key spends a colour");
     let clustering = theme
-        .style(Token::ClusteringKey)
+        .style(Token::ForeignKey)
         .fg
         .expect("the clustering key spends a colour");
 

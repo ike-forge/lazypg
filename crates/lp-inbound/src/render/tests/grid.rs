@@ -231,7 +231,7 @@ fn the_key_columns_are_drawn_in_the_styles_that_carry_the_physical_shape() {
     let area = block_area(&buffer, "Table contents");
     let header = |x: u16| buffer.cell((x, 1)).expect("inside the panel");
     let partition = Theme::default()
-        .style(Token::PartitionKey)
+        .style(Token::PrimaryKey)
         .fg
         .expect("the partition key spends a colour");
 
@@ -831,7 +831,7 @@ fn a_key_columns_heading_keeps_its_colour_under_the_wash() {
     assert_eq!(
         heading.fg,
         theme
-            .style(Token::PartitionKey)
+            .style(Token::PrimaryKey)
             .fg
             .expect("the partition key spends a colour"),
         "and `id` still reads as the partition key under it"
