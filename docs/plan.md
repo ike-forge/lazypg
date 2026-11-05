@@ -55,7 +55,7 @@ Every LazyCassandra module falls into one of three buckets.
    runs against `lp_outbound::demo`. Domain and config keep the Cassandra
    vocabulary (`Keyspace`, `Cluster`, `hosts`) until steps 3–4 and Phase 1
    replace it; every step keeps the app running and the tests green.
-2. **Driver.** `tokio-postgres` + rustls against `docker/`: connect,
+2. **Driver.** *Done.* `tokio-postgres` + rustls against `docker/`: connect,
    cancel a `pg_sleep`, page with `LIMIT/OFFSET`, decode every
    `zoo.everything` column. TLS from LazyCassandra's
    `lc-outbound/src/tls.rs` via `tokio-postgres-rustls`. Record the

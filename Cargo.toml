@@ -44,6 +44,13 @@ tokio = { version = "1.54.1", features = [
     "sync",
     "time",
 ] }
+# The driver. Default features only: rows are read as Postgres's own text
+# rendering (lp-outbound/src/postgres.rs), so no type-crate integrations.
+tokio-postgres = "0.7.18"
+tokio-postgres-rustls = { version = "0.14.0", features = ["aws-lc-rs"] }
+rustls = { version = "0.23.46", default-features = false, features = ["aws_lc_rs", "std", "tls12"] }
+rustls-native-certs = "0.8.4"
+rustls-pki-types = { version = "1.15.1", features = ["std"] }
 # Read-only TOML; dropping `display` drops `toml_writer`.
 toml = { version = "1.1.4", default-features = false, features = [
     "std",

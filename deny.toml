@@ -4,6 +4,10 @@
 # the gate rather than slip in.
 allow = [
     "Apache-2.0",
+    # subtle 2.6.1, via the TLS stack.
+    "BSD-3-Clause",
+    # rustls-webpki, untrusted and aws-lc-rs/-sys: the TLS stack.
+    "ISC",
     "MIT",
     "BSL-1.0",
     "Unicode-3.0",
@@ -26,6 +30,8 @@ allow-wildcard-paths = true
 # choice, not ours; delete the entry once the tree converges.
 skip = [
     { crate = "syn@2.0.119", reason = "several proc-macro crates have not moved to syn 3" },
+    { crate = "const-oid@0.9.6", reason = "tokio-postgres-rustls's x509-cert 0.2 lags postgres-protocol's digest 0.11" },
+    { crate = "wasi@0.11.1", reason = "mio, under crossterm, lags tokio-postgres's whoami" },
 ]
 
 [advisories]

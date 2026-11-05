@@ -4,8 +4,8 @@ Companion to [vision.md](vision.md). The structure is LazyCassandra's; this
 document records what is the same, what differs for Postgres, and what is
 still open.
 
-**Status:** Phase 0 step 1 done: LazyCassandra shell ported, running against
-an in-memory demo database.
+**Status:** Phase 0 steps 1–2 done: LazyCassandra shell ported and running
+against Postgres through the Cassandra-shaped domain model.
 **Last updated:** 2026-11-05
 
 ---
@@ -123,8 +123,14 @@ opened on unfold.
 | `sqlx` | Compile-time-checked queries are irrelevant for ad-hoc SQL; less direct control over portals and cancellation |
 | `libpq` bindings | FFI; ruled out by conventions.md §1 |
 
-The Phase 0 spike confirms cancellation, type decoding for the
-`docker/seed` zoo, and the `deny.toml` cost.
+Rows are read over the simple query protocol, so every value arrives as
+Postgres's own text rendering; a `prepare` of the same text supplies column
+types for booleans, integers, floats, `bytea` and `uuid`, and everything else
+stays text. `numeric` stays text deliberately. Cancellation is a drop guard:
+aborting the task, or a request timeout, sends a cancel request.
+
+Wiring it in cost two `deny.toml` skip entries (`const-oid` 0.9, `wasi` 0.11)
+and two licences, `ISC` and `BSD-3-Clause`, for the rustls/aws-lc stack.
 
 ## 9. Shared code with LazyCassandra
 

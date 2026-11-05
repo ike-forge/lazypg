@@ -1,0 +1,569 @@
+//! The `Cluster` port over `tokio-postgres`.
+//!
+//! Rows are read with the simple query protocol, so every value arrives as
+//! Postgres's own text rendering and no type needs a decoder of ours. Column
+//! types come from a `prepare` of the same text; a multi-statement string
+//! cannot be prepared and reads as all text.
+
+use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
+use std::time::Duration;
+
+use async_trait::async_trait;
+use lp_domain::config::{ConnectionConfig, DriverConfig, PageSize, Tls};
+use lp_domain::contents::TableRef;
+use lp_domain::health::Health;
+use lp_domain::model::{
+    Column, ConnId, CqlValue, DbError, Keyspace, Page, PagingState, PrimaryKey, Replication, Row,
+    Schema, Statement, StatementKind, Table, TableOptions,
+};
+use lp_domain::ports::Cluster;
+use lp_domain::posture::Posture;
+use tokio::sync::RwLock;
+use tokio_postgres::error::SqlState;
+use tokio_postgres::types::Type;
+use tokio_postgres::{CancelToken, Client, NoTls, SimpleQueryMessage};
+use tokio_postgres_rustls::MakeRustlsConnect;
+
+use crate::secret::Secrets;
+use crate::tls;
+
+#[derive(Debug, Default)]
+pub struct Postgres {
+    open: RwLock<HashMap<ConnId, Arc<Open>>>,
+}
+
+struct Open {
+    client: Client,
+    cancel: CancelToken,
+    tls: Option<MakeRustlsConnect>,
+    request_timeout: Duration,
+}
+
+impl std::fmt::Debug for Open {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Open")
+            .field("tls", &self.tls.is_some())
+            .field("request_timeout", &self.request_timeout)
+            .finish_non_exhaustive()
+    }
+}
+
+impl Postgres {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    async fn session(&self, conn: ConnId) -> Result<Arc<Open>, DbError> {
+        self.open
+            .read()
+            .await
+            .get(&conn)
+            .cloned()
+            .ok_or_else(|| DbError::Unreachable("not connected".to_owned()))
+    }
+}
+
+#[async_trait]
+impl Cluster for Postgres {
+    async fn connect(
+        &self,
+        conn: ConnId,
+        target: &ConnectionConfig,
+        driver: &DriverConfig,
+    ) -> Result<Posture, DbError> {
+        let mut config = tokio_postgres::Config::new();
+        config
+            .application_name("lazypg")
+            .connect_timeout(millis(driver.connect_timeout.get()));
+
+        for host in &target.hosts {
+            let (host, port) = host_and_port(host)?;
+            config.host(host).port(port);
+        }
+
+        let user = match &target.credentials {
+            Some(credentials) => {
+                // Resolved here so the plaintext never enters `lp-domain`.
+                let (user, password) = Secrets
+                    .credentials(credentials)
+                    .await
+                    .map_err(|error| DbError::Unreachable(error.to_string()))?;
+                config.password(password);
+                user
+            }
+            None => std::env::var("PGUSER")
+                .or_else(|_| std::env::var("USER"))
+                .map_err(|_| DbError::Authentication("no username: set one".to_owned()))?,
+        };
+        // No dbname: the server then defaults it to the user's name, as libpq.
+        config.user(user);
+
+        // The server-side rail (architecture.md §4): a statement the domain
+        // misclassifies is still refused.
+        if target.posture == Posture::ReadOnly {
+            config.options("-c default_transaction_read_only=on");
+        }
+
+        let tls = match &target.tls {
+            Tls::Off => None,
+            Tls::On(settings) => Some(MakeRustlsConnect::new(
+                (*tls::client_config(settings).await?).clone(),
+            )),
+            Tls::Cqlshrc(_) => {
+                return Err(DbError::Tls(
+                    "cqlshrc is not a Postgres TLS source".to_owned(),
+                ));
+            }
+        };
+
+        let client = match &tls {
+            None => {
+                let (client, connection) = config
+                    .connect(NoTls)
+                    .await
+                    .map_err(|error| connect_error(&error))?;
+                tokio::spawn(connection);
+                client
+            }
+            Some(tls) => {
+                let (client, connection) = config
+                    .connect(tls.clone())
+                    .await
+                    .map_err(|error| connect_error(&error))?;
+                tokio::spawn(connection);
+                client
+            }
+        };
+
+        let open = Open {
+            cancel: client.cancel_token(),
+            client,
+            tls,
+            request_timeout: millis(driver.request_timeout.get()),
+        };
+        self.open.write().await.insert(conn, Arc::new(open));
+
+        Ok(target.posture)
+    }
+
+    async fn describe(&self, conn: ConnId) -> Result<Schema, DbError> {
+        let open = self.session(conn).await?;
+        describe(&open.client).await
+    }
+
+    async fn execute(&self, conn: ConnId, stmt: &Statement) -> Result<Page, DbError> {
+        let open = self.session(conn).await?;
+        run(&open, &stmt.cql).await
+    }
+
+    /// `LIMIT/OFFSET` around the statement (architecture.md §6). One row past
+    /// the page tells whether there is another.
+    async fn execute_paged(
+        &self,
+        conn: ConnId,
+        stmt: &Statement,
+        page_size: PageSize,
+        cursor: Option<&PagingState>,
+    ) -> Result<Page, DbError> {
+        let open = self.session(conn).await?;
+
+        let Some(inner) = pageable(stmt) else {
+            return run(&open, &stmt.cql).await;
+        };
+
+        let offset = cursor.map_or(0, offset_of);
+        let size = u64::from(page_size.get());
+        let sql = format!(
+            "SELECT * FROM ({inner}) AS lazypg_page LIMIT {} OFFSET {offset}",
+            size + 1
+        );
+
+        let mut page = run(&open, &sql).await?;
+        if page.rows.len() as u64 > size {
+            page.rows.truncate(page_size.get() as usize);
+            page.next = Some(PagingState((offset + size).to_be_bytes().to_vec()));
+        }
+        Ok(page)
+    }
+
+    async fn table_health(&self, _conn: ConnId, _table: &TableRef) -> Result<Health, DbError> {
+        Err(DbError::Other(
+            "table health is not available for Postgres yet".to_owned(),
+        ))
+    }
+}
+
+fn millis(value: u32) -> Duration {
+    Duration::from_millis(value.into())
+}
+
+fn host_and_port(host: &str) -> Result<(&str, u16), DbError> {
+    let bracketed = host.strip_prefix('[').and_then(|rest| rest.split_once(']'));
+    let (name, port) = match bracketed {
+        Some((name, rest)) => (name, rest.strip_prefix(':')),
+        None => match host.rsplit_once(':') {
+            Some((name, port)) if !name.contains(':') => (name, Some(port)),
+            _ => (host, None),
+        },
+    };
+
+    let port = port.map_or(Ok(5432), |port| {
+        port.parse()
+            .map_err(|_| DbError::Unreachable(format!("`{host}`: invalid port")))
+    })?;
+    Ok((name, port))
+}
+
+/// The statement without its trailing `;`, when wrapping it in a subquery is
+/// valid; `None` runs it as written, unpaged.
+fn pageable(stmt: &Statement) -> Option<&str> {
+    if stmt.kind != StatementKind::Read {
+        return None;
+    }
+    let inner = stmt.cql.trim().trim_end_matches(';').trim_end();
+    let first = inner
+        .split(|c: char| c.is_whitespace() || c == '(')
+        .next()?
+        .to_ascii_uppercase();
+
+    // A `;` left inside means several statements, or one in a literal; both
+    // run unwrapped rather than risk a broken subquery.
+    (matches!(first.as_str(), "SELECT" | "VALUES" | "TABLE" | "WITH") && !inner.contains(';'))
+        .then_some(inner)
+}
+
+fn offset_of(PagingState(bytes): &PagingState) -> u64 {
+    bytes.as_slice().try_into().map_or(0, u64::from_be_bytes)
+}
+
+/// Aborting the future that holds this — `Effect::Cancel` aborts the task —
+/// sends a cancel request, so the server stops rather than finishing unseen.
+struct CancelOnDrop {
+    open: Option<Arc<Open>>,
+}
+
+impl CancelOnDrop {
+    fn disarm(mut self) {
+        self.open = None;
+    }
+}
+
+impl Drop for CancelOnDrop {
+    fn drop(&mut self) {
+        let Some(open) = self.open.take() else {
+            return;
+        };
+        let Ok(runtime) = tokio::runtime::Handle::try_current() else {
+            return;
+        };
+        runtime.spawn(async move {
+            let token = open.cancel.clone();
+            // Best effort: a failed cancel leaves the query to its own timeout.
+            let _ = match &open.tls {
+                Some(tls) => token.cancel_query(tls.clone()).await,
+                None => token.cancel_query(NoTls).await,
+            };
+        });
+    }
+}
+
+async fn run(open: &Arc<Open>, sql: &str) -> Result<Page, DbError> {
+    let guard = CancelOnDrop {
+        open: Some(Arc::clone(open)),
+    };
+
+    let read = async {
+        let types: Option<Vec<Type>> = open.client.prepare(sql).await.ok().map(|prepared| {
+            prepared
+                .columns()
+                .iter()
+                .map(|c| c.type_().clone())
+                .collect()
+        });
+        let messages = open
+            .client
+            .simple_query(sql)
+            .await
+            .map_err(|error| db_error(&error))?;
+        Ok::<_, DbError>(page(messages, types.as_deref()))
+    };
+
+    // An elapsed timeout drops the guard armed, which cancels server-side.
+    let page = tokio::time::timeout(open.request_timeout, read)
+        .await
+        .map_err(|_| DbError::Timeout)??;
+    guard.disarm();
+    Ok(page)
+}
+
+/// The last result set wins, as in psql.
+fn page(messages: Vec<SimpleQueryMessage>, types: Option<&[Type]>) -> Page {
+    let mut columns = Vec::new();
+    let mut rows = Vec::new();
+
+    for message in messages {
+        match message {
+            SimpleQueryMessage::RowDescription(described) => {
+                columns = described.iter().map(|c| c.name().to_owned()).collect();
+                rows.clear();
+            }
+            SimpleQueryMessage::Row(row) => {
+                let values = (0..row.len())
+                    .map(|i| {
+                        let ty = types.and_then(|t| t.get(i));
+                        value(row.get(i), ty)
+                    })
+                    .collect();
+                rows.push(Row { values });
+            }
+            _ => {}
+        }
+    }
+
+    Page {
+        columns,
+        rows,
+        next: None,
+    }
+}
+
+fn value(text: Option<&str>, ty: Option<&Type>) -> CqlValue {
+    let Some(text) = text else {
+        return CqlValue::Null;
+    };
+    let as_text = || CqlValue::Text(text.to_owned());
+
+    match ty {
+        Some(&Type::BOOL) => CqlValue::Boolean(text == "t"),
+        Some(&Type::INT2 | &Type::INT4 | &Type::INT8 | &Type::OID) => {
+            text.parse().map_or_else(|_| as_text(), CqlValue::Int)
+        }
+        // `numeric` stays text: it is arbitrary precision.
+        Some(&Type::FLOAT4 | &Type::FLOAT8) => {
+            text.parse().map_or_else(|_| as_text(), CqlValue::Float)
+        }
+        Some(&Type::BYTEA) => hex(text).map_or_else(as_text, CqlValue::Blob),
+        Some(&Type::UUID) => CqlValue::Uuid(text.to_owned()),
+        _ => as_text(),
+    }
+}
+
+/// `bytea_output = hex`, the default since 9.0.
+fn hex(text: &str) -> Option<Vec<u8>> {
+    let digits = text.strip_prefix("\\x")?;
+    if digits.len() % 2 != 0 {
+        return None;
+    }
+    (0..digits.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(digits.get(i..i + 2)?, 16).ok())
+        .collect()
+}
+
+fn connect_error(error: &tokio_postgres::Error) -> DbError {
+    match error.as_db_error() {
+        Some(db)
+            if [
+                SqlState::INVALID_PASSWORD,
+                SqlState::INVALID_AUTHORIZATION_SPECIFICATION,
+            ]
+            .contains(db.code()) =>
+        {
+            DbError::Authentication(db.message().to_owned())
+        }
+        Some(_) => db_error(error),
+        None => DbError::Unreachable(error.to_string()),
+    }
+}
+
+fn db_error(error: &tokio_postgres::Error) -> DbError {
+    let Some(db) = error.as_db_error() else {
+        return if error.is_closed() {
+            DbError::Unreachable(error.to_string())
+        } else {
+            DbError::Other(error.to_string())
+        };
+    };
+
+    match *db.code() {
+        SqlState::READ_ONLY_SQL_TRANSACTION => DbError::ReadOnly,
+        SqlState::QUERY_CANCELED => DbError::Cancelled,
+        _ => DbError::Invalid(match db.hint() {
+            Some(hint) => format!("{} (hint: {hint})", db.message()),
+            None => db.message().to_owned(),
+        }),
+    }
+}
+
+const SCHEMAS: &str = "
+    SELECT nspname FROM pg_namespace
+    WHERE nspname NOT IN ('pg_catalog', 'information_schema')
+      AND nspname NOT LIKE 'pg\\_toast%' AND nspname NOT LIKE 'pg\\_temp\\_%'";
+
+/// Partitions are left out; plan.md Phase 1 folds them under their parent.
+const COLUMNS: &str = "
+    SELECT n.nspname, c.relname, a.attname,
+           format_type(a.atttypid, a.atttypmod),
+           array_position(pk.indkey::int2[], a.attnum)
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped
+    LEFT JOIN pg_index pk ON pk.indrelid = c.oid AND pk.indisprimary
+    WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f') AND NOT c.relispartition
+      AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+      AND n.nspname NOT LIKE 'pg\\_toast%' AND n.nspname NOT LIKE 'pg\\_temp\\_%'
+    ORDER BY 1, 2, a.attnum";
+
+/// Mapped onto the Cassandra-shaped model until plan.md Phase 0 step 4: the
+/// primary key fills `partition`, schemas fill keyspaces.
+async fn describe(client: &Client) -> Result<Schema, DbError> {
+    let mut keyspaces: BTreeMap<String, Keyspace> = client
+        .query(SCHEMAS, &[])
+        .await
+        .map_err(|error| db_error(&error))?
+        .iter()
+        .map(|row| {
+            let name: String = row.get(0);
+            let keyspace = Keyspace {
+                name: name.clone(),
+                replication: Replication::Other {
+                    class: "postgres".to_owned(),
+                },
+                tables: BTreeMap::new(),
+            };
+            (name, keyspace)
+        })
+        .collect();
+
+    let mut keyed: BTreeMap<(String, String), Vec<(i32, Column)>> = BTreeMap::new();
+
+    for row in client
+        .query(COLUMNS, &[])
+        .await
+        .map_err(|error| db_error(&error))?
+    {
+        let schema: String = row.get(0);
+        let relation: String = row.get(1);
+        let column = Column {
+            name: row.get(2),
+            cql_type: row.get(3),
+        };
+        let key_position: Option<i32> = row.get(4);
+
+        let Some(keyspace) = keyspaces.get_mut(&schema) else {
+            continue;
+        };
+        let table = keyspace
+            .tables
+            .entry(relation.clone())
+            .or_insert_with(|| Table {
+                name: relation.clone(),
+                primary_key: PrimaryKey {
+                    partition: Vec::new(),
+                    clustering: Vec::new(),
+                },
+                static_columns: Vec::new(),
+                regular_columns: Vec::new(),
+                indexes: Vec::new(),
+                options: TableOptions::new(BTreeMap::new()),
+            });
+
+        match key_position {
+            Some(position) => keyed
+                .entry((schema, relation))
+                .or_default()
+                .push((position, column)),
+            None => table.regular_columns.push(column),
+        }
+    }
+
+    for ((schema, relation), mut key) in keyed {
+        key.sort_by_key(|(position, _)| *position);
+        if let Some(table) = keyspaces
+            .get_mut(&schema)
+            .and_then(|keyspace| keyspace.tables.get_mut(&relation))
+        {
+            table.primary_key.partition = key.into_iter().map(|(_, column)| column).collect();
+        }
+    }
+
+    Ok(Schema { keyspaces })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn read(cql: &str) -> Statement {
+        Statement {
+            cql: cql.to_owned(),
+            kind: StatementKind::Read,
+        }
+    }
+
+    #[test]
+    fn a_host_without_a_port_dials_5432() {
+        assert_eq!(host_and_port("db").unwrap(), ("db", 5432));
+        assert_eq!(host_and_port("db:6543").unwrap(), ("db", 6543));
+        assert_eq!(host_and_port("[::1]:6543").unwrap(), ("::1", 6543));
+        assert_eq!(host_and_port("::1").unwrap(), ("::1", 5432));
+        assert!(host_and_port("db:port").is_err());
+    }
+
+    #[test]
+    fn only_a_single_read_is_wrapped_for_paging() {
+        assert_eq!(pageable(&read("select 1;  ")), Some("select 1"));
+        assert_eq!(
+            pageable(&read("WITH x AS (SELECT 1) TABLE x")),
+            Some("WITH x AS (SELECT 1) TABLE x")
+        );
+        assert_eq!(pageable(&read("(SELECT 1)")), None);
+        assert_eq!(pageable(&read("SELECT 1; SELECT 2")), None);
+        assert_eq!(pageable(&read("SHOW search_path")), None);
+        assert_eq!(
+            pageable(&Statement {
+                cql: "SELECT 1".to_owned(),
+                kind: StatementKind::Write,
+            }),
+            None
+        );
+    }
+
+    #[test]
+    fn values_take_their_column_type_and_fall_back_to_text() {
+        assert_eq!(value(None, Some(&Type::INT4)), CqlValue::Null);
+        assert_eq!(value(Some("t"), Some(&Type::BOOL)), CqlValue::Boolean(true));
+        assert_eq!(value(Some("-7"), Some(&Type::INT8)), CqlValue::Int(-7));
+        assert_eq!(
+            value(Some("\\xdeadbeef"), Some(&Type::BYTEA)),
+            CqlValue::Blob(vec![0xde, 0xad, 0xbe, 0xef])
+        );
+        assert_eq!(
+            value(Some("\\x"), Some(&Type::BYTEA)),
+            CqlValue::Blob(Vec::new())
+        );
+        assert_eq!(
+            value(Some("3.14159265358979323846"), Some(&Type::NUMERIC)),
+            CqlValue::Text("3.14159265358979323846".to_owned())
+        );
+        assert!(
+            matches!(value(Some("NaN"), Some(&Type::FLOAT8)), CqlValue::Float(f) if f.is_nan())
+        );
+        assert_eq!(
+            value(Some("Infinity"), Some(&Type::FLOAT8)),
+            CqlValue::Float(f64::INFINITY)
+        );
+        assert_eq!(
+            value(Some("{1,2}"), None),
+            CqlValue::Text("{1,2}".to_owned())
+        );
+    }
+
+    #[test]
+    fn the_offset_round_trips_through_the_cursor() {
+        assert_eq!(offset_of(&PagingState(500_u64.to_be_bytes().to_vec())), 500);
+        assert_eq!(offset_of(&PagingState(vec![1])), 0);
+    }
+}

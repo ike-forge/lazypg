@@ -143,7 +143,7 @@ async fn run(
     spawn_ticker(tx.clone());
 
     // Built empty: the target is chosen from the config default or the picker.
-    let cluster: Arc<dyn Cluster> = Arc::new(lp_outbound::demo::cluster());
+    let cluster: Arc<dyn Cluster> = Arc::new(lp_outbound::postgres::Postgres::new());
     let writer: Arc<dyn Writer> = Arc::new(lp_outbound::file::FileWriter);
 
     lp_outbound::config::write_example_config_from_env();
