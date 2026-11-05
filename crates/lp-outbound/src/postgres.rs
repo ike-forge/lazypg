@@ -5,7 +5,7 @@
 //! types come from a `prepare` of the same text; a multi-statement string
 //! cannot be prepared and reads as all text.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::num::NonZeroU16;
 use std::sync::Arc;
 use std::time::Duration;
@@ -15,8 +15,7 @@ use lp_domain::config::{ConnectionConfig, DriverConfig, PageSize, SslMode};
 use lp_domain::contents::TableRef;
 use lp_domain::health::Health;
 use lp_domain::model::{
-    Catalog, Column, ConnId, CqlValue, DbError, Page, PagingState, PrimaryKey, Replication, Row,
-    Schema, Statement, StatementKind, Table, TableOptions,
+    Catalog, ConnId, CqlValue, DbError, Page, PagingState, Row, Statement, StatementKind,
 };
 use lp_domain::ports::{Cluster, SecretResolver as _};
 use lp_domain::posture::Posture;
@@ -159,7 +158,7 @@ impl Cluster for Postgres {
 
     async fn describe(&self, conn: ConnId) -> Result<Catalog, DbError> {
         let open = self.session(conn).await?;
-        describe(&open.client).await
+        crate::catalog::describe(&open.client).await
     }
 
     async fn execute(&self, conn: ConnId, stmt: &Statement) -> Result<Page, DbError> {
@@ -426,7 +425,7 @@ fn connect_error(error: &tokio_postgres::Error) -> DbError {
     }
 }
 
-fn db_error(error: &tokio_postgres::Error) -> DbError {
+pub(crate) fn db_error(error: &tokio_postgres::Error) -> DbError {
     let Some(db) = error.as_db_error() else {
         return if error.is_closed() {
             DbError::Unreachable(error.to_string())
@@ -443,101 +442,6 @@ fn db_error(error: &tokio_postgres::Error) -> DbError {
             None => db.message().to_owned(),
         }),
     }
-}
-
-const SCHEMAS: &str = "
-    SELECT nspname FROM pg_namespace
-    WHERE nspname NOT IN ('pg_catalog', 'information_schema')
-      AND nspname NOT LIKE 'pg\\_toast%' AND nspname NOT LIKE 'pg\\_temp\\_%'";
-
-/// Partitions are left out; plan.md Phase 1 folds them under their parent.
-const COLUMNS: &str = "
-    SELECT n.nspname, c.relname, a.attname,
-           format_type(a.atttypid, a.atttypmod),
-           array_position(pk.indkey::int2[], a.attnum)
-    FROM pg_class c
-    JOIN pg_namespace n ON n.oid = c.relnamespace
-    JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped
-    LEFT JOIN pg_index pk ON pk.indrelid = c.oid AND pk.indisprimary
-    WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f') AND NOT c.relispartition
-      AND n.nspname NOT IN ('pg_catalog', 'information_schema')
-      AND n.nspname NOT LIKE 'pg\\_toast%' AND n.nspname NOT LIKE 'pg\\_temp\\_%'
-    ORDER BY 1, 2, a.attnum";
-
-/// Mapped onto the Cassandra-shaped model until plan.md Phase 0 step 4: the
-/// primary key fills `partition`, schemas fill schemas.
-async fn describe(client: &Client) -> Result<Catalog, DbError> {
-    let mut schemas: BTreeMap<String, Schema> = client
-        .query(SCHEMAS, &[])
-        .await
-        .map_err(|error| db_error(&error))?
-        .iter()
-        .map(|row| {
-            let name: String = row.get(0);
-            let keyspace = Schema {
-                name: name.clone(),
-                replication: Replication::Other {
-                    class: "postgres".to_owned(),
-                },
-                tables: BTreeMap::new(),
-            };
-            (name, keyspace)
-        })
-        .collect();
-
-    let mut keyed: BTreeMap<(String, String), Vec<(i32, Column)>> = BTreeMap::new();
-
-    for row in client
-        .query(COLUMNS, &[])
-        .await
-        .map_err(|error| db_error(&error))?
-    {
-        let schema: String = row.get(0);
-        let relation: String = row.get(1);
-        let column = Column {
-            name: row.get(2),
-            data_type: row.get(3),
-        };
-        let key_position: Option<i32> = row.get(4);
-
-        let Some(keyspace) = schemas.get_mut(&schema) else {
-            continue;
-        };
-        let table = keyspace
-            .tables
-            .entry(relation.clone())
-            .or_insert_with(|| Table {
-                name: relation.clone(),
-                primary_key: PrimaryKey {
-                    partition: Vec::new(),
-                    clustering: Vec::new(),
-                },
-                static_columns: Vec::new(),
-                regular_columns: Vec::new(),
-                indexes: Vec::new(),
-                options: TableOptions::new(BTreeMap::new()),
-            });
-
-        match key_position {
-            Some(position) => keyed
-                .entry((schema, relation))
-                .or_default()
-                .push((position, column)),
-            None => table.regular_columns.push(column),
-        }
-    }
-
-    for ((schema, relation), mut key) in keyed {
-        key.sort_by_key(|(position, _)| *position);
-        if let Some(table) = schemas
-            .get_mut(&schema)
-            .and_then(|keyspace| keyspace.tables.get_mut(&relation))
-        {
-            table.primary_key.partition = key.into_iter().map(|(_, column)| column).collect();
-        }
-    }
-
-    Ok(Catalog { schemas })
 }
 
 #[cfg(test)]

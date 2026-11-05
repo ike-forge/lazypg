@@ -1,8 +1,8 @@
 use super::*;
 
 #[test]
-fn keyspaces_are_listed_inside_the_tables_panel() {
-    let buffer = draw_state(40, 12, &browsing(&["shop", "typezoo", "system"], 0));
+fn schemas_are_listed_inside_the_tables_panel() {
+    let buffer = draw_state(40, 12, &browsing(&["shop", "typezoo", "pg_toast"], 0));
 
     assert_eq!(
         row(&buffer, 1),
@@ -14,7 +14,7 @@ fn keyspaces_are_listed_inside_the_tables_panel() {
     );
     assert_eq!(
         row(&buffer, 3),
-        "│ \u{f084} system     ││                      │"
+        "│ \u{f084} pg_toast   ││                      │"
     );
 }
 
@@ -60,12 +60,12 @@ fn the_ddl_identity_rows_wear_the_tree_icons_and_each_heading_its_own() {
     );
     assert!(
         rows.iter()
-            .any(|line| *line == format!("{}Partition Key", crate::icons::KEY)),
+            .any(|line| *line == format!("{}Primary Key", crate::icons::KEY)),
         "got {rows:?}"
     );
     assert!(
         rows.iter()
-            .any(|line| *line == format!("{}Options", crate::icons::SETTINGS)),
+            .any(|line| *line == format!("{}Constraints", crate::icons::SETTINGS)),
         "and a settings section the cog, got {rows:?}"
     );
 }
@@ -186,8 +186,8 @@ fn a_search_drops_the_tables_it_does_not_reach() {
 }
 
 #[test]
-fn the_clusters_own_keyspaces_are_dimmed() {
-    let buffer = draw_state(40, 12, &browsing(&["shop", "system"], 0));
+fn system_schemas_are_dimmed() {
+    let buffer = draw_state(40, 12, &browsing(&["shop", "pg_toast"], 0));
     // Column 4, past the border, bar and icon.
     let fg = |y: u16| buffer.cell((4, y)).expect("inside the panel").fg;
     let faint = Theme::default()
@@ -196,12 +196,12 @@ fn the_clusters_own_keyspaces_are_dimmed() {
         .expect("faint spends a colour");
 
     assert_ne!(fg(1), faint, "shop is the user's");
-    assert_eq!(fg(2), faint, "system is the cluster's");
+    assert_eq!(fg(2), faint, "pg_toast is the system's");
 }
 
 #[test]
 fn a_dimmed_rows_icon_keeps_the_colour_of_what_it_names() {
-    let buffer = draw_state(40, 12, &browsing(&["shop", "system"], 0));
+    let buffer = draw_state(40, 12, &browsing(&["shop", "pg_toast"], 0));
     // Column 2, past the border and bar.
     let icon = |y: u16| buffer.cell((2, y)).expect("inside the panel").fg;
     let theme = Theme::default();
@@ -221,7 +221,7 @@ fn a_dimmed_rows_icon_keeps_the_colour_of_what_it_names() {
 
 #[test]
 fn the_selected_row_is_the_one_the_cursor_is_on() {
-    let buffer = draw_state(40, 12, &browsing(&["shop", "typezoo", "system"], 1));
+    let buffer = draw_state(40, 12, &browsing(&["shop", "typezoo", "pg_toast"], 1));
     let highlight = Theme::default()
         .style(Token::Selected)
         .bg
@@ -235,7 +235,7 @@ fn the_selected_row_is_the_one_the_cursor_is_on() {
 
 #[test]
 fn a_ranged_tree_row_carries_the_bar_and_the_band() {
-    let mut state = browsing(&["shop", "typezoo", "system"], 0);
+    let mut state = browsing(&["shop", "typezoo", "pg_toast"], 0);
     state.tables.selection = held(0, 1);
 
     let buffer = draw_state(40, 12, &state);

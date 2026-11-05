@@ -264,8 +264,8 @@ mod tests {
     }
 
     #[test]
-    fn keyspaces_are_listed_with_the_clusters_own_dimmed_and_last() {
-        let state = loaded(&["system_schema", "typezoo", "shop"]);
+    fn schemas_are_listed_with_the_systems_dimmed_and_last() {
+        let state = loaded(&["pg_catalog", "typezoo", "shop"]);
 
         let PanelBody::Tree { rows, selected, .. } = tables_body(&state) else {
             panic!("a loaded schema lists its schemas");
@@ -275,7 +275,7 @@ mod tests {
             rows.iter()
                 .map(|row| row.label.as_str())
                 .collect::<Vec<_>>(),
-            ["shop", "typezoo", "system_schema"]
+            ["shop", "typezoo", "pg_catalog"]
         );
         assert_eq!(
             rows[0].token,
@@ -330,8 +330,8 @@ mod tests {
     }
 
     #[test]
-    fn a_table_is_faint_exactly_when_its_keyspace_is() {
-        let mut state = tabled(&[("system_schema", &["tables"])]);
+    fn a_table_is_faint_exactly_when_its_schema_is() {
+        let mut state = tabled(&[("pg_catalog", &["tables"])]);
         let schema = state.schema().cloned().expect("loaded");
         state.tables.open(&schema);
 
@@ -446,8 +446,8 @@ mod tests {
     }
 
     #[test]
-    fn a_cluster_keyspace_stays_quiet() {
-        let mut state = tabled(&[("system_schema", &["tables"])]);
+    fn a_system_schema_stays_quiet() {
+        let mut state = tabled(&[("pg_catalog", &["tables"])]);
         let schema = state.schema().cloned().expect("loaded");
         state.tables.open(&schema);
 

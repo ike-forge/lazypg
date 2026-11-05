@@ -2,6 +2,7 @@
 //! crate that talks to the outside world.
 
 pub mod buffer;
+mod catalog;
 pub mod clock;
 pub mod config;
 pub mod fake;

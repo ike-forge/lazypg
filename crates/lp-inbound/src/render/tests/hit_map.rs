@@ -1,8 +1,8 @@
 use super::*;
 
 #[test]
-fn the_map_resolves_every_drawn_keyspace_to_the_row_that_drew_it() {
-    let names = ["shop", "typezoo", "system"];
+fn the_map_resolves_every_drawn_schema_to_the_row_that_drew_it() {
+    let names = ["shop", "typezoo", "pg_toast"];
     let (buffer, map) = draw_mapped(40, 12, &browsing(&names, 0));
 
     for (index, name) in names.iter().enumerate() {

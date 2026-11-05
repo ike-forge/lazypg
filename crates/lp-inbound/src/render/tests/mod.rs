@@ -7,9 +7,8 @@ use lp_domain::feedback::Flash;
 use lp_domain::geometry::Geometry;
 use lp_domain::grid::{BAR, COLUMN_SPACING};
 use lp_domain::model::{
-    Catalog, ClusteringColumn, ClusteringOrder, Column, ConnId, CqlValue, Index, IndexKind,
-    IndexTarget, Key, Page, PrimaryKey, QueryId, Replication, Schema, Statement, Table,
-    TableOptions,
+    Catalog, Column, ConnId, CqlValue, Index, Key, Page, PrimaryKey, QueryId, Schema, Statement,
+    Table,
 };
 use lp_domain::overlay::{Message, Overlay};
 use lp_domain::panel::Panel;
@@ -82,14 +81,12 @@ fn row(buffer: &Buffer, y: u16) -> String {
 fn table(name: &str) -> Table {
     Table {
         name: name.to_owned(),
-        primary_key: PrimaryKey {
-            partition: vec![column("id", "uuid")],
-            clustering: Vec::new(),
-        },
-        static_columns: Vec::new(),
-        regular_columns: Vec::new(),
-        indexes: Vec::new(),
-        options: TableOptions::default(),
+        columns: vec![column("id", "uuid")],
+        primary_key: Some(PrimaryKey {
+            name: format!("{name}_pkey"),
+            columns: vec!["id".to_owned()],
+        }),
+        ..Table::default()
     }
 }
 
@@ -97,6 +94,9 @@ fn column(name: &str, data_type: &str) -> Column {
     Column {
         name: name.to_owned(),
         data_type: data_type.to_owned(),
+        nullable: true,
+        default: None,
+        comment: None,
     }
 }
 
@@ -109,17 +109,12 @@ fn tabled_schema(schemas: &[(&str, &[&str])]) -> Catalog {
         schemas: schemas
             .iter()
             .map(|(name, tables)| {
-                (
-                    (*name).to_owned(),
-                    Schema {
-                        name: (*name).to_owned(),
-                        replication: Replication::SimpleStrategy { factor: 1 },
-                        tables: tables
-                            .iter()
-                            .map(|t| ((*t).to_owned(), table(t)))
-                            .collect::<BTreeMap<_, _>>(),
-                    },
-                )
+                let mut schema = Schema::empty(name);
+                schema.tables = tables
+                    .iter()
+                    .map(|t| ((*t).to_owned(), table(t)))
+                    .collect::<BTreeMap<_, _>>();
+                ((*name).to_owned(), schema)
             })
             .collect(),
     }
@@ -289,32 +284,35 @@ const fn drawn_column(area: Rect, index: u16) -> u16 {
 fn orders() -> Table {
     Table {
         name: "orders_by_customer".to_owned(),
-        primary_key: PrimaryKey {
-            partition: vec![column("customer_id", "uuid")],
-            clustering: vec![
-                ClusteringColumn {
-                    column: column("order_date", "date"),
-                    order: ClusteringOrder::Descending,
-                },
-                ClusteringColumn {
-                    column: column("order_id", "timeuuid"),
-                    order: ClusteringOrder::Ascending,
-                },
-            ],
-        },
-        static_columns: Vec::new(),
-        regular_columns: Vec::new(),
-        indexes: Vec::new(),
-        options: TableOptions::new(
-            [
-                ("comment", "Order list."),
-                ("gc_grace_seconds", "864000"),
-                ("bloom_filter_fp_chance", "0.01"),
-            ]
-            .into_iter()
-            .map(|(name, value)| (name.to_owned(), value.to_owned()))
-            .collect(),
-        ),
+        columns: vec![
+            column("customer_id", "uuid"),
+            column("order_date", "date"),
+            column("order_id", "bigint"),
+        ],
+        primary_key: Some(PrimaryKey {
+            name: "orders_by_customer_pkey".to_owned(),
+            columns: ["customer_id", "order_date", "order_id"]
+                .map(str::to_owned)
+                .to_vec(),
+        }),
+        foreign_keys: vec![lp_domain::model::ForeignKey {
+            name: "orders_customer_id_fkey".to_owned(),
+            columns: vec!["customer_id".to_owned()],
+            target: lp_domain::model::RelationRef {
+                schema: "shop".to_owned(),
+                table: "customers".to_owned(),
+            },
+            target_columns: vec!["id".to_owned()],
+            on_update: "NO ACTION".to_owned(),
+            on_delete: "NO ACTION".to_owned(),
+        }],
+        constraints: vec![lp_domain::model::Constraint {
+            name: "recent".to_owned(),
+            kind: lp_domain::model::ConstraintKind::Check,
+            definition: "CHECK (order_date > '2020-01-01')".to_owned(),
+        }],
+        comment: Some("Order list.".to_owned()),
+        ..Table::default()
     }
 }
 
@@ -323,9 +321,8 @@ fn describing(table: Table) -> State {
         schemas: BTreeMap::from([(
             "shop".to_owned(),
             Schema {
-                name: "shop".to_owned(),
-                replication: Replication::SimpleStrategy { factor: 1 },
                 tables: BTreeMap::from([(table.name.clone(), table)]),
+                ..Schema::empty("shop")
             },
         )]),
     };

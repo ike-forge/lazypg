@@ -380,7 +380,7 @@ fn ddl_motion_still_moves_the_cursor_before_the_first_measurement() {
     let rows = crate::view::ddl_rows(&state);
     assert!(
         rows > 1,
-        "a keyspace's replication must have more than one row, or End \
+        "a schema's description must have more than one row, or End \
          landing on rows - 1 == 0 would hold even if the cursor never moved"
     );
 
@@ -518,7 +518,7 @@ fn a_measurement_pulls_a_stale_scroll_offset_back_inside_the_panel() {
 
 #[test]
 fn the_ddl_cursor_clamps_when_the_selected_table_shrinks() {
-    use crate::model::{Column, PrimaryKey, Replication, Schema, TableOptions};
+    use crate::model::{Column, PrimaryKey, Schema};
 
     let mut state = browsing_tables(&[("shop", &["orders"])]);
     let conn = current_conn(&state);
@@ -535,29 +535,17 @@ fn the_ddl_cursor_clamps_when_the_selected_table_shrinks() {
     // can pull the cursor back.
     let shrunk = crate::model::Table {
         name: "orders".to_owned(),
-        primary_key: PrimaryKey {
-            partition: vec![Column {
-                name: "id".to_owned(),
-                data_type: "uuid".to_owned(),
-            }],
-            clustering: Vec::new(),
-        },
-        static_columns: Vec::new(),
-        regular_columns: Vec::new(),
-        indexes: Vec::new(),
-        options: TableOptions::default(),
+        columns: vec![Column::new("id", "uuid")],
+        primary_key: Some(PrimaryKey {
+            name: "orders_pkey".to_owned(),
+            columns: vec!["id".to_owned()],
+        }),
+        ..crate::model::Table::default()
     };
+    let mut shop = Schema::empty("shop");
+    shop.tables.insert("orders".to_owned(), shrunk);
     let schema = Catalog {
-        schemas: [(
-            "shop".to_owned(),
-            Schema {
-                name: "shop".to_owned(),
-                replication: Replication::SimpleStrategy { factor: 1 },
-                tables: [("orders".to_owned(), shrunk)].into_iter().collect(),
-            },
-        )]
-        .into_iter()
-        .collect(),
+        schemas: [("shop".to_owned(), shop)].into_iter().collect(),
     };
 
     update(
@@ -572,7 +560,7 @@ fn the_ddl_cursor_clamps_when_the_selected_table_shrinks() {
     let rows = crate::view::ddl_rows(&state);
     assert_eq!(
         rows, 3,
-        "the keyspace, the table, one partition column and nothing else"
+        "the schema, the table, one key column and nothing else"
     );
     assert_eq!(
         state.ddl.cursor.index(),

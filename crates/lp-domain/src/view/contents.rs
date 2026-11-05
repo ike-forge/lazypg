@@ -305,21 +305,18 @@ const fn key_token(column: Option<Token>) -> Option<Token> {
 }
 
 /// A typed statement is coloured when the resolver names exactly one table. A
-/// column the table lacks (alias, aggregate, `writetime(x)`) stays plain.
+/// column the table lacks (alias, aggregate, expression) stays plain.
 fn column_token(schema: Option<&Catalog>, table: Option<&TableRef>, column: &str) -> Option<Token> {
     let table = table?;
     let found = schema
         .and_then(|schema| schema.schemas.get(&table.keyspace))
         .and_then(|keyspace| keyspace.tables.get(&table.table))?;
 
-    let key = &found.primary_key;
-    if key.partition.iter().any(|c| c.name == column) {
+    if found.is_key(column) {
         Some(Token::PrimaryKey)
-    } else if key.clustering.iter().any(|c| c.column.name == column) {
+    } else if found.references(column) {
         Some(Token::ForeignKey)
-    } else if found.static_columns.iter().any(|c| c.name == column)
-        || found.regular_columns.iter().any(|c| c.name == column)
-    {
+    } else if found.column(column).is_some() {
         Some(Token::RegularColumn)
     } else {
         None
@@ -427,7 +424,7 @@ fn grid_table(state: &State, subject: &Subject) -> Option<TableRef> {
 mod tests {
     use crate::connection::{Connection, ConnectionState, SchemaState};
     use crate::model::{
-        Catalog, ClusteringColumn, ClusteringOrder, Column, ConnId, Page, QueryId, Row,
+        Catalog, Column, ConnId, ForeignKey, Page, PrimaryKey, QueryId, RelationRef, Row,
     };
     use crate::posture::Posture;
     use crate::search::{Search, Searched};
@@ -486,9 +483,12 @@ mod tests {
             .get_mut("shop")
             .and_then(|keyspace| keyspace.tables.get_mut("orders"))
             .expect("the builder made it");
-        orders.regular_columns = vec![Column {
+        orders.columns = vec![Column {
             name: "total".to_owned(),
             data_type: "int".to_owned(),
+            nullable: true,
+            default: None,
+            comment: None,
         }];
         state.connection = ConnectionState::Connected(Connection {
             id: ConnId::next(),
@@ -592,12 +592,12 @@ mod tests {
 
     #[test]
     fn a_system_tables_title_is_faint_on_both_halves_as_its_tree_row_is() {
-        let state = showing_table("system_schema", "columns");
+        let state = showing_table("pg_catalog", "columns");
 
         assert_eq!(
             title_segments(&state)[1..],
             [
-                Segment::styled("system_schema", Token::Faint),
+                Segment::styled("pg_catalog", Token::Faint),
                 Segment::styled(".", Token::Faint),
                 Segment::styled("columns", Token::Faint),
             ]
@@ -719,23 +719,34 @@ mod tests {
     #[test]
     fn the_header_carries_the_tables_physical_shape() {
         let mut state = tabled(&[("shop", &["orders"])]);
-        // Clusters on `at` too.
+        // References through `at`.
         let mut schema = state.schema().cloned().expect("loaded");
         let table = schema
             .schemas
             .get_mut("shop")
             .and_then(|keyspace| keyspace.tables.get_mut("orders"))
             .expect("the builder made it");
-        table.primary_key.clustering = vec![ClusteringColumn {
-            column: Column {
-                name: "at".to_owned(),
-                data_type: "timestamp".to_owned(),
+        table.primary_key = Some(PrimaryKey {
+            name: "orders_pkey".to_owned(),
+            columns: vec!["id".to_owned()],
+        });
+        table.foreign_keys = vec![ForeignKey {
+            name: "orders_at_fkey".to_owned(),
+            columns: vec!["at".to_owned()],
+            target: RelationRef {
+                schema: "shop".to_owned(),
+                table: "calendar".to_owned(),
             },
-            order: ClusteringOrder::Ascending,
+            target_columns: vec!["day".to_owned()],
+            on_update: "NO ACTION".to_owned(),
+            on_delete: "NO ACTION".to_owned(),
         }];
-        table.regular_columns = vec![Column {
+        table.columns = vec![Column {
             name: "total".to_owned(),
             data_type: "int".to_owned(),
+            nullable: true,
+            default: None,
+            comment: None,
         }];
         state.connection = ConnectionState::Connected(Connection {
             id: ConnId::next(),
@@ -888,12 +899,20 @@ mod tests {
             .get_mut("shop")
             .and_then(|keyspace| keyspace.tables.get_mut("orders"))
             .expect("the builder made it");
-        table.primary_key.clustering = vec![ClusteringColumn {
-            column: Column {
-                name: "at".to_owned(),
-                data_type: "timestamp".to_owned(),
+        table.primary_key = Some(PrimaryKey {
+            name: "orders_pkey".to_owned(),
+            columns: vec!["id".to_owned()],
+        });
+        table.foreign_keys = vec![ForeignKey {
+            name: "orders_at_fkey".to_owned(),
+            columns: vec!["at".to_owned()],
+            target: RelationRef {
+                schema: "shop".to_owned(),
+                table: "calendar".to_owned(),
             },
-            order: ClusteringOrder::Ascending,
+            target_columns: vec!["day".to_owned()],
+            on_update: "NO ACTION".to_owned(),
+            on_delete: "NO ACTION".to_owned(),
         }];
         state.connection = ConnectionState::Connected(Connection {
             id: ConnId::next(),

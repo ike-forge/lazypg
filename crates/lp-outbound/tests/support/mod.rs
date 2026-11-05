@@ -13,8 +13,7 @@ use std::time::Duration;
 use lp_domain::config::{ConnectionConfig, ConnectionName, PageSize};
 use lp_domain::export::{Destination, Encoder, Exported, Format};
 use lp_domain::model::{
-    Catalog, Column, ConnId, JobId, Key, KeyPress, Page, PrimaryKey, Replication, Schema,
-    Statement, Table, TableOptions,
+    Catalog, Column, ConnId, JobId, Key, KeyPress, Page, PrimaryKey, Schema, Statement, Table,
 };
 use lp_domain::ports::{Cluster, ExportError, Sink, Writer};
 use lp_domain::posture::Posture;
@@ -28,20 +27,13 @@ pub(crate) fn schema_of(names: &[&str]) -> Catalog {
 pub(crate) fn table(name: &str) -> Table {
     Table {
         name: name.to_owned(),
-        primary_key: PrimaryKey {
-            partition: vec![Column {
-                name: "id".to_owned(),
-                data_type: "uuid".to_owned(),
-            }],
-            clustering: Vec::new(),
-        },
-        static_columns: Vec::new(),
-        regular_columns: Vec::new(),
-        indexes: Vec::new(),
-        options: TableOptions::new(BTreeMap::from([
-            ("comment".to_owned(), format!("The {name} table.")),
-            ("gc_grace_seconds".to_owned(), "864000".to_owned()),
-        ])),
+        columns: vec![Column::new("id", "uuid")],
+        primary_key: Some(PrimaryKey {
+            name: format!("{name}_pkey"),
+            columns: vec!["id".to_owned()],
+        }),
+        comment: Some(format!("The {name} table.")),
+        ..Table::default()
     }
 }
 
@@ -50,17 +42,12 @@ pub(crate) fn tabled_schema_of(schemas: &[(&str, &[&str])]) -> Catalog {
         schemas: schemas
             .iter()
             .map(|(name, tables)| {
-                (
-                    (*name).to_owned(),
-                    Schema {
-                        name: (*name).to_owned(),
-                        replication: Replication::SimpleStrategy { factor: 1 },
-                        tables: tables
-                            .iter()
-                            .map(|t| ((*t).to_owned(), table(t)))
-                            .collect::<BTreeMap<_, _>>(),
-                    },
-                )
+                let mut schema = Schema::empty(name);
+                schema.tables = tables
+                    .iter()
+                    .map(|t| ((*t).to_owned(), table(t)))
+                    .collect::<BTreeMap<_, _>>();
+                ((*name).to_owned(), schema)
             })
             .collect(),
     }

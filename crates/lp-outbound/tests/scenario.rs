@@ -4,8 +4,7 @@ use lp_domain::clock::Stamp;
 use lp_domain::config::{PageRows, PageSize};
 use lp_domain::log::Outcome;
 use lp_domain::model::{
-    Column, CqlValue, DbError, Index, IndexKind, IndexTarget, Key, KeyPress, Page, PagingState,
-    Row, Statement,
+    Column, CqlValue, DbError, Index, Key, KeyPress, Page, PagingState, Row, Statement,
 };
 use lp_domain::panel::Panel;
 use lp_domain::posture::Posture;
@@ -20,7 +19,7 @@ use support::{press, run, schema_of, tabled_schema_of};
 #[tokio::test]
 async fn connecting_and_describing_fills_the_tables_panel() {
     let cluster = FakeCluster::new(
-        schema_of(&["system_schema", "typezoo", "shop"]),
+        schema_of(&["pg_catalog", "typezoo", "shop"]),
         Posture::ReadOnly,
     );
     let (mut state, effects) = init(support::connected_config(), Vec::new(), Stamp::default());
@@ -34,7 +33,7 @@ async fn connecting_and_describing_fills_the_tables_panel() {
         rows.iter()
             .map(|row| row.label.as_str())
             .collect::<Vec<_>>(),
-        ["shop", "typezoo", "system_schema"]
+        ["shop", "typezoo", "pg_catalog"]
     );
     assert_eq!(
         rows[0].kind,
@@ -138,7 +137,7 @@ async fn pressing_h_from_a_table_lands_on_its_parent_keyspace() {
     );
 }
 
-/// Partition key `id` and a regular column.
+/// Primary key `id` and a regular column.
 fn customers() -> Page {
     Page {
         columns: vec!["id".to_owned(), "email".to_owned()],
@@ -177,9 +176,12 @@ async fn pressing_enter_on_a_table_fills_the_contents_panel() {
         .get_mut("shop")
         .and_then(|keyspace| keyspace.tables.get_mut("orders"))
         .expect("the fixture made it")
-        .regular_columns = vec![Column {
+        .columns = vec![Column {
         name: "email".to_owned(),
         data_type: "text".to_owned(),
+        nullable: true,
+        default: None,
+        comment: None,
     }];
     let cluster = FakeCluster::new(schema, Posture::ReadOnly).returning(customers());
     let mut state = on_a_table(&cluster).await;
@@ -380,8 +382,12 @@ async fn walking_the_ddl_strip_reaches_the_indexes_of_the_selected_table() {
         .expect("the fixture has shop.orders")
         .indexes = vec![Index {
         name: "orders_by_id".to_owned(),
-        target: IndexTarget::parse("id"),
-        kind: IndexKind::Builtin,
+        definition: "CREATE INDEX orders_by_id ON shop.orders USING btree (id)".to_owned(),
+        keys: vec!["id".to_owned()],
+        unique: false,
+        primary: false,
+        method: "btree".to_owned(),
+        predicate: None,
     }];
 
     let cluster = FakeCluster::new(schema, Posture::ReadOnly);
@@ -397,16 +403,21 @@ async fn walking_the_ddl_strip_reaches_the_indexes_of_the_selected_table() {
     let indexes = ddl_details(&state);
     assert_eq!(
         headings(&indexes),
-        ["Partition Key", "orders_by_id"],
-        "the key leads, and the index the cluster reported follows it"
+        ["Primary Key", "orders_by_id"],
+        "the key leads, and the index the server reported follows it"
     );
     assert_eq!(
         section(&indexes, "orders_by_id").rows,
-        [DetailRow::KeyColumn {
-            name: "id".to_owned(),
-            order: None,
-            data_type: "uuid".to_owned(),
-        }]
+        [
+            DetailRow::KeyColumn {
+                name: "id".to_owned(),
+                data_type: "uuid".to_owned(),
+            },
+            DetailRow::Property {
+                name: "using".to_owned(),
+                value: "btree".to_owned(),
+            },
+        ]
     );
 }
 
@@ -421,7 +432,7 @@ async fn stepping_onto_a_table_describes_it_in_the_ddl_panel() {
 
     let keyspace = ddl_details(&state);
     assert_eq!(named(&keyspace), [("Schema", "shop")]);
-    assert_eq!(headings(&keyspace), ["Replication"]);
+    assert_eq!(headings(&keyspace), ["Contents"]);
 
     update(&mut state, Msg::Input(KeyPress::new(Key::Char('l'))));
     let effects = update(&mut state, Msg::Input(KeyPress::new(Key::Char('l'))));
@@ -438,22 +449,15 @@ async fn stepping_onto_a_table_describes_it_in_the_ddl_panel() {
     );
     assert_eq!(
         headings(&table),
-        ["Partition Key", "Options"],
-        "these fixtures have no clustering columns, so that section is absent"
+        ["Primary Key", "About"],
+        "these fixtures have no references or constraints, so those sections are absent"
     );
     assert_eq!(
-        section(&table, "Options").rows,
-        [
-            DetailRow::Property {
-                name: "gc_grace_seconds".to_owned(),
-                value: "864000".to_owned(),
-            },
-            DetailRow::Property {
-                name: "comment".to_owned(),
-                value: "The orders table.".to_owned(),
-            },
-        ],
-        "layout order, not the alphabetical order the map stores"
+        section(&table, "About").rows,
+        [DetailRow::Property {
+            name: "comment".to_owned(),
+            value: "The orders table.".to_owned(),
+        }]
     );
 }
 

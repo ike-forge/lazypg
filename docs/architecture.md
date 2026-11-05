@@ -4,8 +4,8 @@ Companion to [vision.md](vision.md). The structure is LazyCassandra's; this
 document records what is the same, what differs for Postgres, and what is
 still open.
 
-**Status:** Phase 0 steps 1–3 done: LazyCassandra shell ported and running
-against Postgres through the Cassandra-shaped domain model.
+**Status:** Phase 0 done: LazyCassandra shell ported, connected to Postgres,
+with a Postgres catalog model.
 **Last updated:** 2026-11-05
 
 ---
@@ -49,10 +49,10 @@ as a `Msg`, frame geometry the one backwards edge, messages batched per frame.
 
 | LazyCassandra | LazyPg |
 |---|---|
-| `Keyspace → Table` | `Schema → Relation` (`Table`, `View`, `MatView`, `Partitioned`, `Foreign`) plus `Sequence`, `Function` |
-| `PrimaryKey { partition, clustering }` | `PrimaryKey(Vec<ColumnId>)`, optional: a table without one is representable and blocks row edits by type |
-| — | `ForeignKey { from, to, on_delete, on_update }`, indexed both directions so Structure shows referencing tables |
-| — | `Index { columns/expressions, unique, partial predicate, method }`, `Constraint` (check, unique, exclusion) |
+| `Schema → Keyspace → Table` | `Catalog → Schema → Table`; `Table::kind` is a `RelationKind` (table, partitioned, view, materialized view, foreign), plus `Sequence`, `Function` |
+| `PrimaryKey { partition, clustering }` | `Option<PrimaryKey { name, columns }>`: a keyless table is representable, and `key::columns` comes back empty for it |
+| — | `ForeignKey { columns, target, target_columns, on_update, on_delete }`, outgoing; `Catalog::referencing` finds the incoming ones |
+| — | `Index { keys, definition, unique, primary, method, predicate }`, `Constraint` (check, unique, exclusion) |
 | `CqlValue` | `PgValue`: scalar families plus arrays, composites, ranges, enums, `json`/`jsonb`; unknown OIDs fall back to text |
 | `Statement` (CQL) | `Statement` (SQL): text plus a `StatementKind` from the lexer, used for posture and the log |
 | `PagingState` | page offset — see §6 |

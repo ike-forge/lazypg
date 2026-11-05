@@ -237,46 +237,22 @@ impl TablesPanel {
 #[cfg(test)]
 pub(crate) mod tests_support {
     use super::*;
-    use crate::model::{
-        ClusteringColumn, ClusteringOrder, Column, PrimaryKey, Replication, TableOptions,
-    };
-    use std::collections::BTreeMap;
+    use crate::model::{Column, PrimaryKey};
 
     pub(crate) fn table(name: &str) -> Table {
         Table {
             name: name.to_owned(),
-            primary_key: PrimaryKey {
-                partition: vec![Column {
-                    name: "id".to_owned(),
-                    data_type: "uuid".to_owned(),
-                }],
-                clustering: vec![ClusteringColumn {
-                    column: Column {
-                        name: "created_at".to_owned(),
-                        data_type: "timestamp".to_owned(),
-                    },
-                    order: ClusteringOrder::Ascending,
-                }],
-            },
-            static_columns: Vec::new(),
-            regular_columns: Vec::new(),
-            indexes: Vec::new(),
-            options: options(&[
-                ("gc_grace_seconds", "864000"),
-                ("bloom_filter_fp_chance", "0.01"),
-                ("caching", "{'keys': 'ALL'}"),
-                ("comment", "fixture"),
-            ]),
+            columns: vec![
+                Column::new("id", "uuid"),
+                Column::new("created_at", "timestamp"),
+            ],
+            primary_key: Some(PrimaryKey {
+                name: format!("{name}_pkey"),
+                columns: vec!["id".to_owned(), "created_at".to_owned()],
+            }),
+            comment: Some("fixture".to_owned()),
+            ..Table::default()
         }
-    }
-
-    pub(crate) fn options(pairs: &[(&str, &str)]) -> TableOptions {
-        TableOptions::new(
-            pairs
-                .iter()
-                .map(|(name, value)| ((*name).to_owned(), (*value).to_owned()))
-                .collect(),
-        )
     }
 
     pub(crate) fn schema_of(schemas: &[(&str, &[&str])]) -> Catalog {
@@ -284,17 +260,9 @@ pub(crate) mod tests_support {
             schemas: schemas
                 .iter()
                 .map(|(name, tables)| {
-                    (
-                        (*name).to_owned(),
-                        Schema {
-                            name: (*name).to_owned(),
-                            replication: Replication::SimpleStrategy { factor: 1 },
-                            tables: tables
-                                .iter()
-                                .map(|t| ((*t).to_owned(), table(t)))
-                                .collect::<BTreeMap<_, _>>(),
-                        },
-                    )
+                    let mut schema = Schema::empty(name);
+                    schema.tables = tables.iter().map(|t| ((*t).to_owned(), table(t))).collect();
+                    ((*name).to_owned(), schema)
                 })
                 .collect(),
         }

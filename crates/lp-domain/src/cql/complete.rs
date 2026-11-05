@@ -518,7 +518,7 @@ fn split(word: &str) -> (Option<&str>, &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{ClusteringColumn, ClusteringOrder, Column, PrimaryKey};
+    use crate::model::{Column, PrimaryKey};
     use crate::tree::tests_support::schema_of;
 
     fn typed(text: &str) -> Editor {
@@ -531,37 +531,46 @@ mod tests {
         Column {
             name: name.to_owned(),
             data_type: data_type.to_owned(),
+            nullable: true,
+            default: None,
+            comment: None,
         }
     }
 
     /// Column names avoid sharing first letters with other tables', so a
-    /// one-character prefix points at `orders` alone.
+    /// one-character prefix points at `orders` alone. The first `key`
+    /// columns are the primary key.
     fn schema() -> Catalog {
         let mut schema = schema_of(&[
             ("shop", &["orders", "order_items", "customers"]),
             ("secrets", &["keys"]),
         ]);
 
-        let orders = schema
-            .schemas
-            .get_mut("shop")
-            .and_then(|keyspace| keyspace.tables.get_mut("orders"))
-            .expect("orders is in the fixture");
-
-        orders.primary_key = PrimaryKey {
-            partition: vec![column("id", "uuid")],
-            clustering: vec![ClusteringColumn {
-                column: column("line", "int"),
-                order: ClusteringOrder::Ascending,
-            }],
-        };
-        orders.static_columns = vec![column("region", "text")];
-        orders.regular_columns = vec![column("total", "decimal")];
-
-        for (keyspace, table, key) in [
-            ("shop", "order_items", "sku"),
-            ("shop", "customers", "email"),
-            ("secrets", "keys", "fingerprint"),
+        for (keyspace, table, columns, key) in [
+            (
+                "shop",
+                "orders",
+                &[
+                    ("id", "uuid"),
+                    ("line", "int"),
+                    ("region", "text"),
+                    ("total", "decimal"),
+                ][..],
+                2,
+            ),
+            (
+                "shop",
+                "order_items",
+                &[("sku", "text"), ("created", "timestamp")][..],
+                2,
+            ),
+            (
+                "shop",
+                "customers",
+                &[("email", "text"), ("verified", "boolean")][..],
+                1,
+            ),
+            ("secrets", "keys", &[("fingerprint", "text")][..], 1),
         ] {
             let table = schema
                 .schemas
@@ -569,30 +578,15 @@ mod tests {
                 .and_then(|keyspace| keyspace.tables.get_mut(table))
                 .expect("fixture table");
 
-            table.primary_key = PrimaryKey {
-                partition: vec![column(key, "text")],
-                clustering: Vec::new(),
-            };
+            table.columns = columns.iter().map(|(name, ty)| column(name, ty)).collect();
+            table.primary_key = Some(PrimaryKey {
+                name: format!("{}_pkey", table.name),
+                columns: columns[..key]
+                    .iter()
+                    .map(|(name, _)| (*name).to_owned())
+                    .collect(),
+            });
         }
-
-        // No static or regular column: pins an empty tail.
-        let order_items = schema
-            .schemas
-            .get_mut("shop")
-            .and_then(|keyspace| keyspace.tables.get_mut("order_items"))
-            .expect("order_items is in the fixture");
-        order_items.primary_key.clustering = vec![ClusteringColumn {
-            column: column("created", "timestamp"),
-            order: ClusteringOrder::Ascending,
-        }];
-
-        // No clustering column: pins an empty middle.
-        let customers = schema
-            .schemas
-            .get_mut("shop")
-            .and_then(|keyspace| keyspace.tables.get_mut("customers"))
-            .expect("customers is in the fixture");
-        customers.static_columns = vec![column("verified", "boolean")];
 
         schema
     }
@@ -897,14 +891,14 @@ mod tests {
     }
 
     #[test]
-    fn a_system_keyspaces_columns_never_crowd_out_the_users_own() {
-        // `system_auth` sorts first and could fill every slot.
+    fn a_system_schemas_columns_never_crowd_out_the_users_own() {
+        // `pg_catalog` sorts first and could fill every slot.
         let mut names = Vec::new();
         for index in 0..=MOST {
             names.push(format!("t{index}"));
         }
         let system: Vec<&str> = names.iter().map(String::as_str).collect();
-        let schema = schema_of(&[("system_auth", &system), ("zoo", &["visits"])]);
+        let schema = schema_of(&[("pg_catalog", &system), ("zoo", &["visits"])]);
 
         let labels: Vec<String> = every_column(Some(&schema), "id", true)
             .into_iter()
@@ -914,7 +908,7 @@ mod tests {
         assert_eq!(
             labels.first().map(String::as_str),
             Some("zoo.visits.id"),
-            "a user's keyspace is offered before the cluster's own"
+            "a user schema is offered before the system's"
         );
     }
 

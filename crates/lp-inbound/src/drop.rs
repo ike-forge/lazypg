@@ -453,29 +453,16 @@ mod tests {
     }
 
     fn described() -> lp_domain::model::Table {
-        use lp_domain::model::{
-            ClusteringColumn, ClusteringOrder, Column, PrimaryKey, Table, TableOptions,
-        };
+        use lp_domain::model::{Column, PrimaryKey, Table};
 
         Table {
             name: "orders".to_owned(),
-            primary_key: PrimaryKey {
-                partition: vec![Column {
-                    name: "id".to_owned(),
-                    data_type: "uuid".to_owned(),
-                }],
-                clustering: vec![ClusteringColumn {
-                    column: Column {
-                        name: "placed".to_owned(),
-                        data_type: "date".to_owned(),
-                    },
-                    order: ClusteringOrder::Ascending,
-                }],
-            },
-            static_columns: Vec::new(),
-            regular_columns: Vec::new(),
-            indexes: Vec::new(),
-            options: TableOptions::new(std::collections::BTreeMap::new()),
+            columns: vec![Column::new("id", "uuid"), Column::new("placed", "date")],
+            primary_key: Some(PrimaryKey {
+                name: "orders_pkey".to_owned(),
+                columns: vec!["id".to_owned(), "placed".to_owned()],
+            }),
+            ..Table::default()
         }
     }
 

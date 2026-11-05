@@ -4,7 +4,6 @@
 //! column, which ratatui clips.
 
 use lp_domain::grid::BAR;
-use lp_domain::model::{ClusteringOrder, Setting};
 use lp_domain::search::Search;
 use lp_domain::style::Token;
 use lp_domain::view::{ColumnKind, DetailRow, Details, Group, IdentityKind};
@@ -18,13 +17,10 @@ use ratatui::widgets::Paragraph;
 use crate::body::{Marked, barred, patched};
 use crate::theme::Theme;
 
-const ASCENDING: &str = " ↑";
-const DESCENDING: &str = " ↓";
 const INDENT: usize = 2;
 /// A wrapped value falls to its own line, one step in from the name.
 const TYPE_INDENT: usize = 4;
 const ELLIPSIS: char = '…';
-const BULLET: &str = "· ";
 
 pub(crate) struct Laid {
     pub(crate) lines: Vec<Line<'static>>,
@@ -184,11 +180,7 @@ fn row_lines(
     theme: Theme,
 ) -> Vec<Line<'static>> {
     match row {
-        DetailRow::KeyColumn {
-            name,
-            order,
-            data_type,
-        } => key_column_lines(name, *order, data_type, width)
+        DetailRow::KeyColumn { name, data_type } => key_column_lines(name, data_type, width)
             .into_iter()
             .map(|text| Line::from(crate::highlight::spans(&text, search, style, theme)))
             .collect(),
@@ -200,12 +192,6 @@ fn row_lines(
         DetailRow::Property { name, value } => {
             property_lines(name, value, width, style, search, theme)
         }
-        DetailRow::ClassProperty {
-            name,
-            class,
-            settings,
-            ..
-        } => class_property_lines(name, class, settings, width, style, search, theme),
         DetailRow::Identity { kind, name } => identity_lines(*kind, name, width, search, theme),
     }
 }
@@ -242,23 +228,8 @@ fn identity_lines(
         .collect()
 }
 
-fn key_column_lines(
-    name: &str,
-    order: Option<ClusteringOrder>,
-    data_type: &str,
-    width: usize,
-) -> Vec<String> {
-    let arrow = match order {
-        Some(ClusteringOrder::Ascending) => ASCENDING,
-        Some(ClusteringOrder::Descending) => DESCENDING,
-        None => "",
-    };
-
-    laid_out(
-        &format!("{}{name}{arrow}", " ".repeat(INDENT)),
-        data_type,
-        width,
-    )
+fn key_column_lines(name: &str, data_type: &str, width: usize) -> Vec<String> {
+    laid_out(&format!("{}{name}", " ".repeat(INDENT)), data_type, width)
 }
 
 /// The whole row wears the kind's colour: the glyph only says key or not.
@@ -340,56 +311,6 @@ fn property_lines(
         .collect()
 }
 
-fn class_property_lines(
-    name: &str,
-    class: &str,
-    settings: &[Setting],
-    width: usize,
-    style: Style,
-    search: Option<&Search>,
-    theme: Theme,
-) -> Vec<Line<'static>> {
-    let label = theme.style(Token::PropertyName);
-    let faint = theme.style(Token::Faint);
-    let tail = settings
-        .iter()
-        .map(|setting| format!("{BULLET}{} {}", setting.label, setting.value))
-        .collect::<Vec<String>>()
-        .join(" ");
-
-    let value = format!("{class}{}", tail_at(&tail));
-
-    if let Some(gap) = gap_after_name(name, &value, width) {
-        let mut spans = name_spans(name, search, label, theme);
-        spans.push(TextSpan::styled(" ".repeat(gap), style));
-        spans.extend(crate::highlight::spans(class, search, style, theme));
-        spans.extend(crate::highlight::spans(
-            &tail_at(&tail),
-            search,
-            faint,
-            theme,
-        ));
-        return vec![Line::from(spans)];
-    }
-
-    // Class and settings wrap as separate blocks: a wrapped line carries one
-    // style.
-    std::iter::once(name_line(name, width, search, label, theme))
-        .chain(highlighted(
-            crate::wrap::plain(class, width, TYPE_INDENT),
-            search,
-            style,
-            theme,
-        ))
-        .chain(highlighted(
-            crate::wrap::plain(&tail, width, TYPE_INDENT),
-            search,
-            faint,
-            theme,
-        ))
-        .collect()
-}
-
 /// One step in from the heading, where a key column's name sits.
 fn name_spans(
     name: &str,
@@ -421,26 +342,6 @@ fn name_line(
 
 fn gap_after_name(name: &str, value: &str, width: usize) -> Option<usize> {
     gap(&format!("{}{name}", " ".repeat(INDENT)), value, width)
-}
-
-fn highlighted(
-    texts: Vec<String>,
-    search: Option<&Search>,
-    style: Style,
-    theme: Theme,
-) -> impl Iterator<Item = Line<'static>> {
-    texts
-        .into_iter()
-        .map(move |text| Line::from(crate::highlight::spans(&text, search, style, theme)))
-}
-
-/// Empty where there are no settings.
-fn tail_at(tail: &str) -> String {
-    if tail.is_empty() {
-        String::new()
-    } else {
-        format!(" {tail}")
-    }
 }
 
 /// `None` when the two cannot share a line with a gap.
@@ -490,90 +391,18 @@ mod tests {
         ))
     }
 
-    fn class_property(
-        name: &str,
-        class: &str,
-        settings: &[(&'static str, &str)],
-        width: usize,
-    ) -> Vec<String> {
-        let settings: Vec<Setting> = settings
-            .iter()
-            .map(|(label, value)| Setting {
-                label,
-                value: (*value).to_owned(),
-            })
-            .collect();
-
-        texts(&class_property_lines(
-            name,
-            class,
-            &settings,
-            width,
-            Style::new(),
-            None,
-            Theme::default(),
-        ))
-    }
-
-    #[test]
-    fn a_class_property_puts_its_class_and_settings_at_the_right_margin() {
-        assert_eq!(
-            class_property("compression", "LZ4Compressor", &[("chunk", "16kb")], 40),
-            ["  compression LZ4Compressor · chunk 16kb"],
-            "the whole value is pushed right, the way a plain property's is"
-        );
-    }
-
-    #[test]
-    fn a_class_property_too_wide_for_one_line_drops_its_settings_beneath_the_class() {
-        assert_eq!(
-            class_property(
-                "compaction",
-                "SizeTieredCompactionStrategy",
-                &[("max", "32"), ("min", "4")],
-                28,
-            ),
-            [
-                "  compaction",
-                "    SizeTieredCompactionStra",
-                "    tegy",
-                "    · max 32 · min 4",
-            ],
-        );
-    }
-
-    #[test]
-    fn a_class_with_no_settings_draws_the_class_alone() {
-        assert_eq!(
-            class_property("compression", "SnappyCompressor", &[], 30),
-            ["  compression SnappyCompressor"],
-        );
-    }
-
     #[test]
     fn a_column_puts_its_type_at_the_right_margin() {
         assert_eq!(
-            key_column_lines("customer_id", None, "uuid", 23),
+            key_column_lines("customer_id", "uuid", 23),
             ["  customer_id      uuid"]
-        );
-    }
-
-    #[test]
-    fn a_clustering_column_carries_its_direction_beside_its_name() {
-        assert_eq!(
-            key_column_lines("order_date", Some(ClusteringOrder::Descending), "date", 23),
-            ["  order_date ↓     date"]
-        );
-        assert_eq!(
-            key_column_lines("order_id", Some(ClusteringOrder::Ascending), "timeuuid", 23),
-            ["  order_id ↑   timeuuid"]
         );
     }
 
     #[test]
     fn a_column_too_wide_for_one_line_drops_its_type_beneath_the_name() {
         assert_eq!(
-            key_column_lines("warehouse_identifier", None, "frozen<list<text>>", 23),
+            key_column_lines("warehouse_identifier", "frozen<list<text>>", 23),
             ["  warehouse_identifier", "    frozen<list<text>>"]
         );
     }
@@ -592,17 +421,13 @@ mod tests {
     #[test]
     fn a_listed_key_column_wears_the_key_glyph_where_the_other_tab_indents() {
         assert_eq!(
-            listed("customer_id", "uuid", ColumnKind::Partition, 23),
+            listed("customer_id", "uuid", ColumnKind::PrimaryKey, 23),
             [format!("{}customer_id      uuid", crate::icons::KEY)]
         );
         assert_eq!(
-            listed("order_date", "date", ColumnKind::Clustering, 23),
-            [format!("{}order_date       date", crate::icons::KEY)],
-            "the same glyph: which key it is is what the colour says"
-        );
-        assert_eq!(
-            listed("region", "text", ColumnKind::Static, 23),
-            ["  region           text"]
+            listed("order_date", "date", ColumnKind::ForeignKey, 23),
+            ["  order_date       date"],
+            "a reference is told by its colour, not the key glyph"
         );
         assert_eq!(
             listed("status", "text", ColumnKind::Regular, 23),
@@ -616,9 +441,8 @@ mod tests {
         let theme = Theme::default();
 
         for (kind, token) in [
-            (ColumnKind::Partition, Token::PrimaryKey),
-            (ColumnKind::Clustering, Token::ForeignKey),
-            (ColumnKind::Static, Token::StaticColumn),
+            (ColumnKind::PrimaryKey, Token::PrimaryKey),
+            (ColumnKind::ForeignKey, Token::ForeignKey),
             (ColumnKind::Regular, Token::RegularColumn),
         ] {
             let lines = column_lines("customer_id", "uuid", kind, 23, None, theme);
@@ -655,7 +479,11 @@ mod tests {
             [format!("  {}Schema         shop", crate::icons::KEYSPACE)]
         );
         assert_eq!(
-            named(IdentityKind::Table, "orders", 23),
+            named(
+                IdentityKind::Relation(lp_domain::model::RelationKind::Table),
+                "orders",
+                23
+            ),
             [format!("  {}Table        orders", crate::icons::TABLE)]
         );
     }
@@ -663,7 +491,11 @@ mod tests {
     #[test]
     fn a_name_too_wide_to_share_the_label_line_wraps_beneath_it() {
         assert_eq!(
-            named(IdentityKind::Table, "orders_by_customer", 23),
+            named(
+                IdentityKind::Relation(lp_domain::model::RelationKind::Table),
+                "orders_by_customer",
+                23
+            ),
             [
                 format!("  {}Table", crate::icons::TABLE),
                 "    orders_by_customer".to_owned()
@@ -695,7 +527,13 @@ mod tests {
     #[test]
     fn a_wrapped_identity_name_keeps_the_kinds_colour() {
         let theme = Theme::default();
-        let lines = identity_lines(IdentityKind::Table, "orders_by_customer", 23, None, theme);
+        let lines = identity_lines(
+            IdentityKind::Relation(lp_domain::model::RelationKind::Table),
+            "orders_by_customer",
+            23,
+            None,
+            theme,
+        );
         let table = theme.style(Token::Table).fg;
 
         assert!(lines.len() > 1, "the name has to have wrapped");
@@ -844,20 +682,19 @@ mod tests {
                     group: Group::Identity,
                     token: None,
                     rows: vec![DetailRow::Identity {
-                        kind: IdentityKind::Table,
+                        kind: IdentityKind::Relation(lp_domain::model::RelationKind::Table),
                         name: "orders".to_owned(),
                     }],
                 },
                 Section {
                     heading: Some(Heading {
-                        text: "Partition Key".to_owned(),
+                        text: "Primary Key".to_owned(),
                         token: Token::PrimaryKey,
                     }),
                     group: Group::Shape,
                     token: Some(Token::PrimaryKey),
                     rows: vec![DetailRow::KeyColumn {
                         name: "customer_id".to_owned(),
-                        order: None,
                         data_type: "uuid".to_owned(),
                     }],
                 },
@@ -921,7 +758,7 @@ mod tests {
                     DetailRow::Column {
                         name: "id".to_owned(),
                         data_type: "uuid".to_owned(),
-                        kind: ColumnKind::Partition,
+                        kind: ColumnKind::PrimaryKey,
                     },
                     DetailRow::Column {
                         name: "email".to_owned(),

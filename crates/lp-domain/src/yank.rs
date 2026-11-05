@@ -3,7 +3,7 @@
 
 use crate::cell;
 use crate::log::Entry;
-use crate::model::{ClusteringOrder, CqlValue, Row};
+use crate::model::{CqlValue, Row};
 use crate::selection::Ranges;
 use crate::tree::Node;
 use crate::view::logs::outcome_text;
@@ -51,26 +51,13 @@ pub fn grid_column(rows: &[Row], column: usize) -> String {
 pub fn detail_row(row: &DetailRow) -> String {
     let fields = match row {
         DetailRow::Identity { kind, name } => vec![kind.label().to_owned(), name.clone()],
-        DetailRow::KeyColumn {
-            name,
-            order,
-            data_type,
-        } => {
-            let mut fields = vec![name.clone(), data_type.clone()];
-            // A partition column has no ordering field.
-            if let Some(order) = order {
-                fields.push(ordering(*order).to_owned());
-            }
-            fields
-        }
+        DetailRow::KeyColumn { name, data_type } => vec![name.clone(), data_type.clone()],
         DetailRow::Column {
             name,
             data_type,
             kind,
         } => vec![name.clone(), data_type.clone(), part(*kind).to_owned()],
         DetailRow::Property { name, value } => vec![name.clone(), value.clone()],
-        // The raw map: a yank is pasted back into CQL.
-        DetailRow::ClassProperty { name, raw, .. } => vec![name.clone(), raw.clone()],
     };
 
     line(&fields)
@@ -141,18 +128,10 @@ fn value(value: &CqlValue) -> String {
     }
 }
 
-const fn ordering(order: ClusteringOrder) -> &'static str {
-    match order {
-        ClusteringOrder::Ascending => "asc",
-        ClusteringOrder::Descending => "desc",
-    }
-}
-
 const fn part(kind: ColumnKind) -> &'static str {
     match kind {
-        ColumnKind::Partition => "partition",
-        ColumnKind::Clustering => "clustering",
-        ColumnKind::Static => "static",
+        ColumnKind::PrimaryKey => "primary key",
+        ColumnKind::ForeignKey => "foreign key",
         ColumnKind::Regular => "regular",
     }
 }
@@ -162,14 +141,10 @@ mod tests {
     use super::*;
     use crate::clock::Stamp;
     use crate::log::{Outcome, Subject};
-    use crate::model::{
-        ClusteringOrder, CqlValue, Page, PrimaryKey, Replication, Row, Schema, Setting, Table,
-        TableOptions,
-    };
+    use crate::model::{CqlValue, Page, Row, Schema, Table};
     use crate::selection::Range;
     use crate::tree::Node;
     use crate::view::{ColumnKind, DetailRow, IdentityKind};
-    use std::collections::BTreeMap;
     use std::time::Duration;
 
     fn sample_rows(rows: usize, columns: usize) -> Vec<Row> {
@@ -185,14 +160,7 @@ mod tests {
     fn table(name: &str) -> Table {
         Table {
             name: name.to_owned(),
-            primary_key: PrimaryKey {
-                partition: Vec::new(),
-                clustering: Vec::new(),
-            },
-            static_columns: Vec::new(),
-            regular_columns: Vec::new(),
-            indexes: Vec::new(),
-            options: TableOptions::default(),
+            ..Table::default()
         }
     }
 
@@ -263,74 +231,40 @@ mod tests {
         let row = DetailRow::Column {
             name: "created_at".to_owned(),
             data_type: "timestamp".to_owned(),
-            kind: ColumnKind::Clustering,
+            kind: ColumnKind::ForeignKey,
         };
 
-        assert_eq!(detail_row(&row), "created_at,timestamp,clustering");
+        assert_eq!(detail_row(&row), "created_at,timestamp,foreign key");
     }
 
     #[test]
-    fn a_partition_column_yanks_without_an_order() {
-        let partition = DetailRow::KeyColumn {
+    fn a_key_column_yanks_its_name_and_type() {
+        let key = DetailRow::KeyColumn {
             name: "id".to_owned(),
-            order: None,
             data_type: "uuid".to_owned(),
         };
-        let clustering = DetailRow::KeyColumn {
-            name: "created_at".to_owned(),
-            order: Some(ClusteringOrder::Descending),
-            data_type: "timestamp".to_owned(),
-        };
 
-        assert_eq!(detail_row(&partition), "id,uuid");
-        assert_eq!(detail_row(&clustering), "created_at,timestamp,desc");
+        assert_eq!(detail_row(&key), "id,uuid");
     }
 
     #[test]
     fn a_property_and_an_identity_row_yank_their_two_fields() {
         let property = DetailRow::Property {
-            name: "compaction".to_owned(),
-            value: "SizeTieredCompactionStrategy".to_owned(),
+            name: "price_check".to_owned(),
+            value: "CHECK (price >= 0)".to_owned(),
         };
         let identity = DetailRow::Identity {
-            kind: IdentityKind::Table,
+            kind: IdentityKind::Relation(crate::model::RelationKind::Table),
             name: "users".to_owned(),
         };
 
-        assert_eq!(
-            detail_row(&property),
-            "compaction,SizeTieredCompactionStrategy"
-        );
+        assert_eq!(detail_row(&property), "price_check,CHECK (price >= 0)");
         assert_eq!(detail_row(&identity), "Table,users");
     }
 
     #[test]
-    fn a_class_property_yanks_the_map_rather_than_the_summary_drawn_over_it() {
-        let row = DetailRow::ClassProperty {
-            name: "compression".to_owned(),
-            class: "LZ4Compressor".to_owned(),
-            settings: vec![Setting {
-                label: "chunk",
-                value: "16kb".to_owned(),
-            }],
-            raw: "{chunk_length_in_kb: 16, class: org.apache.cassandra.io.compress.LZ4Compressor}"
-                .to_owned(),
-        };
-
-        assert_eq!(
-            detail_row(&row),
-            "compression,\"{chunk_length_in_kb: 16, class: org.apache.cassandra.io.compress.LZ4Compressor}\"",
-            "a paste back into CQL needs the map, not the abbreviation"
-        );
-    }
-
-    #[test]
-    fn a_keyspace_yanks_its_name_and_a_table_its_qualified_one() {
-        let keyspace = Schema {
-            name: "demo".to_owned(),
-            replication: Replication::SimpleStrategy { factor: 1 },
-            tables: BTreeMap::new(),
-        };
+    fn a_schema_yanks_its_name_and_a_table_its_qualified_one() {
+        let keyspace = Schema::empty("demo");
         let users = table("users");
 
         assert_eq!(

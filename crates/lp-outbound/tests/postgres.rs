@@ -7,7 +7,10 @@ use std::time::{Duration, Instant};
 use lp_domain::config::{
     ConnectionConfig, ConnectionName, Credential, DriverConfig, Millis, PageSize, SslMode,
 };
-use lp_domain::model::{ConnId, CqlValue, DbError, Page, Statement, StatementKind};
+use lp_domain::model::{
+    ConnId, ConstraintKind, CqlValue, DbError, Page, RelationKind, RelationRef, Statement,
+    StatementKind,
+};
 use lp_domain::ports::Cluster;
 use lp_domain::posture::Posture;
 use lp_outbound::postgres::Postgres;
@@ -60,36 +63,165 @@ async fn query(db: &Postgres, sql: &str) -> Page {
     db.execute(conn(), &read(sql)).await.unwrap()
 }
 
-#[tokio::test]
-async fn the_schema_reads_keys_in_key_order_and_skips_partitions() {
+#[allow(
+    clippy::unwrap_used,
+    reason = "allow-unwrap-in-tests only covers #[test]-attributed items, not helpers they call"
+)]
+async fn catalog() -> lp_domain::model::Catalog {
     let db = connected(Posture::ReadOnly, DriverConfig::default()).await;
-    let schema = db.describe(conn()).await.unwrap();
+    db.describe(conn()).await.unwrap()
+}
 
-    let shop = &schema.schemas["shop"];
-    let line = &shop.tables["order_line"];
-    let key: Vec<_> = line
-        .primary_key
-        .partition
-        .iter()
-        .map(|c| c.name.as_str())
-        .collect();
-    assert_eq!(key, ["order_id", "line_no"]);
-    assert_eq!(line.regular_columns[0].name, "customer_id");
-    assert!(
-        shop.tables.contains_key("customer_totals"),
-        "views are listed"
-    );
+#[tokio::test]
+async fn the_catalog_lists_user_schemas_and_relations_of_every_kind() {
+    let catalog = catalog().await;
 
-    let edge = &schema.schemas["Edge Cases"];
-    assert!(edge.tables["no_pk"].primary_key.partition.is_empty());
-    assert!(edge.tables.contains_key("measurement"));
-    assert!(!edge.tables.contains_key("measurement_2026"));
+    let names: Vec<_> = catalog.schemas.keys().map(String::as_str).collect();
+    assert_eq!(names, ["Edge Cases", "public", "shop", "zoo"]);
+
+    let kind = |schema: &str, table: &str| catalog.schemas[schema].tables[table].kind;
+    assert_eq!(kind("shop", "customer"), RelationKind::Table);
+    assert_eq!(kind("shop", "customer_totals"), RelationKind::View);
     assert_eq!(
-        edge.tables["Mixed Case"].primary_key.partition[0].data_type,
-        "integer"
+        kind("Edge Cases", "no_pk_summary"),
+        RelationKind::MaterializedView
     );
-    assert!(schema.schemas.contains_key("public"));
-    assert!(!schema.schemas.contains_key("pg_catalog"));
+    assert_eq!(kind("Edge Cases", "measurement"), RelationKind::Partitioned);
+
+    let edge = &catalog.schemas["Edge Cases"];
+    assert!(
+        !edge.tables.contains_key("measurement_2026"),
+        "a partition is its parent's"
+    );
+    assert_eq!(edge.tables["measurement"].partitions, ["measurement_2026"]);
+    assert!(
+        catalog.schemas["shop"].tables["customer_totals"]
+            .definition
+            .as_deref()
+            .is_some_and(|sql| sql.contains("sum(")),
+        "a view carries its query"
+    );
+}
+
+#[tokio::test]
+async fn columns_carry_type_nullability_and_default_in_table_order() {
+    let catalog = catalog().await;
+    let customer = &catalog.schemas["shop"].tables["customer"];
+
+    let names: Vec<_> = customer.columns.iter().map(|c| c.name.as_str()).collect();
+    assert_eq!(names, ["id", "email", "name", "created_at"]);
+    let id = &customer.columns[0];
+    assert_eq!(id.data_type, "bigint");
+    assert!(!id.nullable);
+    assert_eq!(id.default.as_deref(), Some("generated always as identity"));
+    assert_eq!(customer.columns[3].default.as_deref(), Some("now()"));
+    assert_eq!(
+        catalog.schemas["zoo"].tables["everything"].columns[7].data_type,
+        "character varying(16)"
+    );
+}
+
+#[tokio::test]
+async fn keys_are_read_in_key_order_and_foreign_keys_from_both_ends() {
+    let catalog = catalog().await;
+    let shop = &catalog.schemas["shop"];
+    let line = &shop.tables["order_line"];
+
+    let key = line.primary_key.as_ref().expect("order_line has a key");
+    assert_eq!(key.columns, ["order_id", "line_no"]);
+    assert!(
+        catalog.schemas["Edge Cases"].tables["no_pk"]
+            .primary_key
+            .is_none()
+    );
+
+    let targets: Vec<_> = line
+        .foreign_keys
+        .iter()
+        .map(|key| {
+            (
+                key.columns.clone(),
+                key.target.table.clone(),
+                key.target_columns.clone(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        targets,
+        [
+            (
+                vec!["customer_id".to_owned()],
+                "customer".to_owned(),
+                vec!["id".to_owned()]
+            ),
+            (
+                vec!["sku".to_owned()],
+                "product".to_owned(),
+                vec!["sku".to_owned()]
+            ),
+        ]
+    );
+    assert_eq!(line.foreign_keys[0].on_delete, "NO ACTION");
+
+    let customer = RelationRef {
+        schema: "shop".to_owned(),
+        table: "customer".to_owned(),
+    };
+    let incoming: Vec<_> = catalog
+        .referencing(&customer)
+        .map(|(from, _)| from.table)
+        .collect();
+    assert_eq!(incoming, ["order_line"]);
+}
+
+#[tokio::test]
+async fn indexes_and_constraints_are_read_as_postgres_renders_them() {
+    let catalog = catalog().await;
+    let shop = &catalog.schemas["shop"];
+    let line = &shop.tables["order_line"];
+
+    let index = line
+        .indexes
+        .iter()
+        .find(|index| index.name == "order_line_customer_idx")
+        .expect("the seed creates it");
+    assert_eq!(index.keys, ["customer_id"]);
+    assert_eq!(index.method, "btree");
+    assert!(!index.unique && !index.primary);
+    assert!(
+        index
+            .definition
+            .starts_with("CREATE INDEX order_line_customer_idx")
+    );
+    assert!(line.indexes.iter().any(|index| index.primary));
+
+    let unique: Vec<_> = shop.tables["customer"]
+        .constraints
+        .iter()
+        .map(|c| (c.kind, c.definition.as_str()))
+        .collect();
+    assert_eq!(unique, [(ConstraintKind::Unique, "UNIQUE (email)")]);
+    assert!(
+        shop.tables["product"]
+            .constraints
+            .iter()
+            .any(|c| c.kind == ConstraintKind::Check && c.definition.contains("price >="))
+    );
+}
+
+#[tokio::test]
+async fn identity_sequences_are_owned_by_their_column() {
+    let catalog = catalog().await;
+
+    let sequences: Vec<_> = catalog.schemas["shop"]
+        .sequences
+        .iter()
+        .map(|s| (s.name.as_str(), s.data_type.as_str(), s.owned_by.as_deref()))
+        .collect();
+    assert_eq!(
+        sequences,
+        [("customer_id_seq", "bigint", Some("customer.id"))]
+    );
 }
 
 #[tokio::test]

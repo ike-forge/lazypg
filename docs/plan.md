@@ -51,10 +51,10 @@ Every LazyCassandra module falls into one of three buckets.
 ## Phase 0 — Foundations
 
 1. **Shell port.** *Done.* The whole LazyCassandra workspace, renamed, with
-   the scylla adapter, its TLS setup and node health reads removed. The app
-   runs against `lp_outbound::demo`. Domain and config keep the Cassandra
-   vocabulary (`Keyspace`, `Cluster`) until step 4 and Phase 1
-   replace it; every step keeps the app running and the tests green.
+   the scylla adapter, its TLS setup and node health reads removed. Some
+   Cassandra vocabulary remains (the `Cluster` port, `keyspace` locals, the
+   DDL panel's name, CQL in `cql/`); Phase 1 replaces it as it touches each
+   area.
 2. **Driver.** *Done.* `tokio-postgres` + rustls against `docker/`: connect,
    cancel a `pg_sleep`, page with `LIMIT/OFFSET`, decode every
    `zoo.everything` column. TLS from LazyCassandra's
@@ -64,8 +64,9 @@ Every LazyCassandra module falls into one of three buckets.
    `user`, `password`, `sslmode`, `sslrootcert`, `sslcert`, `sslkey`) or a
    `url`, JDBC accepted. Unstated keys fall back to `PG*`, then libpq's
    defaults; the password to `PGPASSWORD`, then the passfile.
-4. **Schema model and introspection.** Accessible databases, then per
-   database `pg_catalog` queries for schemas,
+4. **Schema model and introspection.** *Done, but for listing databases,
+   which moves to Phase 1 step 1 with the tree.* Per database `pg_catalog`
+   queries for schemas,
    relations, columns, keys, foreign keys, indexes, constraints, sequences,
    functions. Integration tests against the seed, including the
    `"Edge Cases"` schema.

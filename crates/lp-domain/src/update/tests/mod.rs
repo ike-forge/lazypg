@@ -595,9 +595,12 @@ fn schema_with_email() -> Catalog {
         .get_mut("shop")
         .and_then(|keyspace| keyspace.tables.get_mut("orders"))
     {
-        table.regular_columns.push(crate::model::Column {
+        table.columns.push(crate::model::Column {
             name: "email".to_owned(),
             data_type: "text".to_owned(),
+            nullable: true,
+            default: None,
+            comment: None,
         });
     }
     schema

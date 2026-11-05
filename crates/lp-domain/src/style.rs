@@ -45,8 +45,6 @@ pub enum Token {
     /// the emphasis a matched cell spends.
     PrimaryKeyValue,
     ForeignKeyValue,
-    /// Static-ness changes what a write means.
-    StaticColumn,
     RegularColumn,
     Posture(Posture),
     Severity(Severity),

@@ -11,13 +11,8 @@ fn row_text(buffer: &Buffer, row: u16) -> String {
 
 #[test]
 fn the_columns_tab_draws_every_column_with_its_kind_and_type() {
-    let table = Table {
-        static_columns: vec![Column {
-            name: "region".to_owned(),
-            data_type: "text".to_owned(),
-        }],
-        ..orders()
-    };
+    let mut table = orders();
+    table.columns.push(column("region", "text"));
 
     let buffer = draw_state(104, 41, &listing(table));
 
@@ -32,37 +27,40 @@ fn the_columns_tab_draws_every_column_with_its_kind_and_type() {
             "4 columns",
             " \u{f030b} customer_id      uuid",
             " \u{f030b} order_date       date",
-            " \u{f030b} order_id     timeuuid",
-            // No glyph outside the primary key: colour says static.
+            " \u{f030b} order_id       bigint",
+            // No glyph outside the primary key.
             "   region           text",
         ]
     );
 }
 
-fn indexed() -> Table {
-    Table {
-        regular_columns: vec![column("status", "text"), column("tags", "set<text>")],
-        indexes: vec![
-            Index {
-                name: "orders_by_status".to_owned(),
-                target: IndexTarget::parse("status"),
-                kind: IndexKind::Builtin,
-            },
-            Index {
-                name: "orders_by_tag".to_owned(),
-                target: IndexTarget::parse("values(tags)"),
-                kind: IndexKind::Builtin,
-            },
-            Index {
-                name: "orders_sasi".to_owned(),
-                target: IndexTarget::parse("status"),
-                kind: IndexKind::Custom {
-                    class: "org.apache.cassandra.index.sasi.SASIIndex".to_owned(),
-                },
-            },
-        ],
-        ..orders()
+fn index(name: &str, keys: &[&str], method: &str, predicate: Option<&str>) -> Index {
+    Index {
+        name: name.to_owned(),
+        definition: String::new(),
+        keys: keys.iter().map(|key| (*key).to_owned()).collect(),
+        unique: false,
+        primary: false,
+        method: method.to_owned(),
+        predicate: predicate.map(str::to_owned),
     }
+}
+
+fn indexed() -> Table {
+    let mut table = orders();
+    table
+        .columns
+        .extend([column("status", "text"), column("tags", "text[]")]);
+    table.indexes = vec![
+        index(
+            "orders_by_status",
+            &["status"],
+            "btree",
+            Some("(status <> 'done'::text)"),
+        ),
+        index("orders_by_tag", &["tags"], "gin", None),
+    ];
+    table
 }
 
 fn indexing(table: Table) -> State {
@@ -76,30 +74,28 @@ fn the_indexes_tab_draws_the_primary_key_and_a_block_per_index() {
     let buffer = draw_state(104, 41, &indexing(indexed()));
 
     assert_eq!(
-        ddl_rows(&buffer)[..19],
+        ddl_rows(&buffer)[..18],
         [
             "▌  \u{f084} Schema         shop",
             "   \u{f0ce} Table",
             "     orders_by_customer",
             "",
-            "\u{f030b} Partition Key",
+            "\u{f030b} Primary Key",
             "   customer_id      uuid",
-            "\u{f030b} Clustering Key",
-            "   order_date ↓     date",
-            "   order_id ↑   timeuuid",
+            "   order_date       date",
+            "   order_id       bigint",
             // Indexes open a group of their own.
             "",
             "\u{f002} orders_by_status",
             "   status           text",
+            "   using           btree",
+            // Too wide beside its name, so the predicate wraps.
+            "   where",
+            "     (status <>",
+            "     'done'::text)",
             "\u{f002} orders_by_tag",
-            // Too wide beside the target, so the type wraps.
-            "   values(tags)",
-            "     set<text>",
-            "\u{f002} orders_sasi",
-            "   status           text",
-            // A custom index names its class.
-            "   class",
-            "     org.apache.cassandr",
+            "   tags           text[]",
+            "   using             gin",
         ]
     );
 }
@@ -109,7 +105,7 @@ fn a_table_with_no_index_says_so_rather_than_showing_an_empty_block() {
     let buffer = draw_state(104, 41, &indexing(orders()));
 
     assert_eq!(
-        ddl_rows(&buffer)[9..12],
+        ddl_rows(&buffer)[8..11],
         ["", "\u{f002} Indexes", "   none"]
     );
 }
@@ -274,11 +270,11 @@ fn a_border_too_narrow_for_either_strip_keeps_the_tab_it_is_drawing_whole() {
 }
 
 #[test]
-fn a_selected_tables_shape_is_drawn_above_its_options() {
+fn a_selected_tables_shape_is_drawn_above_its_settings() {
     let buffer = draw_state(104, 41, &describing(orders()));
 
     assert_eq!(
-        ddl_rows(&buffer)[..16],
+        ddl_rows(&buffer)[..18],
         [
             // The cursor opens on this row.
             "▌  \u{f084} Schema         shop",
@@ -287,26 +283,27 @@ fn a_selected_tables_shape_is_drawn_above_its_options() {
             // Between what the panel is about and its shape.
             "",
             // A heading is no cursor stop, so it keeps the bar's column.
-            "\u{f030b} Partition Key",
+            "\u{f030b} Primary Key",
             "   customer_id      uuid",
-            "\u{f030b} Clustering Key",
-            "   order_date ↓     date",
-            "   order_id ↑   timeuuid",
-            // Between what the table is and its configuration.
+            "   order_date       date",
+            "   order_id       bigint",
+            "\u{f030b} Foreign Keys",
+            // Too wide for one line, so the target wraps beneath.
+            "   customer_id",
+            "     shop.customers(id)",
+            // Between what the table is and the rules it keeps.
             "",
-            "\u{f013} Options",
-            // `gc_grace_seconds` and its value need 24 of 23 columns, so it
-            // wraps.
-            "   gc_grace_seconds",
-            "     864000",
-            "   bloom_filter_fp_chan…",
-            "     0.01",
+            "\u{f013} Constraints",
+            "   recent",
+            "     CHECK (order_date >",
+            "     '2020-01-01')",
+            "\u{f013} About",
             "   comment   Order list.",
         ]
     );
     assert!(
-        ddl_rows(&buffer)[16..].iter().all(String::is_empty),
-        "`comment` sorts last, and the panel has room to spare beneath it"
+        ddl_rows(&buffer)[18..].iter().all(String::is_empty),
+        "`About` comes last, and the panel has room to spare beneath it"
     );
 }
 
@@ -327,17 +324,16 @@ fn highlighted_rows(buffer: &Buffer) -> Vec<u16> {
 fn every_line_of_a_selected_property_is_highlighted() {
     let mut state = describing(orders());
     state.focus_on(Panel::Ddl);
-    // `bloom_filter_fp_chance` needs 26 of 23 columns: one row on two lines.
-    // Six rows in.
-    state.ddl.cursor.go_to(6, lp_domain::view::ddl_rows(&state));
+    // The foreign key's target wraps: one row on two lines. Five rows in.
+    state.ddl.cursor.go_to(5, lp_domain::view::ddl_rows(&state));
 
     let buffer = draw_state(104, 41, &state);
 
     assert_eq!(
         highlighted_rows(&buffer),
-        [30, 31],
+        [26, 27],
         "a wrapped value is one cursor stop, so exactly its own two lines \
-         are the selection — not fewer, and not bleeding into comment below"
+         are the selection — not fewer, and not bleeding into the row below"
     );
 }
 
@@ -351,7 +347,7 @@ fn a_one_line_property_has_exactly_its_own_line_reversed() {
 
     assert_eq!(
         highlighted_rows(&buffer),
-        [32],
+        [34],
         "comment fits one line, so exactly it is the selection"
     );
 }
@@ -360,26 +356,26 @@ fn a_one_line_property_has_exactly_its_own_line_reversed() {
 fn the_ddl_body_reserves_a_column_for_the_selection_bar() {
     let mut state = describing(orders());
     state.focus_on(Panel::Ddl);
-    // `bloom_filter_fp_chance` wraps: one cursor stop on two lines.
-    state.ddl.cursor.go_to(6, lp_domain::view::ddl_rows(&state));
+    // The foreign key wraps: one cursor stop on two lines.
+    state.ddl.cursor.go_to(5, lp_domain::view::ddl_rows(&state));
 
     let buffer = draw_state(104, 41, &state);
     let bar = |y: u16| buffer.cell((1, y)).expect("inside the panel").symbol();
 
     assert_eq!(
         highlighted_rows(&buffer),
-        [30, 31],
+        [26, 27],
         "the fixture's two lines"
     );
-    assert_eq!(bar(30), "▌");
-    assert_eq!(bar(31), "▌");
-    // 20 and 26 are group blanks; 21, 23 and 27 headings; none pays the bar
-    // column.
-    for y in [17, 18, 19, 22, 24, 25, 28, 29] {
+    assert_eq!(bar(26), "▌");
+    assert_eq!(bar(27), "▌");
+    // 20 and 28 are group blanks; 21, 25, 29 and 33 headings; none pays the
+    // bar column.
+    for y in [17, 18, 19, 22, 23, 24, 30, 31, 32, 34] {
         assert_eq!(bar(y), " ", "row {y} is a row the cursor is not on");
     }
     assert_eq!(
-        bar(27),
+        bar(29),
         crate::icons::SETTINGS.trim_end(),
         "a heading opens at the margin, in the column a row spends on the bar"
     );
@@ -401,7 +397,7 @@ fn a_section_heading_is_never_drawn_as_the_selection() {
     for row in highlighted {
         let text = row_text(&buffer, row);
         assert!(
-            !text.ends_with("Partition Key") && !text.ends_with("Options"),
+            !text.ends_with("Primary Key") && !text.ends_with("Constraints"),
             "row {row} is a heading: {text:?}"
         );
     }
@@ -515,30 +511,29 @@ fn the_key_columns_are_drawn_in_the_tokens_that_mark_them_as_the_key() {
     // Past the bar column: property lines colour their spans.
     let colour = |y: u16| buffer.cell((2, y)).expect("inside the panel").fg;
     let theme = Theme::default();
-    let partition = theme
+    let primary = theme
         .style(Token::PrimaryKey)
         .fg
-        .expect("the partition key spends a colour");
-    let clustering = theme
+        .expect("the primary key spends a colour");
+    let foreign = theme
         .style(Token::ForeignKey)
         .fg
-        .expect("the clustering key spends a colour");
+        .expect("a foreign key spends a colour");
 
-    assert_eq!(colour(21), partition, "Partition Key");
-    assert_eq!(colour(22), partition, "its column");
-    assert_eq!(colour(23), clustering, "Clustering Key");
-    assert_eq!(colour(24), clustering, "its column");
-    // 26 is the settings group's opening blank.
+    assert_eq!(colour(21), primary, "Primary Key");
+    assert_eq!(colour(22), primary, "its column");
+    assert_eq!(colour(25), foreign, "Foreign Keys");
+    // 28 is the settings group's opening blank.
     assert_eq!(
-        colour(27),
+        colour(29),
         theme
             .style(Token::Section)
             .fg
             .expect("a section heading spends a colour"),
-        "Options names a group rather than a schema concept"
+        "Constraints names a group rather than a key"
     );
     assert_eq!(
-        colour(28),
+        colour(30),
         theme
             .style(Token::PropertyName)
             .fg
@@ -548,7 +543,7 @@ fn the_key_columns_are_drawn_in_the_tokens_that_mark_them_as_the_key() {
 }
 
 #[test]
-fn a_selected_keyspace_is_described_by_its_replication() {
+fn a_selected_schema_is_described_by_what_it_holds() {
     let mut state = describing(orders());
     let schema = state.schema().cloned().expect("loaded");
     state.tables.close(&schema);
@@ -565,10 +560,10 @@ fn a_selected_keyspace_is_described_by_its_replication() {
         [
             "▌  \u{f084} Schema         shop",
             "",
-            "\u{f013} Replication",
-            "class  SimpleStrategy"
+            "\u{f013} Contents",
+            "tables              1",
         ],
-        "no table is selected, so the panel names only the keyspace"
+        "no table is selected, so the panel names only the schema"
     );
 }
 

@@ -542,14 +542,14 @@ fn y_yanks_a_column_row() {
 
     assert_eq!(
         press(&mut state, Key::Char('y')),
-        vec![Effect::Yank("id,uuid,partition".to_owned())]
+        vec![Effect::Yank("id,uuid,primary key".to_owned())]
     );
 
     press(&mut state, Key::Char('j'));
 
     assert_eq!(
         press(&mut state, Key::Char('y')),
-        vec![Effect::Yank("created_at,timestamp,clustering".to_owned())]
+        vec![Effect::Yank("created_at,timestamp,primary key".to_owned())]
     );
 }
 

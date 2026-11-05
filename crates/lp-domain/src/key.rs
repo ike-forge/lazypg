@@ -29,20 +29,13 @@ impl RowKey {
     }
 }
 
-/// Empty only for a schema reported without a key, which callers refuse.
+/// Empty for a table without a primary key, which callers refuse: no `WHERE`
+/// addresses exactly one of its rows.
 #[must_use]
 pub fn columns(table: &Table) -> Vec<(&str, &str)> {
     table
-        .primary_key
-        .partition
-        .iter()
+        .key_columns()
         .map(|column| (column.name.as_str(), column.data_type.as_str()))
-        .chain(table.primary_key.clustering.iter().map(|clustering| {
-            (
-                clustering.column.name.as_str(),
-                clustering.column.data_type.as_str(),
-            )
-        }))
         .collect()
 }
 

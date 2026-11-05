@@ -1,11 +1,8 @@
-//! The Table DDL panel's projection of what the Tables cursor is on. Nothing
+//! The Structure panel's projection of what the Tables cursor is on. Nothing
 //! selected shows nothing: the Tables panel already narrates the connection.
 
 use crate::ddl::DdlTab;
-use crate::model::{
-    ClassKind, ClassOption, ClusteringOrder, Column, Index, IndexKind, Replication, Schema,
-    Setting, Table,
-};
+use crate::model::{Catalog, Column, Index, RelationKind, RelationRef, Schema, Table};
 use crate::panel::Panel;
 use crate::search::{Direction, Search};
 use crate::state::State;
@@ -38,8 +35,8 @@ pub struct Section {
     /// `None` for the identity group, whose rows name themselves.
     pub heading: Option<Heading>,
     pub group: Group,
-    /// `None` where the group names no schema concept, so options never read as
-    /// key structure.
+    /// `None` where the group names no key, so settings never read as key
+    /// structure.
     pub token: Option<Token>,
     pub rows: Vec<DetailRow>,
 }
@@ -75,8 +72,6 @@ pub enum Group {
 pub enum DetailRow {
     KeyColumn {
         name: String,
-        /// `None` for a partition column.
-        order: Option<ClusteringOrder>,
         data_type: String,
     },
     /// Carries its own kind: nothing above it in the Columns tab says what part
@@ -90,14 +85,6 @@ pub enum DetailRow {
         name: String,
         value: String,
     },
-    /// `raw` keeps the reported map: a yank and a search must not be narrowed
-    /// to the abbreviation drawn.
-    ClassProperty {
-        name: String,
-        class: String,
-        settings: Vec<Setting>,
-        raw: String,
-    },
     Identity {
         kind: IdentityKind,
         name: String,
@@ -107,7 +94,7 @@ pub enum DetailRow {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IdentityKind {
     Schema,
-    Table,
+    Relation(RelationKind),
 }
 
 impl IdentityKind {
@@ -115,7 +102,7 @@ impl IdentityKind {
     pub const fn label(self) -> &'static str {
         match self {
             Self::Schema => "Schema",
-            Self::Table => "Table",
+            Self::Relation(kind) => kind.label(),
         }
     }
 
@@ -123,17 +110,17 @@ impl IdentityKind {
     pub const fn token(self) -> Token {
         match self {
             Self::Schema => Token::Schema,
-            Self::Table => Token::Table,
+            Self::Relation(_) => Token::Table,
         }
     }
 }
 
-/// Exhaustive over [`Table`]'s fields.
+/// A key column that also references is drawn as key: the key is what
+/// addresses the row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ColumnKind {
-    Partition,
-    Clustering,
-    Static,
+    PrimaryKey,
+    ForeignKey,
     Regular,
 }
 
@@ -141,16 +128,25 @@ impl ColumnKind {
     /// The one thing marked with a glyph; the rest travels as the token.
     #[must_use]
     pub const fn is_key(self) -> bool {
-        matches!(self, Self::Partition | Self::Clustering)
+        matches!(self, Self::PrimaryKey)
     }
 
     #[must_use]
     pub const fn token(self) -> Token {
         match self {
-            Self::Partition => Token::PrimaryKey,
-            Self::Clustering => Token::ForeignKey,
-            Self::Static => Token::StaticColumn,
+            Self::PrimaryKey => Token::PrimaryKey,
+            Self::ForeignKey => Token::ForeignKey,
             Self::Regular => Token::RegularColumn,
+        }
+    }
+
+    fn of(table: &Table, column: &str) -> Self {
+        if table.is_key(column) {
+            Self::PrimaryKey
+        } else if table.references(column) {
+            Self::ForeignKey
+        } else {
+            Self::Regular
         }
     }
 }
@@ -168,19 +164,19 @@ pub(super) fn of(state: &State) -> Option<Details> {
         return None;
     }
 
-    let schema = state.schema()?;
+    let catalog = state.schema()?;
 
-    let details = match (state.tables.selected(schema)?, shown_tab(state)) {
-        (Node::Table { keyspace, table }, DdlTab::Ddl) => of_table(keyspace, table),
+    let details = match (state.tables.selected(catalog)?, shown_tab(state)) {
+        (Node::Table { keyspace, table }, DdlTab::Ddl) => of_table(catalog, keyspace, table),
         (Node::Table { keyspace, table }, DdlTab::Columns) => columns_of(keyspace, table),
         (Node::Table { keyspace, table }, DdlTab::Indexes) => indexes_of(keyspace, table),
-        (Node::Schema { keyspace, .. }, _) => of_keyspace(keyspace),
+        (Node::Schema { keyspace, .. }, _) => of_schema(keyspace),
     };
 
     Some(details)
 }
 
-/// No Columns tab for a keyspace: an empty tab teaches the wrong thing.
+/// No Columns tab for a schema: an empty tab teaches the wrong thing.
 pub(super) fn tabs_for(state: &State) -> &'static [DdlTab] {
     if describes_a_table(state) {
         &DdlTab::ALL
@@ -189,7 +185,7 @@ pub(super) fn tabs_for(state: &State) -> &'static [DdlTab] {
     }
 }
 
-/// The held tab is not reset, so stepping to the keyspace and back keeps it.
+/// The held tab is not reset, so stepping to the schema and back keeps it.
 pub(super) fn shown_tab(state: &State) -> DdlTab {
     let tab = state.ddl.tab();
 
@@ -233,16 +229,11 @@ impl DetailRow {
     #[must_use]
     pub(crate) fn matches(&self, search: &Search) -> bool {
         match self {
-            Self::KeyColumn {
-                name, data_type, ..
-            }
+            Self::KeyColumn { name, data_type }
             | Self::Column {
                 name, data_type, ..
             } => search.matches(name) || search.matches(data_type),
             Self::Property { name, value } => search.matches(name) || search.matches(value),
-            // Against the reported map: a term the abbreviation dropped is
-            // still in the option.
-            Self::ClassProperty { name, raw, .. } => search.matches(name) || search.matches(raw),
             // Labels are the same on every table and would tell `n` nothing.
             Self::Identity { name, .. } => search.matches(name),
         }
@@ -268,24 +259,14 @@ pub(crate) fn next_match(
         .find(|at| rows[*at].matches(search))
 }
 
-fn option_row((name, value): (&str, &str)) -> DetailRow {
-    let parsed = ClassKind::of(name).and_then(|kind| ClassOption::parse(kind, value));
-
-    parsed.map_or_else(
-        || DetailRow::Property {
-            name: name.to_owned(),
-            value: value.to_owned(),
-        },
-        |option| DetailRow::ClassProperty {
-            name: name.to_owned(),
-            class: option.class,
-            settings: option.settings,
-            raw: value.to_owned(),
-        },
-    )
+fn property(name: impl Into<String>, value: impl Into<String>) -> DetailRow {
+    DetailRow::Property {
+        name: name.into(),
+        value: value.into(),
+    }
 }
 
-fn identity(keyspace: &Schema, table: Option<&Table>) -> Section {
+fn identity(schema: &Schema, table: Option<&Table>) -> Section {
     let row = |kind: IdentityKind, name: &str| DetailRow::Identity {
         kind,
         name: name.to_owned(),
@@ -295,74 +276,128 @@ fn identity(keyspace: &Schema, table: Option<&Table>) -> Section {
         heading: None,
         group: Group::Identity,
         token: None,
-        rows: std::iter::once(row(IdentityKind::Schema, &keyspace.name))
-            .chain(table.map(|table| row(IdentityKind::Table, &table.name)))
+        rows: std::iter::once(row(IdentityKind::Schema, &schema.name))
+            .chain(table.map(|table| row(IdentityKind::Relation(table.kind), &table.name)))
             .collect(),
     }
 }
 
-fn partition_section(table: &Table) -> Section {
+fn key_column(column: &Column) -> DetailRow {
+    DetailRow::KeyColumn {
+        name: column.name.clone(),
+        data_type: column.data_type.clone(),
+    }
+}
+
+fn primary_key_section(table: &Table) -> Section {
     Section {
-        heading: Some(Heading::new("Partition Key", Token::PrimaryKey)),
+        heading: Some(Heading::new("Primary Key", Token::PrimaryKey)),
         group: Group::Shape,
         token: Some(Token::PrimaryKey),
-        rows: table
-            .primary_key
-            .partition
-            .iter()
-            .map(|column| DetailRow::KeyColumn {
-                name: column.name.clone(),
-                order: None,
-                data_type: column.data_type.clone(),
-            })
-            .collect(),
+        rows: table.key_columns().map(key_column).collect(),
     }
 }
 
-fn clustering_section(table: &Table) -> Section {
+/// One row per key: its columns, then `schema.table(columns)`. No arrow: a
+/// wrap would strand it on a line of its own.
+fn foreign_keys_section(table: &Table) -> Section {
     Section {
-        heading: Some(Heading::new("Clustering Key", Token::ForeignKey)),
+        heading: Some(Heading::new("Foreign Keys", Token::ForeignKey)),
         group: Group::Shape,
         token: Some(Token::ForeignKey),
         rows: table
-            .primary_key
-            .clustering
+            .foreign_keys
             .iter()
-            .map(|clustering| DetailRow::KeyColumn {
-                name: clustering.column.name.clone(),
-                order: Some(clustering.order),
-                data_type: clustering.column.data_type.clone(),
+            .map(|key| {
+                property(
+                    key.columns.join(", "),
+                    format!(
+                        "{}({})",
+                        qualified(&key.target),
+                        key.target_columns.join(", ")
+                    ),
+                )
             })
             .collect(),
     }
 }
 
-fn of_table(keyspace: &Schema, table: &Table) -> Details {
-    let options = Section {
-        heading: Some(Heading::new("Options", Token::Section)),
+/// What a `DELETE` here has to answer to.
+fn referenced_by_section(catalog: &Catalog, schema: &Schema, table: &Table) -> Section {
+    let target = RelationRef {
+        schema: schema.name.clone(),
+        table: table.name.clone(),
+    };
+
+    Section {
+        heading: Some(Heading::new("Referenced By", Token::ForeignKey)),
+        group: Group::Shape,
+        token: Some(Token::ForeignKey),
+        rows: catalog
+            .referencing(&target)
+            .map(|(from, key)| {
+                property(
+                    format!("{}({})", qualified(&from), key.columns.join(", ")),
+                    format!("on delete {}", key.on_delete.to_lowercase()),
+                )
+            })
+            .collect(),
+    }
+}
+
+fn qualified(at: &RelationRef) -> String {
+    format!("{}.{}", at.schema, at.table)
+}
+
+fn settings(heading: &str, rows: Vec<DetailRow>) -> Section {
+    Section {
+        heading: Some(Heading::new(heading, Token::Section)),
         group: Group::Settings,
         token: None,
-        rows: table.options.in_display_order().map(option_row).collect(),
-    };
+        rows,
+    }
+}
+
+fn of_table(catalog: &Catalog, schema: &Schema, table: &Table) -> Details {
+    let constraints = table
+        .constraints
+        .iter()
+        .map(|constraint| property(constraint.name.clone(), constraint.definition.clone()))
+        .collect();
+    let partitions = table
+        .partitions
+        .iter()
+        .map(|partition| property(partition.clone(), ""))
+        .collect();
+    let about = table
+        .comment
+        .iter()
+        .map(|comment| property("comment", comment.clone()))
+        .chain(
+            table
+                .definition
+                .iter()
+                .map(|definition| property("definition", definition.trim().to_owned())),
+        )
+        .collect();
 
     Details {
         sections: populated([
-            identity(keyspace, Some(table)),
-            partition_section(table),
-            clustering_section(table),
-            options,
+            identity(schema, Some(table)),
+            primary_key_section(table),
+            foreign_keys_section(table),
+            referenced_by_section(catalog, schema, table),
+            settings("Constraints", constraints),
+            settings("Partitions", partitions),
+            settings("About", about),
         ]),
     }
 }
 
 /// The primary key leads, drawn as the DDL tab draws it, so the tab reads as
-/// one list of ways in.
-fn indexes_of(keyspace: &Schema, table: &Table) -> Details {
-    let mut sections = populated([
-        identity(keyspace, Some(table)),
-        partition_section(table),
-        clustering_section(table),
-    ]);
+/// one list of ways in. Its backing index is not repeated.
+fn indexes_of(schema: &Schema, table: &Table) -> Details {
+    let mut sections = populated([identity(schema, Some(table)), primary_key_section(table)]);
 
     sections.extend(index_sections(table));
 
@@ -370,13 +405,17 @@ fn indexes_of(keyspace: &Schema, table: &Table) -> Details {
 }
 
 fn index_sections(table: &Table) -> Vec<Section> {
-    if table.indexes.is_empty() {
+    let indexes: Vec<&Index> = table
+        .indexes
+        .iter()
+        .filter(|index| !index.primary)
+        .collect();
+    if indexes.is_empty() {
         return vec![no_indexes()];
     }
 
-    table
-        .indexes
-        .iter()
+    indexes
+        .into_iter()
         .map(|index| Section {
             heading: Some(Heading::new(index.name.clone(), Token::Section)),
             group: Group::Indexes,
@@ -386,26 +425,25 @@ fn index_sections(table: &Table) -> Vec<Section> {
         .collect()
 }
 
-/// The kind is not a row: the target already says `KEYS` or `COMPOSITES`.
+/// An expression key has no column, so no type.
 fn index_rows(table: &Table, index: &Index) -> Vec<DetailRow> {
-    let target = DetailRow::KeyColumn {
-        name: index.target.text(),
-        order: None,
+    let keys = index.keys.iter().map(|key| DetailRow::KeyColumn {
+        name: key.clone(),
         data_type: table
-            .column(&index.target.column)
+            .column(key)
             .map(|column| column.data_type.clone())
             .unwrap_or_default(),
-    };
+    });
+    let traits = [
+        Some(property("using", index.method.clone())),
+        index.unique.then(|| property("unique", "")),
+        index
+            .predicate
+            .as_ref()
+            .map(|predicate| property("where", predicate.clone())),
+    ];
 
-    let class = match &index.kind {
-        IndexKind::Builtin => None,
-        IndexKind::Custom { class } => Some(DetailRow::Property {
-            name: "class".to_owned(),
-            value: class.clone(),
-        }),
-    };
-
-    std::iter::once(target).chain(class).collect()
+    keys.chain(traits.into_iter().flatten()).collect()
 }
 
 /// A row, not a bare heading: a heading with nothing under it reads as a failed
@@ -415,53 +453,28 @@ fn no_indexes() -> Section {
         heading: Some(Heading::new("Indexes", Token::Section)),
         group: Group::Indexes,
         token: None,
-        rows: vec![DetailRow::Property {
-            name: "none".to_owned(),
-            value: String::new(),
-        }],
+        rows: vec![property("none", "")],
     }
 }
 
-/// Flat: headings would repeat the DDL tab; the kind travels with each row.
-fn columns_of(keyspace: &Schema, table: &Table) -> Details {
-    let row = |column: &Column, kind: ColumnKind| DetailRow::Column {
-        name: column.name.clone(),
-        data_type: column.data_type.clone(),
-        kind,
-    };
-
+/// Flat and in column order, as `SELECT *` returns them; the kind travels
+/// with each row.
+fn columns_of(schema: &Schema, table: &Table) -> Details {
     let rows = table
-        .primary_key
-        .partition
-        .iter()
-        .map(|column| row(column, ColumnKind::Partition))
-        .chain(
-            table
-                .primary_key
-                .clustering
-                .iter()
-                .map(|clustering| row(&clustering.column, ColumnKind::Clustering)),
-        )
-        .chain(
-            table
-                .static_columns
-                .iter()
-                .map(|column| row(column, ColumnKind::Static)),
-        )
-        .chain(
-            table
-                .regular_columns
-                .iter()
-                .map(|column| row(column, ColumnKind::Regular)),
-        )
+        .columns()
+        .map(|column| DetailRow::Column {
+            name: column.name.clone(),
+            data_type: column_type(column),
+            kind: ColumnKind::of(table, &column.name),
+        })
         .collect();
 
     Details {
         sections: populated([
-            identity(keyspace, Some(table)),
+            identity(schema, Some(table)),
             Section {
                 heading: Some(Heading::new(
-                    format!("{} columns", table.columns().count()),
+                    format!("{} columns", table.columns.len()),
                     Token::Section,
                 )),
                 group: Group::Shape,
@@ -472,41 +485,43 @@ fn columns_of(keyspace: &Schema, table: &Table) -> Details {
     }
 }
 
-fn of_keyspace(keyspace: &Schema) -> Details {
-    let replication = Section {
-        heading: Some(Heading::new("Replication", Token::Section)),
-        group: Group::Settings,
-        token: None,
-        rows: replication_rows(&keyspace.replication),
-    };
-
-    Details {
-        sections: populated([identity(keyspace, None), replication]),
+/// `not null` beside the type: whether a cell can be empty is part of its
+/// type to anyone writing a query.
+fn column_type(column: &Column) -> String {
+    if column.nullable {
+        column.data_type.clone()
+    } else {
+        format!("{} not null", column.data_type)
     }
 }
 
-/// Named as `system_schema.schemas.replication` names them.
-fn replication_rows(replication: &Replication) -> Vec<DetailRow> {
-    let property = |name: &str, value: String| DetailRow::Property {
-        name: name.to_owned(),
-        value,
+fn of_schema(schema: &Schema) -> Details {
+    let count = |kind: RelationKind| {
+        schema
+            .tables
+            .values()
+            .filter(|table| table.kind == kind)
+            .count()
     };
+    let contents = [
+        (
+            "tables",
+            count(RelationKind::Table) + count(RelationKind::Partitioned),
+        ),
+        ("views", count(RelationKind::View)),
+        ("materialized views", count(RelationKind::MaterializedView)),
+        ("foreign tables", count(RelationKind::Foreign)),
+        ("sequences", schema.sequences.len()),
+        ("functions", schema.functions.len()),
+    ]
+    .into_iter()
+    // Tables always, so an empty schema says it is empty.
+    .filter(|(name, n)| *n > 0 || *name == "tables")
+    .map(|(name, n)| property(name, n.to_string()))
+    .collect();
 
-    match replication {
-        Replication::SimpleStrategy { factor } => vec![
-            property("class", "SimpleStrategy".to_owned()),
-            property("replication_factor", factor.to_string()),
-        ],
-        Replication::NetworkTopologyStrategy { factors } => {
-            std::iter::once(property("class", "NetworkTopologyStrategy".to_owned()))
-                .chain(
-                    factors
-                        .iter()
-                        .map(|(datacenter, factor)| property(datacenter, factor.to_string())),
-                )
-                .collect()
-        }
-        Replication::Other { class } => vec![property("class", class.clone())],
+    Details {
+        sections: populated([identity(schema, None), settings("Contents", contents)]),
     }
 }
 
@@ -519,16 +534,14 @@ fn populated<const N: usize>(sections: [Section; N]) -> Vec<Section> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
-
     use crate::connection::{Connection, ConnectionState, SchemaState};
     use crate::model::{
-        Catalog, ClusteringColumn, Column, ConnId, DbError, Index, IndexKind, IndexTarget,
-        PrimaryKey, Replication, TableOptions,
+        Catalog, Column, ConnId, Constraint, ConstraintKind, DbError, ForeignKey, Index,
+        PrimaryKey, RelationKind, RelationRef,
     };
     use crate::search::{Search, Searched};
     use crate::state::State;
-    use crate::tree::tests_support::{options, schema_of};
+    use crate::tree::tests_support::schema_of;
 
     use super::super::tests_support::{connected, panel_body, state_with, tabled};
     use super::*;
@@ -580,299 +593,319 @@ mod tests {
             .unwrap_or_else(|| panic!("{heading} is missing"))
     }
 
-    fn column(name: &str, data_type: &str) -> Column {
+    fn not_null(name: &str, data_type: &str) -> Column {
         Column {
-            name: name.to_owned(),
-            data_type: data_type.to_owned(),
+            nullable: false,
+            ..Column::new(name, data_type)
         }
     }
 
-    fn orders() -> Table {
+    fn at(table: &str) -> RelationRef {
+        RelationRef {
+            schema: "shop".to_owned(),
+            table: table.to_owned(),
+        }
+    }
+
+    /// Key in an order other than column order, one outgoing foreign key.
+    fn order_line() -> Table {
         Table {
-            name: "orders_by_customer".to_owned(),
-            primary_key: PrimaryKey {
-                partition: vec![column("customer_id", "uuid")],
-                clustering: vec![
-                    ClusteringColumn {
-                        column: column("order_date", "date"),
-                        order: ClusteringOrder::Descending,
-                    },
-                    ClusteringColumn {
-                        column: column("order_id", "timeuuid"),
-                        order: ClusteringOrder::Ascending,
-                    },
-                ],
-            },
-            static_columns: Vec::new(),
-            regular_columns: vec![column("status", "text")],
-            indexes: Vec::new(),
-            options: options(&[
-                ("gc_grace_seconds", "864000"),
-                ("comment", "Order history."),
-                ("bloom_filter_fp_chance", "0.01"),
-            ]),
+            name: "order_line".to_owned(),
+            columns: vec![
+                not_null("order_id", "bigint"),
+                not_null("line_no", "integer"),
+                not_null("customer_id", "bigint"),
+                Column::new("note", "text"),
+            ],
+            primary_key: Some(PrimaryKey {
+                name: "order_line_pkey".to_owned(),
+                columns: vec!["order_id".to_owned(), "line_no".to_owned()],
+            }),
+            foreign_keys: vec![ForeignKey {
+                name: "order_line_customer_id_fkey".to_owned(),
+                columns: vec!["customer_id".to_owned()],
+                target: at("customer"),
+                target_columns: vec!["id".to_owned()],
+                on_update: "NO ACTION".to_owned(),
+                on_delete: "CASCADE".to_owned(),
+            }],
+            indexes: vec![
+                Index {
+                    name: "order_line_pkey".to_owned(),
+                    definition: String::new(),
+                    keys: vec!["order_id".to_owned(), "line_no".to_owned()],
+                    unique: true,
+                    primary: true,
+                    method: "btree".to_owned(),
+                    predicate: None,
+                },
+                Index {
+                    name: "order_line_customer_idx".to_owned(),
+                    definition: String::new(),
+                    keys: vec!["customer_id".to_owned(), "lower(note)".to_owned()],
+                    unique: false,
+                    primary: false,
+                    method: "btree".to_owned(),
+                    predicate: Some("(note IS NOT NULL)".to_owned()),
+                },
+            ],
+            constraints: vec![Constraint {
+                name: "order_line_line_no_check".to_owned(),
+                kind: ConstraintKind::Check,
+                definition: "CHECK ((line_no >= 0))".to_owned(),
+            }],
+            comment: Some("One line per product.".to_owned()),
+            ..Table::default()
         }
     }
 
-    fn browsing(table: Table) -> State {
-        let keyspace = Schema {
-            name: "shop".to_owned(),
-            replication: Replication::SimpleStrategy { factor: 1 },
-            tables: BTreeMap::from([(table.name.clone(), table)]),
-        };
-        let schema = Catalog {
-            schemas: BTreeMap::from([(keyspace.name.clone(), keyspace)]),
-        };
+    fn customer() -> Table {
+        Table {
+            name: "customer".to_owned(),
+            columns: vec![not_null("id", "bigint")],
+            primary_key: Some(PrimaryKey {
+                name: "customer_pkey".to_owned(),
+                columns: vec!["id".to_owned()],
+            }),
+            ..Table::default()
+        }
+    }
 
+    fn catalog(tables: Vec<Table>) -> Catalog {
+        let mut shop = Schema::empty("shop");
+        for table in tables {
+            shop.tables.insert(table.name.clone(), table);
+        }
+        Catalog {
+            schemas: [("shop".to_owned(), shop)].into_iter().collect(),
+        }
+    }
+
+    /// The cursor lands on the first table, alphabetically.
+    fn browsing_first(tables: Vec<Table>) -> State {
+        let schema = catalog(tables);
         let mut state = connected(schema.clone());
         state.tables.open(&schema);
         state.tables.open(&schema);
         state
     }
 
-    fn every_kind() -> Table {
-        Table {
-            static_columns: vec![column("region", "text")],
-            ..orders()
-        }
+    fn browsing(table: Table) -> State {
+        browsing_first(vec![table])
     }
 
-    fn indexes_tab(state: &State) -> State {
+    fn on_tab(state: &State, tab: DdlTab) -> State {
         let mut state = state.clone();
-        state.ddl.show(DdlTab::Indexes);
+        state.ddl.show(tab);
         state
     }
 
-    fn indexed() -> Table {
-        Table {
-            regular_columns: vec![column("status", "text"), column("tags", "set<text>")],
-            indexes: vec![
-                Index {
-                    name: "orders_by_status".to_owned(),
-                    target: IndexTarget::parse("status"),
-                    kind: IndexKind::Builtin,
-                },
-                Index {
-                    name: "orders_by_tag".to_owned(),
-                    target: IndexTarget::parse("values(tags)"),
-                    kind: IndexKind::Builtin,
-                },
-                Index {
-                    name: "orders_sasi".to_owned(),
-                    target: IndexTarget::parse("status"),
-                    kind: IndexKind::Custom {
-                        class: "SASIIndex".to_owned(),
-                    },
-                },
-            ],
-            ..orders()
-        }
+    #[test]
+    fn a_table_reads_key_references_then_settings() {
+        assert_eq!(
+            headings(&details(&browsing(order_line()))),
+            ["Primary Key", "Foreign Keys", "Constraints", "About"],
+            "nothing references it, so no Referenced By"
+        );
     }
 
     #[test]
-    fn the_indexes_tab_leads_with_the_key_and_gives_every_index_a_block() {
-        let details = details(&indexes_tab(&browsing(indexed())));
-
+    fn the_primary_key_is_listed_in_key_order_with_types() {
         assert_eq!(
-            headings(&details),
+            section(&details(&browsing(order_line())), "Primary Key").rows,
             [
-                "Partition Key",
-                "Clustering Key",
-                "orders_by_status",
-                "orders_by_tag",
-                "orders_sasi",
-            ],
-            "the key is the index every table has, so it reads first"
+                DetailRow::KeyColumn {
+                    name: "order_id".to_owned(),
+                    data_type: "bigint".to_owned(),
+                },
+                DetailRow::KeyColumn {
+                    name: "line_no".to_owned(),
+                    data_type: "integer".to_owned(),
+                },
+            ]
         );
     }
 
     #[test]
-    fn an_index_carries_the_target_and_the_type_of_the_column_it_covers() {
-        let details = details(&indexes_tab(&browsing(indexed())));
-
+    fn a_foreign_key_names_its_columns_and_where_they_point() {
         assert_eq!(
-            section(&details, "orders_by_tag").rows,
-            [DetailRow::KeyColumn {
-                name: "values(tags)".to_owned(),
-                order: None,
-                data_type: "set<text>".to_owned(),
-            }],
-            "the modality is part of what the index covers, the type is the column's"
-        );
-    }
-
-    #[test]
-    fn a_custom_index_names_the_class_behind_it_and_a_builtin_one_names_nothing() {
-        let details = details(&indexes_tab(&browsing(indexed())));
-
-        assert_eq!(
-            section(&details, "orders_sasi").rows[1],
-            DetailRow::Property {
-                name: "class".to_owned(),
-                value: "SASIIndex".to_owned(),
-            }
-        );
-        assert_eq!(
-            section(&details, "orders_by_status").rows.len(),
-            1,
-            "Cassandra's own implementation is what a class row would restate"
-        );
-    }
-
-    #[test]
-    fn an_index_over_a_column_the_table_no_longer_has_keeps_its_row() {
-        // A schema read that raced a `DROP` … `ADD`: the type is the only thing
-        // missing.
-        let table = Table {
-            indexes: vec![Index {
-                name: "orders_by_gone".to_owned(),
-                target: IndexTarget::parse("gone"),
-                kind: IndexKind::Builtin,
-            }],
-            ..orders()
-        };
-
-        let details = details(&indexes_tab(&browsing(table)));
-
-        assert_eq!(
-            section(&details, "orders_by_gone").rows,
-            [DetailRow::KeyColumn {
-                name: "gone".to_owned(),
-                order: None,
-                data_type: String::new(),
+            section(&details(&browsing(order_line())), "Foreign Keys").rows,
+            [DetailRow::Property {
+                name: "customer_id".to_owned(),
+                value: "shop.customer(id)".to_owned(),
             }]
         );
     }
 
     #[test]
-    fn a_table_with_no_index_says_so_in_a_row_rather_than_a_bare_heading() {
-        let details = details(&indexes_tab(&browsing(orders())));
+    fn a_referenced_table_lists_who_points_at_it_and_what_a_delete_does() {
+        let state = browsing_first(vec![customer(), order_line()]);
+
+        assert_eq!(
+            section(&details(&state), "Referenced By").rows,
+            [DetailRow::Property {
+                name: "shop.order_line(customer_id)".to_owned(),
+                value: "on delete cascade".to_owned(),
+            }]
+        );
+    }
+
+    #[test]
+    fn a_view_says_what_it_is_and_shows_its_definition() {
+        let view = Table {
+            name: "totals".to_owned(),
+            kind: RelationKind::View,
+            columns: vec![Column::new("total", "numeric")],
+            definition: Some(" SELECT sum(1) AS total;".to_owned()),
+            ..Table::default()
+        };
+        let details = details(&browsing(view));
+
+        assert_eq!(
+            identity_rows(&details),
+            [("Schema", "shop"), ("View", "totals")]
+        );
+        assert_eq!(
+            section(&details, "About").rows,
+            [DetailRow::Property {
+                name: "definition".to_owned(),
+                value: "SELECT sum(1) AS total;".to_owned(),
+            }]
+        );
+    }
+
+    #[test]
+    fn a_partitioned_table_lists_its_partitions() {
+        let parent = Table {
+            name: "measurement".to_owned(),
+            kind: RelationKind::Partitioned,
+            partitions: vec!["measurement_2026".to_owned()],
+            ..Table::default()
+        };
+
+        assert_eq!(
+            section(&details(&browsing(parent)), "Partitions").rows,
+            [DetailRow::Property {
+                name: "measurement_2026".to_owned(),
+                value: String::new(),
+            }]
+        );
+    }
+
+    #[test]
+    fn a_keyless_table_draws_no_key_section() {
+        let keyless = Table {
+            primary_key: None,
+            ..order_line()
+        };
+
+        assert!(!headings(&details(&browsing(keyless))).contains(&"Primary Key"));
+    }
+
+    #[test]
+    fn the_columns_tab_lists_every_column_in_table_order_with_its_part() {
+        let details = details(&on_tab(&browsing(order_line()), DdlTab::Columns));
+
+        assert_eq!(headings(&details), ["4 columns"]);
+        assert_eq!(
+            section(&details, "4 columns").rows,
+            [
+                DetailRow::Column {
+                    name: "order_id".to_owned(),
+                    data_type: "bigint not null".to_owned(),
+                    kind: ColumnKind::PrimaryKey,
+                },
+                DetailRow::Column {
+                    name: "line_no".to_owned(),
+                    data_type: "integer not null".to_owned(),
+                    kind: ColumnKind::PrimaryKey,
+                },
+                DetailRow::Column {
+                    name: "customer_id".to_owned(),
+                    data_type: "bigint not null".to_owned(),
+                    kind: ColumnKind::ForeignKey,
+                },
+                DetailRow::Column {
+                    name: "note".to_owned(),
+                    data_type: "text".to_owned(),
+                    kind: ColumnKind::Regular,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn the_indexes_tab_leads_with_the_key_and_skips_the_index_behind_it() {
+        let details = details(&on_tab(&browsing(order_line()), DdlTab::Indexes));
 
         assert_eq!(
             headings(&details),
-            ["Partition Key", "Clustering Key", "Indexes"]
+            ["Primary Key", "order_line_customer_idx"],
+            "the key is the index every keyed table has, so it reads first, once"
         );
+    }
+
+    #[test]
+    fn an_index_lists_its_keys_its_method_and_its_predicate() {
+        let details = details(&on_tab(&browsing(order_line()), DdlTab::Indexes));
+
+        assert_eq!(
+            section(&details, "order_line_customer_idx").rows,
+            [
+                DetailRow::KeyColumn {
+                    name: "customer_id".to_owned(),
+                    data_type: "bigint".to_owned(),
+                },
+                DetailRow::KeyColumn {
+                    name: "lower(note)".to_owned(),
+                    data_type: String::new(),
+                },
+                DetailRow::Property {
+                    name: "using".to_owned(),
+                    value: "btree".to_owned(),
+                },
+                DetailRow::Property {
+                    name: "where".to_owned(),
+                    value: "(note IS NOT NULL)".to_owned(),
+                },
+            ],
+            "an expression key has no column to take a type from"
+        );
+    }
+
+    #[test]
+    fn a_table_with_no_index_says_so_in_a_row_rather_than_a_bare_heading() {
+        let details = details(&on_tab(&browsing(customer()), DdlTab::Indexes));
+
         assert_eq!(
             section(&details, "Indexes").rows,
             [DetailRow::Property {
                 name: "none".to_owned(),
                 value: String::new(),
-            }],
-            "a heading with nothing under it reads as a panel that failed to load"
+            }]
         );
     }
 
     #[test]
-    fn the_indexes_are_a_group_of_their_own_so_a_blank_line_opens_them() {
-        let details = details(&indexes_tab(&browsing(indexed())));
-
-        assert_eq!(
-            section(&details, "Partition Key").group,
-            Group::Shape,
-            "the key is the table's shape wherever it is drawn"
-        );
-        assert_eq!(section(&details, "orders_by_status").group, Group::Indexes);
-    }
-
-    fn columns_tab(state: &State) -> State {
-        let mut state = state.clone();
-        state.ddl.show(DdlTab::Columns);
-        state
-    }
-
-    #[test]
-    fn the_columns_tab_lists_every_column_with_the_part_it_plays() {
-        let details = details(&columns_tab(&browsing(every_kind())));
-
-        assert_eq!(headings(&details), ["5 columns"]);
-        assert_eq!(
-            details
-                .rows()
-                .filter(|row| !matches!(row, DetailRow::Identity { .. }))
-                .cloned()
-                .collect::<Vec<_>>(),
-            [
-                DetailRow::Column {
-                    name: "customer_id".to_owned(),
-                    data_type: "uuid".to_owned(),
-                    kind: ColumnKind::Partition,
-                },
-                DetailRow::Column {
-                    name: "order_date".to_owned(),
-                    data_type: "date".to_owned(),
-                    kind: ColumnKind::Clustering,
-                },
-                DetailRow::Column {
-                    name: "order_id".to_owned(),
-                    data_type: "timeuuid".to_owned(),
-                    kind: ColumnKind::Clustering,
-                },
-                DetailRow::Column {
-                    name: "region".to_owned(),
-                    data_type: "text".to_owned(),
-                    kind: ColumnKind::Static,
-                },
-                DetailRow::Column {
-                    name: "status".to_owned(),
-                    data_type: "text".to_owned(),
-                    kind: ColumnKind::Regular,
-                },
-            ],
-            "key columns first, then static, then regular — Table::columns' order"
-        );
-    }
-
-    #[test]
-    fn the_columns_tab_shows_the_columns_the_ddl_tab_leaves_out() {
-        let ddl = details(&browsing(every_kind()));
-        let columns = details(&columns_tab(&browsing(every_kind())));
-        let named = |details: &Details| -> Vec<String> {
-            details
-                .rows()
-                .filter_map(|row| match row {
-                    DetailRow::KeyColumn { name, .. } | DetailRow::Column { name, .. } => {
-                        Some(name.clone())
-                    }
-                    DetailRow::Property { .. }
-                    | DetailRow::ClassProperty { .. }
-                    | DetailRow::Identity { .. } => None,
-                })
-                .collect()
-        };
-
-        assert_eq!(named(&ddl), ["customer_id", "order_date", "order_id"]);
-        assert_eq!(
-            named(&columns),
-            ["customer_id", "order_date", "order_id", "region", "status"],
-            "the static and regular columns are the point of the tab"
-        );
-    }
-
-    #[test]
-    fn a_keyspace_is_offered_no_columns_tab_and_keeps_describing_itself() {
-        let mut state = tabled(&[("shop", &["orders"])]);
+    fn a_schema_counts_what_it_holds_and_offers_only_its_own_tab() {
+        let mut state = tabled(&[("shop", &["orders", "users"])]);
         state.ddl.show(DdlTab::Columns);
 
+        assert_eq!(tabs_for(&state), [DdlTab::Ddl]);
+        assert_eq!(shown_tab(&state), DdlTab::Ddl);
+        assert_eq!(identity_rows(&details(&state)), [("Schema", "shop")]);
         assert_eq!(
-            tabs_for(&state),
-            [DdlTab::Ddl],
-            "a tab that could only say a keyspace has no columns is not drawn"
-        );
-        assert_eq!(
-            shown_tab(&state),
-            DdlTab::Ddl,
-            "so the panel draws the one tab it does offer"
-        );
-        assert_eq!(
-            headings(&details(&state)),
-            ["Replication"],
-            "the held tab is masked, not the subject"
+            section(&details(&state), "Contents").rows,
+            [DetailRow::Property {
+                name: "tables".to_owned(),
+                value: "2".to_owned(),
+            }]
         );
     }
 
     #[test]
-    fn a_table_is_offered_both_tabs_and_keeps_the_one_it_was_left_on() {
-        let mut state = browsing(orders());
+    fn a_table_is_offered_every_tab_and_keeps_the_one_it_was_left_on() {
+        let mut state = browsing(order_line());
         state.ddl.show(DdlTab::Columns);
 
         assert_eq!(tabs_for(&state), DdlTab::ALL);
@@ -880,528 +913,83 @@ mod tests {
     }
 
     #[test]
-    fn a_selected_table_is_named_by_its_keyspace_and_its_own_name() {
-        assert_eq!(
-            identity_rows(&details(&browsing(orders()))),
-            [("Schema", "shop"), ("Table", "orders_by_customer")],
-            "one row each, so the panel can label them and the tree's colours \
-             say which is which"
-        );
-        assert_eq!(
-            identity_rows(&details(&columns_tab(&browsing(orders())))),
-            [("Schema", "shop"), ("Table", "orders_by_customer")],
-            "the other tab describes the same table"
-        );
-    }
-
-    #[test]
-    fn a_selected_keyspace_names_only_itself() {
-        assert_eq!(
-            identity_rows(&details(&tabled(&[("shop", &["orders"])]))),
-            [("Schema", "shop")],
-            "there is no table selected to name"
-        );
-    }
-
-    #[test]
     fn the_identity_rows_open_the_body_and_the_cursor_walks_them() {
-        let details = details(&browsing(orders()));
+        let details = details(&browsing(order_line()));
 
-        assert!(
-            matches!(
-                details.rows().next(),
-                Some(DetailRow::Identity {
-                    kind: IdentityKind::Schema,
-                    ..
-                })
-            ),
-            "identity comes before the shape it describes"
-        );
         assert_eq!(
-            details.row_count(),
-            2 + details
-                .sections
-                .iter()
-                .filter(|section| section.group != Group::Identity)
-                .map(|section| section.rows.len())
-                .sum::<usize>(),
-            "they are rows like any other, so the cursor can land on them"
+            identity_rows(&details),
+            [("Schema", "shop"), ("Table", "order_line")]
         );
+        assert!(matches!(
+            details.rows().next(),
+            Some(DetailRow::Identity {
+                kind: IdentityKind::Schema,
+                ..
+            })
+        ));
     }
 
     #[test]
-    fn a_tables_physical_shape_is_described_before_its_settings() {
-        let details = details(&browsing(orders()));
-
-        assert_eq!(
-            headings(&details),
-            ["Partition Key", "Clustering Key", "Options"],
-            "vision.md §2: the shape is what the panel exists to keep visible"
-        );
-    }
-
-    #[test]
-    fn key_columns_carry_their_type_and_the_clustering_ones_their_direction() {
-        let details = details(&browsing(orders()));
-
-        assert_eq!(
-            section(&details, "Partition Key").rows,
-            [DetailRow::KeyColumn {
-                name: "customer_id".to_owned(),
-                order: None,
-                data_type: "uuid".to_owned(),
-            }]
-        );
-        assert_eq!(
-            section(&details, "Clustering Key").rows,
-            [
-                DetailRow::KeyColumn {
-                    name: "order_date".to_owned(),
-                    order: Some(ClusteringOrder::Descending),
-                    data_type: "date".to_owned(),
-                },
-                DetailRow::KeyColumn {
-                    name: "order_id".to_owned(),
-                    order: Some(ClusteringOrder::Ascending),
-                    data_type: "timeuuid".to_owned(),
-                },
-            ]
-        );
-    }
-
-    #[test]
-    fn a_tables_shape_and_its_settings_are_marked_as_separate_groups() {
-        let table = details(&browsing(orders()));
-        let groups: Vec<Group> = table.sections.iter().map(|section| section.group).collect();
-
-        assert_eq!(
-            groups,
-            [Group::Identity, Group::Shape, Group::Shape, Group::Settings]
-        );
-        assert_eq!(
-            section(&details(&tabled(&[("shop", &["orders"])])), "Replication").group,
-            Group::Settings,
-            "a keyspace has settings and no shape of its own"
-        );
-    }
-
-    #[test]
-    fn the_key_sections_are_the_ones_that_spend_the_key_tokens() {
-        let details = details(&browsing(orders()));
-
-        assert_eq!(
-            section(&details, "Partition Key").token,
-            Some(Token::PrimaryKey)
-        );
-        assert_eq!(
-            section(&details, "Clustering Key").token,
-            Some(Token::ForeignKey)
-        );
-        assert_eq!(
-            section(&details, "Options").token,
-            None,
-            "an option is not part of the key structure and must not read as one"
-        );
-    }
-
-    #[test]
-    fn a_heading_naming_no_schema_concept_is_a_section_heading() {
-        let keyspace = details(&tabled(&[("shop", &["orders"])]));
-        let table = details(&browsing(orders()));
-        let columns = details(&columns_tab(&browsing(every_kind())));
-        let token = |details: &Details, heading: &str| section(details, heading).heading.clone();
-
-        for (details, heading) in [
-            (&keyspace, "Replication"),
-            (&table, "Options"),
-            (&columns, "5 columns"),
-        ] {
-            assert_eq!(
-                token(details, heading).map(|heading| heading.token),
-                Some(Token::Section),
-                "{heading} names a group, not a schema concept"
-            );
-        }
-
-        for (heading, expected) in [
-            ("Partition Key", Token::PrimaryKey),
-            ("Clustering Key", Token::ForeignKey),
-        ] {
-            assert_eq!(
-                token(&table, heading).map(|heading| heading.token),
-                Some(expected),
-                "{heading} keeps the colour of the key it names"
-            );
-        }
-    }
-
-    fn configured(pairs: &[(&str, &str)]) -> Table {
-        Table {
-            options: options(pairs),
-            ..orders()
-        }
-    }
-
-    #[test]
-    fn a_class_valued_option_is_projected_as_its_class_and_settings() {
-        let raw = "{class: org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy, \
-                   max_threshold: 32, min_threshold: 4}";
-        let details = details(&browsing(configured(&[("compaction", raw)])));
-
-        assert_eq!(
-            section(&details, "Options").rows,
-            [DetailRow::ClassProperty {
-                name: "compaction".to_owned(),
-                class: "SizeTieredCompactionStrategy".to_owned(),
-                settings: vec![
-                    Setting {
-                        label: "max",
-                        value: "32".to_owned(),
-                    },
-                    Setting {
-                        label: "min",
-                        value: "4".to_owned(),
-                    },
-                ],
-                raw: raw.to_owned(),
-            }]
-        );
-    }
-
-    #[test]
-    fn a_class_valued_option_this_build_cannot_read_stays_the_map_it_arrived_as() {
-        let raw = "{class: com.example.Whatever, knobs: 11}";
-        let details = details(&browsing(configured(&[("compaction", raw)])));
-
-        assert_eq!(
-            section(&details, "Options").rows,
-            [DetailRow::Property {
-                name: "compaction".to_owned(),
-                value: raw.to_owned(),
-            }],
-            "an unreadable value is shown whole rather than half-read"
-        );
-    }
-
-    #[test]
-    fn an_option_that_carries_no_class_is_never_read_as_one() {
-        let details = details(&browsing(configured(&[(
-            "comment",
-            "{class: SnappyCompressor}",
-        )])));
-
-        assert_eq!(
-            section(&details, "Options").rows,
-            [DetailRow::Property {
-                name: "comment".to_owned(),
-                value: "{class: SnappyCompressor}".to_owned(),
-            }],
-            "only compaction and compression name a class"
-        );
-    }
-
-    #[test]
-    fn the_compact_options_are_listed_before_the_ones_that_wrap() {
-        let details = details(&browsing(orders()));
-
-        assert_eq!(
-            section(&details, "Options").rows,
-            [
-                DetailRow::Property {
-                    name: "gc_grace_seconds".to_owned(),
-                    value: "864000".to_owned(),
-                },
-                DetailRow::Property {
-                    name: "bloom_filter_fp_chance".to_owned(),
-                    value: "0.01".to_owned(),
-                },
-                DetailRow::Property {
-                    name: "comment".to_owned(),
-                    value: "Order history.".to_owned(),
-                },
-            ]
-        );
-    }
-
-    #[test]
-    fn a_table_with_no_clustering_columns_has_no_clustering_section() {
-        let mut table = orders();
-        table.primary_key.clustering = Vec::new();
-
-        assert_eq!(
-            headings(&details(&browsing(table))),
-            ["Partition Key", "Options"],
-            "an empty group is worse than none: it claims there is something to see"
-        );
-    }
-
-    #[test]
-    fn a_table_whose_options_row_was_missing_still_shows_its_shape() {
-        let mut table = orders();
-        table.options = TableOptions::default();
-
-        assert_eq!(
-            headings(&details(&browsing(table))),
-            ["Partition Key", "Clustering Key"],
-            "options carry no invariant, so their absence costs the panel nothing else"
-        );
-    }
-
-    #[test]
-    fn a_selected_keyspace_reports_its_replication_in_cassandras_own_vocabulary() {
-        let mut state = tabled(&[("shop", &["orders"])]);
-        state.connection = ConnectionState::Connected(Connection {
-            id: ConnId::next(),
-            name: crate::config::ConnectionName::try_new("local").expect("a valid name"),
-            posture: crate::posture::Posture::ReadOnly,
-            schema: SchemaState::Loaded(Catalog {
-                schemas: BTreeMap::from([(
-                    "shop".to_owned(),
-                    Schema {
-                        name: "shop".to_owned(),
-                        replication: Replication::NetworkTopologyStrategy {
-                            factors: BTreeMap::from([
-                                ("datacenter1".to_owned(), 3),
-                                ("datacenter2".to_owned(), 2),
-                            ]),
-                        },
-                        tables: BTreeMap::new(),
-                    },
-                )]),
-            }),
-        });
-
-        let details = details(&state);
-
-        assert_eq!(identity_rows(&details), [("Schema", "shop")]);
-        assert_eq!(
-            section(&details, "Replication").rows,
-            [
-                DetailRow::Property {
-                    name: "class".to_owned(),
-                    value: "NetworkTopologyStrategy".to_owned(),
-                },
-                DetailRow::Property {
-                    name: "datacenter1".to_owned(),
-                    value: "3".to_owned(),
-                },
-                DetailRow::Property {
-                    name: "datacenter2".to_owned(),
-                    value: "2".to_owned(),
-                },
-            ]
-        );
-    }
-
-    #[test]
-    fn a_simple_strategy_keyspace_reports_its_one_factor() {
-        let details = details(&tabled(&[("shop", &["orders"])]));
-
-        assert_eq!(
-            section(&details, "Replication").rows,
-            [
-                DetailRow::Property {
-                    name: "class".to_owned(),
-                    value: "SimpleStrategy".to_owned(),
-                },
-                DetailRow::Property {
-                    name: "replication_factor".to_owned(),
-                    value: "1".to_owned(),
-                },
-            ]
-        );
-    }
-
-    #[test]
-    fn the_projection_carries_the_panels_own_offset() {
-        let mut state = browsing(orders());
+    fn the_projection_carries_the_panels_own_offset_and_selection() {
+        let mut state = browsing(order_line());
         state.ddl.scroll.to_end(9, 3);
+        state.ddl.cursor.go_to(3, 6);
 
-        let PanelBody::Details { offset, .. } = ddl_body(&state) else {
+        let PanelBody::Details {
+            offset, selected, ..
+        } = ddl_body(&state)
+        else {
             panic!("a selected table has something to describe");
         };
 
-        assert_eq!(offset, 6);
+        assert_eq!((offset, selected), (6, 3));
     }
 
     fn searched_ddl(term: &str) -> State {
-        let mut state = browsing(orders());
+        let mut state = browsing(order_line());
         state.apply_search(Searched::Ddl, Search::new(term));
         state
     }
 
-    fn section_headings(details: &Details) -> Vec<String> {
-        details
-            .sections
-            .iter()
-            .filter_map(|section| section.heading.as_ref())
-            .map(|heading| heading.text.clone())
-            .collect()
+    #[test]
+    fn a_search_drops_no_row_and_empties_no_section() {
+        let whole = details(&browsing(order_line()));
+        let searched = details(&searched_ddl("customer_id"));
+
+        assert_eq!(searched.rows().count(), whole.rows().count());
+        assert!(headings(&searched).contains(&"About"));
     }
 
     #[test]
-    fn a_search_drops_no_detail_row() {
-        let whole = details(&browsing(orders()));
-        let searched = details(&searched_ddl("zzz"));
-
-        assert_eq!(
-            searched.rows().count(),
-            whole.rows().count(),
-            "a search that matches nothing still draws every row"
-        );
-    }
-
-    #[test]
-    fn a_section_is_never_emptied_by_a_search() {
-        let details = details(&searched_ddl("customer_id"));
-
-        assert!(
-            section_headings(&details)
-                .iter()
-                .any(|heading| heading == "Options"),
-            "Options has no matching row and must still be drawn"
-        );
-    }
-
-    #[test]
-    fn the_next_match_is_the_one_after_the_cursor() {
-        let state = searched_ddl("order");
+    fn the_next_match_moves_forward_wraps_and_none_is_none() {
+        let state = searched_ddl("line");
         let search = state.ddl.search().expect("applied above");
         let details = details(&state);
 
         let first = next_match(&details, search, 0, Direction::Forwards).expect("a match");
-        let second =
-            next_match(&details, search, first, Direction::Forwards).expect("a second match");
+        let second = next_match(&details, search, first, Direction::Forwards).expect("another");
+        assert!(second > first, "{first} then {second}");
 
-        assert!(second > first, "n moves forward: {first} then {second}");
+        let lone = searched_ddl("customer.id");
+        let none = lone.ddl.search().expect("applied above");
+        assert_eq!(next_match(&details, none, 0, Direction::Forwards), None);
     }
 
     #[test]
-    fn the_next_match_wraps_and_a_lone_match_returns_to_itself() {
-        let state = searched_ddl("customer_id");
-        let search = state.ddl.search().expect("applied above");
-        let details = details(&state);
-
-        let only = next_match(&details, search, 0, Direction::Forwards).expect("a match");
-
-        assert_eq!(
-            next_match(&details, search, only, Direction::Forwards),
-            Some(only),
-            "one match is its own next"
-        );
-    }
-
-    #[test]
-    fn no_match_is_none() {
-        let state = searched_ddl("zzz");
-        let search = state.ddl.search().expect("applied above");
-        let details = details(&state);
-
-        assert_eq!(next_match(&details, search, 0, Direction::Forwards), None);
-    }
-
-    #[test]
-    fn a_row_still_knows_whether_it_matches() {
-        let search = Search::new("timeuuid").expect("non-empty");
-        let row = DetailRow::Column {
-            name: "created_at".to_owned(),
-            data_type: "timeuuid".to_owned(),
-            kind: ColumnKind::Regular,
-        };
-
-        assert!(row.matches(&search), "the cql type answers a search");
-    }
-
-    #[test]
-    fn a_class_property_matches_the_map_it_flattened() {
-        let search = Search::new("io.compress").expect("non-empty");
-        let row = DetailRow::ClassProperty {
-            name: "compression".to_owned(),
-            class: "LZ4Compressor".to_owned(),
-            settings: Vec::new(),
-            raw: "{'class': 'org.apache.cassandra.io.compress.LZ4Compressor'}".to_owned(),
-        };
-
-        assert!(row.matches(&search), "raw is what a yank copies");
-    }
-
-    #[test]
-    fn a_property_matches_on_its_name() {
-        let search = Search::new("gc_grace").expect("non-empty");
-        let row = DetailRow::Property {
-            name: "gc_grace_seconds".to_owned(),
-            value: "864000".to_owned(),
-        };
-
-        assert!(row.matches(&search));
-    }
-
-    #[test]
-    fn a_property_matches_on_its_value() {
-        let search = Search::new("Order history").expect("non-empty");
-        let row = DetailRow::Property {
-            name: "comment".to_owned(),
-            value: "Order history.".to_owned(),
-        };
-
-        assert!(row.matches(&search), "the name does not carry the term");
-    }
-
-    #[test]
-    fn a_column_matches_on_its_name() {
-        let search = Search::new("customer_id").expect("non-empty");
-        let row = DetailRow::KeyColumn {
-            name: "customer_id".to_owned(),
-            order: None,
-            data_type: "uuid".to_owned(),
-        };
-
-        assert!(row.matches(&search));
-    }
-
-    #[test]
-    fn a_column_matches_on_its_cql_type() {
-        let search = Search::new("timeuuid").expect("non-empty");
-        let row = DetailRow::KeyColumn {
+    fn a_row_matches_on_its_name_its_type_or_its_value() {
+        let term = |text: &str| Search::new(text).expect("non-empty");
+        let column = DetailRow::KeyColumn {
             name: "order_id".to_owned(),
-            order: Some(ClusteringOrder::Ascending),
-            data_type: "timeuuid".to_owned(),
+            data_type: "bigint".to_owned(),
+        };
+        let property = DetailRow::Property {
+            name: "comment".to_owned(),
+            value: "One line per product.".to_owned(),
         };
 
-        assert!(row.matches(&search), "the name does not carry the term");
-    }
-
-    #[test]
-    fn the_rows_the_cursor_walks_are_the_described_ones_and_no_headings() {
-        let details = details(&browsing(orders()));
-
-        assert_eq!(
-            details.row_count(),
-            8,
-            "the keyspace and the table, one partition column, two clustering, \
-             three options — and no heading"
-        );
-        assert_eq!(
-            details.rows().nth(3),
-            Some(&DetailRow::KeyColumn {
-                name: "order_date".to_owned(),
-                order: Some(ClusteringOrder::Descending),
-                data_type: "date".to_owned(),
-            }),
-            "down from the last partition column lands on the first clustering one"
-        );
-    }
-
-    #[test]
-    fn the_projection_carries_the_panels_own_selection() {
-        let mut state = browsing(orders());
-        state.ddl.cursor.go_to(3, 6);
-
-        let PanelBody::Details { selected, .. } = ddl_body(&state) else {
-            panic!("a selected table has something to describe");
-        };
-
-        assert_eq!(selected, 3);
+        assert!(column.matches(&term("order")));
+        assert!(column.matches(&term("bigint")));
+        assert!(property.matches(&term("per product")));
     }
 
     #[test]
@@ -1413,10 +1001,7 @@ mod tests {
         state.tables.selection.start(state.tables.cursor().index());
         state.move_tree_cursor(state.tables.cursor().index() + 1);
 
-        assert!(
-            of(&state).is_none(),
-            "a panel that describes one node has nothing to say about three"
-        );
+        assert!(of(&state).is_none());
     }
 
     #[test]
