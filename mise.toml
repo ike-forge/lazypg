@@ -1,0 +1,57 @@
+min_version = "2025.1.0"
+
+[tools]
+rust = { version = "1.97.1", profile = "default", components = ["rust-src"] }
+
+# Makes the cargo: backend fetch prebuilt binaries rather than build from source.
+cargo-binstall = "1.21.1"
+
+"cargo:cargo-nextest" = "0.9.143"
+"aqua:EmbarkStudios/cargo-deny" = "0.20.2"
+
+[env]
+RUST_BACKTRACE = "1"
+
+[tasks.build]
+description = "Build the workspace"
+run = "cargo build --workspace"
+
+[tasks.run]
+description = "Run lazypg"
+run = "cargo run --package lp-app"
+
+[tasks.fmt]
+description = "Format the workspace"
+run = "cargo fmt --all"
+
+[tasks.check]
+description = "Formatting, clippy with warnings denied, licences and advisories"
+run = [
+    "cargo fmt --all -- --check",
+    "cargo clippy --workspace --all-targets --all-features -- -D warnings",
+    "cargo deny check",
+]
+
+[tasks.test]
+description = "Fast test tiers: domain, scenario, render"
+run = "cargo nextest run --workspace --no-tests=pass"
+
+[tasks."test:it"]
+description = "Integration tier against the fixture Postgres (requires a container)"
+run = "cargo nextest run --workspace --features integration --no-tests=pass"
+
+[tasks.ci]
+description = "Everything CI gates on"
+depends = ["check", "test"]
+
+[tasks."db:up"]
+description = "Start the fixture Postgres; seeded on first start from docker/seed"
+run = "docker compose -f docker/compose.yaml up -d --wait postgres"
+
+[tasks."db:down"]
+description = "Stop the fixture Postgres and drop its volume"
+run = "docker compose -f docker/compose.yaml down -v"
+
+[tasks."db:psql"]
+description = "Open psql against the fixture"
+run = "docker compose -f docker/compose.yaml exec postgres psql -U lazypg lazypg"

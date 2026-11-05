@@ -1,0 +1,19 @@
+[licenses]
+# Exactly what the tree resolves to; a new licence should fail the gate.
+allow = []
+
+[licenses.private]
+ignore = true
+
+[bans]
+multiple-versions = "deny"
+wildcards = "deny"
+# Our path dependencies have no version and read as wildcards.
+allow-wildcard-paths = true
+
+[advisories]
+yanked = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

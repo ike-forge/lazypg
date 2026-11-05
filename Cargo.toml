@@ -1,0 +1,40 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/lp-domain",
+    "crates/lp-inbound",
+    "crates/lp-outbound",
+    "crates/lp-app",
+]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.97.1"
+publish = false
+license = "0BSD"
+repository = "https://github.com/ike-forge/lazypg"
+homepage = "https://github.com/ike-forge/lazypg"
+
+[workspace.dependencies]
+lp-domain = { path = "crates/lp-domain" }
+lp-inbound = { path = "crates/lp-inbound" }
+lp-outbound = { path = "crates/lp-outbound" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_debug_implementations = "warn"
+unreachable_pub = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+unwrap_used = "warn"
+expect_used = "warn"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

@@ -1,0 +1,21 @@
+[package]
+name = "lp-app"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "A terminal UI for PostgreSQL"
+
+[[bin]]
+name = "lazypg"
+path = "src/main.rs"
+
+[dependencies]
+lp-domain.workspace = true
+lp-inbound.workspace = true
+lp-outbound.workspace = true
+
+[lints]
+workspace = true

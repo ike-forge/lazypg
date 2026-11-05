@@ -1,0 +1,12 @@
+# The docker/compose.yaml fixture. See docs/development.md.
+default_connection = "local"
+
+[[connections]]
+name = "local"
+host = "localhost"
+port = 5432
+database = "lazypg"
+user = "lazypg"
+password = "lazypg"
+# Scratch fixture; `posture` defaults to read-only.
+posture = "writable"
