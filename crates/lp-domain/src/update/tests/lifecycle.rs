@@ -6,13 +6,8 @@ fn connecting_config() -> Config {
 
     Config {
         connections: vec![ConnectionConfig {
-            name: name.clone(),
-            hosts: vec!["127.0.0.1:9042".to_owned()],
             posture: Posture::ReadOnly,
-            discovery: Discovery::default(),
-            datacenter: None,
-            credentials: None,
-            tls: crate::config::Tls::Off,
+            ..ConnectionConfig::named(name.clone())
         }],
         default_connection: Some(name),
         ..Config::default()

@@ -4,7 +4,7 @@ Companion to [vision.md](vision.md). The structure is LazyCassandra's; this
 document records what is the same, what differs for Postgres, and what is
 still open.
 
-**Status:** Phase 0 steps 1–2 done: LazyCassandra shell ported and running
+**Status:** Phase 0 steps 1–3 done: LazyCassandra shell ported and running
 against Postgres through the Cassandra-shaped domain model.
 **Last updated:** 2026-11-05
 
@@ -104,9 +104,13 @@ read. `Page` carries an opaque cursor from the start so the switch stays in
 
 ## 7. Configuration
 
-As LazyCassandra architecture.md §7, with Postgres connection fields (`host`,
-`port`, `database`, `user`, `sslmode`, `application_name`) and `pgpass` /
-`PG*` as credential sources.
+As LazyCassandra architecture.md §7, with libpq's connection keys, or a
+`url` (`postgresql://` or JDBC) in their place. An unstated key is `None` in
+`ConnectionConfig` and resolved at connect time in `lp-outbound` as libpq
+resolves it: the `PG*` variable, then libpq's default. The password falls
+back to `PGPASSWORD`, then `~/.pgpass` (or `PGPASSFILE`), ignored when group
+or others can read it. `sslmode` follows libpq, including `require` with a
+root certificate verifying the chain.
 
 The Objects tree roots at the server and lists every database the user can
 connect to (`pg_database` with `datallowconn` and `CONNECT` privilege). A

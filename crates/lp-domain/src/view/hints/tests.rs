@@ -260,13 +260,10 @@ fn the_connection_pickers_bar_names_connect_and_teaches_no_motion() {
 
 fn connection() -> crate::config::ConnectionConfig {
     crate::config::ConnectionConfig {
-        name: crate::config::ConnectionName::try_new("local").expect("a valid name"),
-        hosts: vec!["127.0.0.1:9042".to_owned()],
         posture: crate::posture::Posture::ReadOnly,
-        discovery: crate::config::Discovery::default(),
-        datacenter: None,
-        credentials: None,
-        tls: crate::config::Tls::Off,
+        ..crate::config::ConnectionConfig::named(
+            crate::config::ConnectionName::try_new("local").expect("a valid name"),
+        )
     }
 }
 

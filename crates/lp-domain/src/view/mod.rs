@@ -143,11 +143,10 @@ pub enum HealthBody {
     },
 }
 
-/// `hosts` arrives joined: punctuation is the renderer's call, made once.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConnectionRow {
     pub name: String,
-    pub hosts: String,
+    pub address: String,
     pub posture: Posture,
     pub is_default: bool,
 }
@@ -292,7 +291,7 @@ fn sift_view(sift: &Sift) -> SiftView {
 fn connection_row(config: &Config, connection: &ConnectionConfig) -> ConnectionRow {
     ConnectionRow {
         name: connection.name.as_str().to_owned(),
-        hosts: connection.hosts.join(", "),
+        address: connection.address(),
         posture: connection.posture,
         is_default: config
             .default_connection

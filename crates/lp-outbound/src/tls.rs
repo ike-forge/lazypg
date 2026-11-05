@@ -1,9 +1,10 @@
-//! `TlsSettings` into the `rustls::ClientConfig` the driver dials with.
+//! A connection's TLS settings into the `rustls::ClientConfig` the driver
+//! dials with.
 
 use std::path::Path;
 use std::sync::Arc;
 
-use lp_domain::config::{ClientIdentity, TlsSettings, Trust, Verification};
+use lp_domain::config::{ClientIdentity, ConnectionConfig, SslMode, Trust};
 use lp_domain::model::DbError;
 use rustls::client::WebPkiServerVerifier;
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
@@ -16,50 +17,59 @@ use rustls::{
 
 use crate::secret::expand_home;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Verification {
+    Full,
+    ChainOnly,
+    /// Encrypted, but the server is unauthenticated.
+    Off,
+}
+
+/// libpq's table: `require` with a root certificate behaves as `verify-ca`.
+fn verification(mode: SslMode, trust: &Trust) -> Verification {
+    match (mode, trust) {
+        (SslMode::VerifyFull, _) => Verification::Full,
+        (SslMode::VerifyCa, _) | (SslMode::Require, Trust::CaFile(_)) => Verification::ChainOnly,
+        (SslMode::Disable | SslMode::Prefer | SslMode::Require, _) => Verification::Off,
+    }
+}
+
 /// # Errors
 ///
 /// [`DbError::Tls`] when a stated file is unreadable or holds no usable PEM, or
 /// there are no trusted roots.
-pub(crate) async fn client_config(settings: &TlsSettings) -> Result<Arc<ClientConfig>, DbError> {
+pub(crate) async fn client_config(
+    mode: SslMode,
+    target: &ConnectionConfig,
+) -> Result<Arc<ClientConfig>, DbError> {
     let provider = Arc::new(aws_lc_rs::default_provider());
     let builder = ClientConfig::builder_with_provider(Arc::clone(&provider))
         .with_safe_default_protocol_versions()
         .map_err(tls)?;
 
-    let builder = if settings.verification == Verification::Off {
-        builder
+    let builder = match verification(mode, &target.trust) {
+        Verification::Off => builder
             .dangerous()
             .with_custom_certificate_verifier(Arc::new(Unverified {
                 algorithms: provider.signature_verification_algorithms,
-            }))
-    } else {
-        let roots = Arc::new(roots(&settings.trust).await?);
-        let inner = WebPkiServerVerifier::builder_with_provider(roots, provider)
-            .build()
-            .map_err(tls)?;
+            })),
+        verification => {
+            let roots = Arc::new(roots(&target.trust).await?);
+            let inner = WebPkiServerVerifier::builder_with_provider(roots, provider)
+                .build()
+                .map_err(tls)?;
 
-        match &settings.verification {
-            Verification::Full | Verification::Off => {
+            if verification == Verification::Full {
                 builder.dangerous().with_custom_certificate_verifier(inner)
-            }
-            Verification::Named(name) => {
-                let name = ServerName::try_from(name.clone())
-                    .map_err(|error| DbError::Tls(format!("server_name `{name}`: {error}")))?;
-
+            } else {
                 builder
                     .dangerous()
-                    .with_custom_certificate_verifier(Arc::new(Relaxed {
-                        inner,
-                        name: Some(name),
-                    }))
+                    .with_custom_certificate_verifier(Arc::new(ChainOnly { inner }))
             }
-            Verification::ChainOnly => builder
-                .dangerous()
-                .with_custom_certificate_verifier(Arc::new(Relaxed { inner, name: None })),
         }
     };
 
-    let config = match &settings.identity {
+    let config = match &target.identity {
         None => builder.with_no_client_auth(),
         Some(identity) => {
             let (chain, key) = identity_pair(identity).await?;
@@ -146,13 +156,11 @@ async fn identity_pair(
 /// webpki checks the name after the chain, so a name error means the chain
 /// passed.
 #[derive(Debug)]
-struct Relaxed {
+struct ChainOnly {
     inner: Arc<WebPkiServerVerifier>,
-    /// `None` skips the name check.
-    name: Option<ServerName<'static>>,
 }
 
-impl ServerCertVerifier for Relaxed {
+impl ServerCertVerifier for ChainOnly {
     fn verify_server_cert(
         &self,
         end_entity: &CertificateDer<'_>,
@@ -161,15 +169,16 @@ impl ServerCertVerifier for Relaxed {
         ocsp_response: &[u8],
         now: UnixTime,
     ) -> Result<ServerCertVerified, Error> {
-        let name = self.name.as_ref().unwrap_or(server_name);
-        let verdict =
-            self.inner
-                .verify_server_cert(end_entity, intermediates, name, ocsp_response, now);
-
-        match verdict {
+        match self.inner.verify_server_cert(
+            end_entity,
+            intermediates,
+            server_name,
+            ocsp_response,
+            now,
+        ) {
             Err(Error::InvalidCertificate(
                 CertificateError::NotValidForName | CertificateError::NotValidForNameContext { .. },
-            )) if self.name.is_none() => Ok(ServerCertVerified::assertion()),
+            )) => Ok(ServerCertVerified::assertion()),
             other => other,
         }
     }
@@ -240,28 +249,48 @@ impl ServerCertVerifier for Unverified {
 
 #[cfg(test)]
 mod tests {
+    use lp_domain::config::ConnectionName;
+
     use super::*;
+
+    fn trusting(trust: Trust) -> ConnectionConfig {
+        ConnectionConfig {
+            trust,
+            ..ConnectionConfig::named(ConnectionName::try_new("t").expect("a valid name"))
+        }
+    }
 
     #[tokio::test]
     async fn a_missing_ca_file_names_the_file() {
-        let settings = TlsSettings {
-            trust: Trust::CaFile("/nonexistent/ca.pem".into()),
-            ..TlsSettings::default()
-        };
+        let target = trusting(Trust::CaFile("/nonexistent/ca.pem".into()));
 
-        let error = client_config(&settings).await.expect_err("no such file");
+        let error = client_config(SslMode::VerifyFull, &target)
+            .await
+            .expect_err("no such file");
 
         assert!(matches!(&error, DbError::Tls(m) if m.contains("/nonexistent/ca.pem")));
     }
 
     #[tokio::test]
     async fn an_unverified_config_needs_no_roots() {
-        let settings = TlsSettings {
-            trust: Trust::CaFile("/nonexistent/ca.pem".into()),
-            verification: Verification::Off,
-            ..TlsSettings::default()
-        };
+        let target = trusting(Trust::System);
 
-        assert!(client_config(&settings).await.is_ok());
+        assert!(client_config(SslMode::Prefer, &target).await.is_ok());
+    }
+
+    #[test]
+    fn require_with_a_root_certificate_verifies_the_chain_as_libpq_does() {
+        let ca = Trust::CaFile("/ca.pem".into());
+
+        assert_eq!(
+            verification(SslMode::Require, &Trust::System),
+            Verification::Off
+        );
+        assert_eq!(verification(SslMode::Require, &ca), Verification::ChainOnly);
+        assert_eq!(
+            verification(SslMode::VerifyCa, &Trust::System),
+            Verification::ChainOnly
+        );
+        assert_eq!(verification(SslMode::VerifyFull, &ca), Verification::Full);
     }
 }

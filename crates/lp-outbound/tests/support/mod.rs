@@ -80,13 +80,8 @@ pub(crate) fn connected_config() -> lp_domain::Config {
 
     lp_domain::Config {
         connections: vec![ConnectionConfig {
-            name: name.clone(),
-            hosts: vec!["127.0.0.1:9042".to_owned()],
             posture: Posture::ReadOnly,
-            discovery: lp_domain::config::Discovery::default(),
-            datacenter: None,
-            credentials: None,
-            tls: lp_domain::config::Tls::Off,
+            ..ConnectionConfig::named(name.clone())
         }],
         default_connection: Some(name),
         ..lp_domain::Config::default()

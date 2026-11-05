@@ -53,15 +53,17 @@ Every LazyCassandra module falls into one of three buckets.
 1. **Shell port.** *Done.* The whole LazyCassandra workspace, renamed, with
    the scylla adapter, its TLS setup and node health reads removed. The app
    runs against `lp_outbound::demo`. Domain and config keep the Cassandra
-   vocabulary (`Keyspace`, `Cluster`, `hosts`) until steps 3–4 and Phase 1
+   vocabulary (`Keyspace`, `Cluster`) until step 4 and Phase 1
    replace it; every step keeps the app running and the tests green.
 2. **Driver.** *Done.* `tokio-postgres` + rustls against `docker/`: connect,
    cancel a `pg_sleep`, page with `LIMIT/OFFSET`, decode every
    `zoo.everything` column. TLS from LazyCassandra's
    `lc-outbound/src/tls.rs` via `tokio-postgres-rustls`. Record the
    `deny.toml` cost in architecture.md §8.
-3. **Config.** Port config layering; Postgres connection fields; pgpass and
-   `PG*`; `sslmode`. Connection picker works.
+3. **Config.** *Done.* libpq's connection keys (`host`, `port`, `database`,
+   `user`, `password`, `sslmode`, `sslrootcert`, `sslcert`, `sslkey`) or a
+   `url`, JDBC accepted. Unstated keys fall back to `PG*`, then libpq's
+   defaults; the password to `PGPASSWORD`, then the passfile.
 4. **Schema model and introspection.** Accessible databases, then per
    database `pg_catalog` queries for schemas,
    relations, columns, keys, foreign keys, indexes, constraints, sequences,

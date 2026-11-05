@@ -1,4 +1,4 @@
-//! The connection picker. Rows are name, hosts and posture, since a name alone
+//! The connection picker. Rows are name, address and posture, since a name alone
 //! does not say which cluster. An empty list draws guidance naming the config
 //! file.
 
@@ -22,7 +22,7 @@ const MARKER: &str = "● ";
 const NO_MARKER: &str = "  ";
 const GAP: &str = "  ";
 
-/// A glyph, not "(default)", which would push the hosts off a narrow block.
+/// A glyph, not "(default)", which would push the address off a narrow block.
 fn marker(row: &ConnectionRow) -> &'static str {
     if row.is_default { MARKER } else { NO_MARKER }
 }
@@ -43,14 +43,14 @@ fn columns(rows: &[ConnectionRow]) -> [usize; 3] {
 
     [
         widest(|row| row.name.chars().count()),
-        widest(|row| row.hosts.chars().count()),
+        widest(|row| row.address.chars().count()),
         widest(|row| row.posture.label().chars().count()),
     ]
 }
 
 fn width(area: Rect, rows: &[ConnectionRow]) -> u16 {
-    let [name, hosts, posture] = columns(rows);
-    let widest = MARKER.chars().count() + name + GAP.len() + hosts + GAP.len() + posture;
+    let [name, address, posture] = columns(rows);
+    let widest = MARKER.chars().count() + name + GAP.len() + address + GAP.len() + posture;
     let wanted = u16::try_from(widest.saturating_add(usize::from(2 + 2 * PAD)))
         .unwrap_or(u16::MAX)
         .clamp(MIN_WIDTH, MAX_WIDTH);
@@ -120,7 +120,7 @@ pub(crate) fn render(
         return;
     }
 
-    let [name_width, hosts_width, _] = columns(rows);
+    let [name_width, address_width, _] = columns(rows);
     let items: Vec<ListItem> = matched
         .iter()
         .filter_map(|at| rows.get(*at))
@@ -142,7 +142,7 @@ pub(crate) fn render(
             ));
             spans.push(Span::raw(GAP));
             spans.push(Span::styled(
-                format!("{:hosts_width$}", row.hosts),
+                format!("{:address_width$}", row.address),
                 theme.style(Token::Faint),
             ));
             spans.push(Span::raw(GAP));
@@ -219,8 +219,9 @@ fn guidance(where_to: &str) -> Vec<String> {
         format!("Add one to {where_to}:"),
         String::new(),
         "  [[connections]]".to_owned(),
-        "  name  = \"local\"".to_owned(),
-        "  hosts = [\"127.0.0.1:9042\"]".to_owned(),
+        "  name     = \"local\"".to_owned(),
+        "  host     = \"localhost\"".to_owned(),
+        "  database = \"postgres\"".to_owned(),
         String::new(),
         "Then name it under default_connection".to_owned(),
         "to open it on startup.".to_owned(),
@@ -239,7 +240,7 @@ mod tests {
     fn row(name: &str, is_default: bool) -> ConnectionRow {
         ConnectionRow {
             name: name.to_owned(),
-            hosts: format!("{name}.example:9042"),
+            address: format!("{name}.example:5432"),
             posture: Posture::ReadOnly,
             is_default,
         }
@@ -272,12 +273,12 @@ mod tests {
     }
 
     #[test]
-    fn a_row_names_the_connection_its_hosts_and_its_posture() {
+    fn a_row_names_the_connection_its_address_and_its_posture() {
         let rows = [row("prod", false), row("staging", false)];
         let frame = drawn(80, 24, &rows, &[0, 1]);
 
         assert!(frame.contains("prod"));
-        assert!(frame.contains("prod.example:9042"));
+        assert!(frame.contains("prod.example:5432"));
         assert!(
             frame.contains("read-only"),
             "a name alone does not say what opening it permits"

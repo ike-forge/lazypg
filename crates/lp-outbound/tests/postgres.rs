@@ -5,7 +5,7 @@
 use std::time::{Duration, Instant};
 
 use lp_domain::config::{
-    ConnectionConfig, ConnectionName, Credential, Credentials, DriverConfig, Millis, PageSize, Tls,
+    ConnectionConfig, ConnectionName, Credential, DriverConfig, Millis, PageSize, SslMode,
 };
 use lp_domain::model::{ConnId, CqlValue, DbError, Page, Statement, StatementKind};
 use lp_domain::ports::Cluster;
@@ -25,16 +25,13 @@ fn conn() -> ConnId {
 fn target(posture: Posture) -> ConnectionConfig {
     let port = std::env::var("LP_PG_PORT").unwrap_or_else(|_| "5432".to_owned());
     ConnectionConfig {
-        name: ConnectionName::try_new("fixture").unwrap(),
-        hosts: vec![format!("127.0.0.1:{port}")],
+        host: Some("127.0.0.1".to_owned()),
+        port: Some(port.parse().unwrap()),
+        user: Some("lazypg".to_owned()),
+        password: Some(Credential::Literal("lazypg".to_owned())),
+        sslmode: Some(SslMode::Disable),
         posture,
-        discovery: lp_domain::config::Discovery::default(),
-        datacenter: None,
-        credentials: Some(Credentials::Stated {
-            username: "lazypg".to_owned(),
-            password: Credential::Literal("lazypg".to_owned()),
-        }),
-        tls: Tls::Off,
+        ..ConnectionConfig::named(ConnectionName::try_new("fixture").unwrap())
     }
 }
 
@@ -190,10 +187,7 @@ async fn a_read_only_connection_is_refused_writes_by_the_server() {
 #[tokio::test]
 async fn a_wrong_password_is_an_authentication_failure() {
     let mut target = target(Posture::ReadOnly);
-    target.credentials = Some(Credentials::Stated {
-        username: "lazypg".to_owned(),
-        password: Credential::Literal("wrong".to_owned()),
-    });
+    target.password = Some(Credential::Literal("wrong".to_owned()));
 
     let result = Postgres::new()
         .connect(conn(), &target, &DriverConfig::default())

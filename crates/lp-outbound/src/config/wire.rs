@@ -97,13 +97,13 @@ impl Layer {
             at(driver.page_size.as_mut(), source, origin);
             at(driver.request_timeout_ms.as_mut(), source, origin);
             at(driver.connect_timeout_ms.as_mut(), source, origin);
-            at(driver.consistency.as_mut(), source, origin);
-            at(driver.compression.as_mut(), source, origin);
         }
         for connection in &mut self.connections {
             connection.name.locate(source, origin);
             at(connection.posture.as_mut(), source, origin);
-            at(connection.discovery.as_mut(), source, origin);
+            at(connection.port.as_mut(), source, origin);
+            at(connection.sslmode.as_mut(), source, origin);
+            at(connection.url.as_mut(), source, origin);
         }
         for theme in &mut self.themes {
             theme.name.locate(source, origin);
@@ -145,8 +145,6 @@ pub(crate) struct DriverLayer {
     pub(crate) page_size: Option<Located<u32>>,
     pub(crate) request_timeout_ms: Option<Located<u32>>,
     pub(crate) connect_timeout_ms: Option<Located<u32>>,
-    pub(crate) consistency: Option<Located<String>>,
-    pub(crate) compression: Option<Located<String>>,
     #[serde(flatten)]
     pub(crate) unknown: Unknown,
 }
@@ -163,33 +161,18 @@ pub(crate) struct ExportLayer {
 #[derive(Debug, Deserialize)]
 pub(crate) struct ConnectionLayer {
     pub(crate) name: Located<String>,
-    pub(crate) hosts: Option<Vec<String>>,
-    pub(crate) posture: Option<Located<String>>,
-    pub(crate) discovery: Option<Located<String>>,
-    pub(crate) datacenter: Option<String>,
-    pub(crate) username: Option<String>,
+    /// `postgresql://…`, or a JDBC URL; replaces the keys it can carry.
+    pub(crate) url: Option<Located<String>>,
+    pub(crate) host: Option<String>,
+    pub(crate) port: Option<Located<i64>>,
+    pub(crate) database: Option<String>,
+    pub(crate) user: Option<String>,
     pub(crate) password: Option<CredentialLayer>,
-    pub(crate) cqlshrc: Option<String>,
-    pub(crate) tls: Option<TlsLayer>,
-    #[serde(flatten)]
-    pub(crate) unknown: Unknown,
-}
-
-/// Plain `String`s: a span cannot survive serde's untagged buffering.
-#[derive(Debug, Deserialize)]
-#[serde(untagged)]
-pub(crate) enum TlsLayer {
-    Switch(bool),
-    Table(TlsTable),
-}
-
-#[derive(Debug, Deserialize)]
-pub(crate) struct TlsTable {
-    pub(crate) ca: Option<String>,
-    pub(crate) cert: Option<String>,
-    pub(crate) key: Option<String>,
-    pub(crate) verify: Option<String>,
-    pub(crate) server_name: Option<String>,
+    pub(crate) posture: Option<Located<String>>,
+    pub(crate) sslmode: Option<Located<String>>,
+    pub(crate) sslrootcert: Option<String>,
+    pub(crate) sslcert: Option<String>,
+    pub(crate) sslkey: Option<String>,
     #[serde(flatten)]
     pub(crate) unknown: Unknown,
 }

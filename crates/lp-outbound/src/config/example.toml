@@ -53,76 +53,44 @@
 # page_size          = 5000    # 1..=100000; rows per round trip
 # request_timeout_ms = 5000    # 1..=600000
 # connect_timeout_ms = 5000    # 1..=600000
-# consistency        = "local-quorum"   # any | one | two | three | quorum |
-#                                       # all | local-quorum | each-quorum |
-#                                       # local-one
-# compression        = "lz4"            # none | lz4 | snappy
 
 # ── export ────────────────────────────────────────────────────
 # path and prefix are unset by default; an export then asks for a destination.
 # [export]
 # path         = "~/exports"
-# prefix       = "lc-"
+# prefix       = "lp-"
 # clipboard_mb = 10   # 1..=1024; a larger copy fails rather than truncates
 
+# Every key but `name` is optional. One left out falls back as psql's does:
+# its PG* variable (PGHOST, PGPORT, PGDATABASE, PGUSER, PGPASSWORD,
+# PGSSLMODE), then libpq's default. Without a password, ~/.pgpass (or
+# PGPASSFILE) is read, and ignored if group or others can read it.
 # [[connections]]
-# name       = "prod"                        # required; no whitespace
-# hosts      = ["10.0.0.1:9042", "10.0.0.2:9042"]
-# posture    = "read-only"                   # read-only | writable | protected
-# discovery  = "cluster"                     # cluster | contact-points
-# datacenter = "eu-west-1"                   # without this the driver will
-#                                            # happily cross a region
-# username   = "cassandra"                   # both, or neither: a cluster is
-#                                            # sent the pair
-# password   = "hunter2"                     # or { env = "CASSANDRA_PW" }
-#                                            # or { file = "~/.cassandra/pw" }
-# tls        = true                          # or a table, below; unset = plaintext
+# name        = "prod"                 # required; no whitespace
+# host        = "db.internal"          # or a socket directory: "/var/run/postgresql"
+# port        = 5432
+# database    = "orders"               # unset: the user's name
+# user        = "ana"
+# password    = "hunter2"              # or { env = "ORDERS_PW" }
+#                                      # or { file = "~/.secrets/orders" }
+# posture     = "read-only"            # read-only | writable | protected
+# sslmode     = "verify-full"          # disable | prefer | require |
+#                                      # verify-ca | verify-full
+# sslrootcert = "~/certs/root.pem"     # unset: the system's roots
+# sslcert     = "~/certs/client.pem"   # a client certificate; both or neither
+# sslkey      = "~/certs/client.key"
 
-# `tls = true` verifies the server against the system's root certificates.
-# The table form states what differs:
-#   `tls = { ca = "~/ca.pem" }`                trust this PEM bundle instead
-#   `tls = { cert = "c.pem", key = "k.pem" }`  present a client certificate
-#                                              (`require_client_auth`); both
-#   `tls = { verify = "chain" }`               full | chain | none
-#   `tls = { server_name = "cass.internal" }`  check this name, not the address
-# Cassandra node certificates often carry no SAN for the address you dial:
-# `chain` still checks the chain and expiry, only the name is skipped. `none`
-# checks nothing, so the traffic is encrypted but the peer unauthenticated.
-# `server_name` is for `verify = "full"` and is refused beside the others.
+# `sslmode` is libpq's: `prefer` and `require` encrypt without checking the
+# server, `verify-ca` checks the chain, `verify-full` the chain and the name.
+# `require` with an `sslrootcert` checks the chain, as libpq does.
 
-# `discovery = "contact-points"` is for a cluster reached through a tunnel —
-# a `kubectl port-forward`, an SSH forward, a bastion. Left at "cluster" the
-# driver reads system.peers and pools to every node it names, and those are
-# `inet` columns: raw in-cluster addresses no /etc/hosts entry can redirect.
-# Through a tunnel they are unreachable, so every peer but the forwarded one
-# sits permanently down. "contact-points" folds every address the cluster
-# reports onto the single host stated above, so `hosts` must name exactly one.
-# The cost is token-aware routing, which is worth less than a session that
-# works.
-
-# `cqlshrc` takes both halves from a file cqlsh already owns, so a password
-# lives in one place rather than two. The username comes from
-# `[auth_provider]` — or `[authentication]`, on older cqlsh — and the password
-# from the mode-600 credentials file, under `[PlainTextAuthProvider]`. It
-# replaces `username` and `password` rather than defaulting them: stating it
-# beside either is reported, not silently resolved one way.
-#
-# TLS comes from the same file, as cqlsh reads it: `[connection] ssl = true`
-# turns it on, and `[ssl]` gives `certfile` (the CA), `usercert` and `userkey`
-# (a client certificate) and `validate`. Like cqlsh, the chain is checked and
-# the hostname is not; `validate = false` checks nothing. A `tls` key stated
-# beside `cqlshrc` replaces all of it.
-#
-# The credentials path is cqlsh's own rule and nothing more: the one the file
-# states, or `~/.cassandra/credentials` when it states none. A cqlshrc written
-# for cqlsh running in a container names a path this host does not have, and
-# that is a configuration to fix where it is written — mount the directory at
-# the same path inside and out, and the one file serves both.
+# `url` takes the place of host, port, database, user, password and sslmode,
+# and refuses to be stated beside them. A JDBC URL copied from an
+# application's config works; its driver-only parameters are reported and
+# ignored.
 # [[connections]]
-# name      = "preprod"
-# hosts     = ["127.0.0.1:9043"]
-# discovery = "contact-points"
-# cqlshrc   = "~/.cassandra/preprod/cqlshrc"
+# name = "staging"
+# url  = "jdbc:postgresql://staging.internal:5432/orders?user=svc&sslmode=require"
 
 # ── custom themes ─────────────────────────────────────────────
 # [[themes]]

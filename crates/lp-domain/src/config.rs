@@ -2,6 +2,7 @@
 //! structs, so nothing here asks whether a setting was stated.
 
 use std::collections::BTreeMap;
+use std::num::NonZeroU16;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -236,28 +237,6 @@ pub enum Mouse {
     Off,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Consistency {
-    Any,
-    One,
-    Two,
-    Three,
-    Quorum,
-    All,
-    #[default]
-    LocalQuorum,
-    EachQuorum,
-    LocalOne,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Compression {
-    None,
-    #[default]
-    Lz4,
-    Snappy,
-}
-
 /// No `Command` source: a committed project file would make cloning and running
 /// the tool execute a stranger's command.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -267,50 +246,38 @@ pub enum Credential {
     File(PathBuf),
 }
 
-/// `system.peers` reports raw addresses, so behind a tunnel every peer but the
-/// tunnelled one is unreachable. `ContactPoints` uses only the stated hosts and
-/// gives up token-aware routing.
+/// libpq's `sslmode`, less `allow`. `Prefer` and `Require` encrypt without
+/// authenticating the server.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Discovery {
+pub enum SslMode {
+    Disable,
     #[default]
-    Cluster,
-    ContactPoints,
+    Prefer,
+    Require,
+    VerifyCa,
+    VerifyFull,
 }
 
-impl Discovery {
-    /// The one spelling a config file uses.
+impl SslMode {
+    pub const ALL: [Self; 5] = [
+        Self::Disable,
+        Self::Prefer,
+        Self::Require,
+        Self::VerifyCa,
+        Self::VerifyFull,
+    ];
+
+    /// The one spelling a config file uses, libpq's.
     #[must_use]
     pub const fn label(self) -> &'static str {
         match self {
-            Self::Cluster => "cluster",
-            Self::ContactPoints => "contact-points",
+            Self::Disable => "disable",
+            Self::Prefer => "prefer",
+            Self::Require => "require",
+            Self::VerifyCa => "verify-ca",
+            Self::VerifyFull => "verify-full",
         }
     }
-}
-
-/// A pair, stated whole or not at all. `Cqlshrc` supplies both halves, so it is
-/// a variant here rather than a [`Credential`].
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Credentials {
-    Stated {
-        username: String,
-        password: Credential,
-    },
-    /// Held as written: `~` is expanded where the file is read.
-    Cqlshrc(PathBuf),
-}
-
-/// `ChainOnly`: self-hosted clusters often issue node certificates with no SAN
-/// for the dialled address.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub enum Verification {
-    #[default]
-    Full,
-    /// Chain, and the name against this one rather than the address dialled.
-    Named(String),
-    ChainOnly,
-    /// Encrypted, but the peer is unauthenticated.
-    Off,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -328,32 +295,55 @@ pub struct ClientIdentity {
     pub key: PathBuf,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct TlsSettings {
-    pub trust: Trust,
-    pub identity: Option<ClientIdentity>,
-    pub verification: Verification,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub enum Tls {
-    #[default]
-    Off,
-    On(TlsSettings),
-    /// Read at connect time, like its credentials. Plaintext when it says
-    /// nothing.
-    Cqlshrc(PathBuf),
-}
-
+/// An unstated field falls back as libpq's does — its `PG*` variable, then
+/// libpq's default — resolved in `lp-outbound` at connect time, so the
+/// environment of the moment applies. Absent `database` is the user's name.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConnectionConfig {
     pub name: ConnectionName,
-    pub hosts: Vec<String>,
+    pub host: Option<String>,
+    pub port: Option<NonZeroU16>,
+    pub database: Option<String>,
+    pub user: Option<String>,
+    /// Unstated: `PGPASSWORD`, then the passfile.
+    pub password: Option<Credential>,
     pub posture: Posture,
-    pub discovery: Discovery,
-    pub datacenter: Option<String>,
-    pub credentials: Option<Credentials>,
-    pub tls: Tls,
+    pub sslmode: Option<SslMode>,
+    pub trust: Trust,
+    pub identity: Option<ClientIdentity>,
+}
+
+impl ConnectionConfig {
+    /// Every field libpq defaults is unstated: the connection a bare
+    /// `psql` would make.
+    #[must_use]
+    pub fn named(name: ConnectionName) -> Self {
+        Self {
+            name,
+            host: None,
+            port: None,
+            database: None,
+            user: None,
+            password: None,
+            posture: Posture::default(),
+            sslmode: None,
+            trust: Trust::System,
+            identity: None,
+        }
+    }
+
+    /// `host:port/database`, with what was not stated left out.
+    #[must_use]
+    pub fn address(&self) -> String {
+        let mut address = self.host.clone().unwrap_or_else(|| "localhost".to_owned());
+        if let Some(port) = self.port {
+            address = format!("{address}:{port}");
+        }
+        if let Some(database) = &self.database {
+            address = format!("{address}/{database}");
+        }
+        address
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -374,8 +364,6 @@ pub struct DriverConfig {
     pub page_size: PageSize,
     pub request_timeout: Millis,
     pub connect_timeout: Millis,
-    pub consistency: Consistency,
-    pub compression: Compression,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -540,14 +528,19 @@ mod tests {
     }
 
     #[test]
-    fn a_connection_that_states_no_discovery_uses_the_whole_cluster() {
-        assert_eq!(Discovery::default(), Discovery::Cluster);
-    }
-
-    #[test]
-    fn discovery_spells_itself_the_way_a_config_file_does() {
-        assert_eq!(Discovery::Cluster.label(), "cluster");
-        assert_eq!(Discovery::ContactPoints.label(), "contact-points");
+    fn an_address_shows_what_was_stated() {
+        let name = ConnectionName::try_new("c").unwrap();
+        assert_eq!(ConnectionConfig::named(name.clone()).address(), "localhost");
+        assert_eq!(
+            ConnectionConfig {
+                host: Some("db".to_owned()),
+                port: NonZeroU16::new(6543),
+                database: Some("orders".to_owned()),
+                ..ConnectionConfig::named(name)
+            }
+            .address(),
+            "db:6543/orders"
+        );
     }
 
     #[test]

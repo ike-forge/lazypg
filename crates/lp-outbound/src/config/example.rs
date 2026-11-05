@@ -96,8 +96,8 @@ mod tests {
         assert_eq!(
             config.connections.len(),
             2,
-            "both credential shapes are shown, and each is a whole entry: `cqlshrc` and \
-             `username`/`password` cannot share one"
+            "both shapes are shown, and each is a whole entry: `url` and the keys it carries \
+             cannot share one"
         );
         assert_eq!(config.themes.len(), 1);
         assert!(
@@ -140,26 +140,25 @@ mod tests {
         "page_size",
         "request_timeout_ms",
         "connect_timeout_ms",
-        "consistency",
-        "compression",
         "[export]",
         "path",
         "prefix",
         "clipboard_mb",
         "[[connections]]",
         "name",
-        "hosts",
-        "posture",
-        "datacenter",
-        "username",
+        "url",
+        "host",
+        "port",
+        "database",
+        "user",
         "password",
         "{ env = ",
         "{ file = ",
-        "tls",
-        "ca",
-        "cert",
-        "verify",
-        "server_name",
+        "posture",
+        "sslmode",
+        "sslrootcert",
+        "sslcert",
+        "sslkey",
         "[[themes]]",
         "extends",
         "[themes.colors]",

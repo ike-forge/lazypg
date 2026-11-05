@@ -142,8 +142,6 @@ fn merge_driver(lower: Option<DriverLayer>, upper: Option<DriverLayer>) -> Optio
             page_size: upper.page_size.or(lower.page_size),
             request_timeout_ms: upper.request_timeout_ms.or(lower.request_timeout_ms),
             connect_timeout_ms: upper.connect_timeout_ms.or(lower.connect_timeout_ms),
-            consistency: upper.consistency.or(lower.consistency),
-            compression: upper.compression.or(lower.compression),
             unknown: lower.unknown,
         }),
     }
@@ -207,12 +205,12 @@ mod tests {
     fn connections_union_by_name_and_a_name_in_both_is_taken_from_local_whole() {
         let (merged, _) = merge(vec![
             layer(
-                "[[connections]]\nname = \"prod\"\nhosts = [\"a:9042\"]\nposture = \"writable\"\n\
-                 [[connections]]\nname = \"staging\"\nhosts = [\"b:9042\"]\nposture = \"writable\"\n",
+                "[[connections]]\nname = \"prod\"\nhost = \"a\"\nposture = \"writable\"\n\
+                 [[connections]]\nname = \"staging\"\nhost = \"b\"\nposture = \"writable\"\n",
             ),
             layer(
-                "[[connections]]\nname = \"staging\"\nhosts = [\"c:9042\"]\n\
-                 [[connections]]\nname = \"dev\"\nhosts = [\"d:9042\"]\n",
+                "[[connections]]\nname = \"staging\"\nhost = \"c\"\n\
+                 [[connections]]\nname = \"dev\"\nhost = \"d\"\n",
             ),
         ]);
         let names: Vec<String> = merged
@@ -228,10 +226,7 @@ mod tests {
         );
 
         let staging = &merged.connections[1];
-        assert_eq!(
-            staging.hosts.as_deref(),
-            Some(["c:9042".to_owned()].as_slice())
-        );
+        assert_eq!(staging.host.as_deref(), Some("c"));
         assert_eq!(
             staging.posture, None,
             "a local entry replaces the global one whole; posture is not inherited"
@@ -239,30 +234,24 @@ mod tests {
     }
 
     #[test]
-    fn an_array_of_plain_values_is_replaced_rather_than_concatenated() {
+    fn a_scalar_stated_in_both_is_taken_from_local() {
         let (merged, _) = merge(vec![
-            layer("[[connections]]\nname = \"prod\"\nhosts = [\"a:9042\", \"b:9042\"]\n"),
-            layer("[[connections]]\nname = \"prod\"\nhosts = [\"c:9042\"]\n"),
+            layer("[[connections]]\nname = \"prod\"\nhost = \"a\"\n"),
+            layer("[[connections]]\nname = \"prod\"\nhost = \"c\"\n"),
         ]);
 
-        assert_eq!(
-            merged.connections[0].hosts.as_deref(),
-            Some(["c:9042".to_owned()].as_slice())
-        );
+        assert_eq!(merged.connections[0].host.as_deref(), Some("c"));
     }
 
     #[test]
     fn a_name_stated_twice_in_one_file_keeps_the_first_and_reports_the_second() {
         let (merged, diagnostics) = merge(vec![layer(
-            "[[connections]]\nname = \"prod\"\nhosts = [\"a:9042\"]\n\
-             [[connections]]\nname = \"prod\"\nhosts = [\"b:9042\"]\n",
+            "[[connections]]\nname = \"prod\"\nhost = \"a\"\n\
+             [[connections]]\nname = \"prod\"\nhost = \"b\"\n",
         )]);
 
         assert_eq!(merged.connections.len(), 1);
-        assert_eq!(
-            merged.connections[0].hosts.as_deref(),
-            Some(["a:9042".to_owned()].as_slice())
-        );
+        assert_eq!(merged.connections[0].host.as_deref(), Some("a"));
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].severity, Severity::Warning);
         assert!(diagnostics[0].message.contains("prod"));

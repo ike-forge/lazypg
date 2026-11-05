@@ -6,26 +6,28 @@
 //! cannot be prepared and reads as all text.
 
 use std::collections::{BTreeMap, HashMap};
+use std::num::NonZeroU16;
 use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use lp_domain::config::{ConnectionConfig, DriverConfig, PageSize, Tls};
+use lp_domain::config::{ConnectionConfig, DriverConfig, PageSize, SslMode};
 use lp_domain::contents::TableRef;
 use lp_domain::health::Health;
 use lp_domain::model::{
     Column, ConnId, CqlValue, DbError, Keyspace, Page, PagingState, PrimaryKey, Replication, Row,
     Schema, Statement, StatementKind, Table, TableOptions,
 };
-use lp_domain::ports::Cluster;
+use lp_domain::ports::{Cluster, SecretResolver as _};
 use lp_domain::posture::Posture;
 use tokio::sync::RwLock;
+use tokio_postgres::config::SslMode as DriverSslMode;
 use tokio_postgres::error::SqlState;
 use tokio_postgres::types::Type;
 use tokio_postgres::{CancelToken, Client, NoTls, SimpleQueryMessage};
 use tokio_postgres_rustls::MakeRustlsConnect;
 
-use crate::secret::Secrets;
+use crate::secret::{self, Secrets};
 use crate::tls;
 
 #[derive(Debug, Default)]
@@ -73,32 +75,37 @@ impl Cluster for Postgres {
         target: &ConnectionConfig,
         driver: &DriverConfig,
     ) -> Result<Posture, DbError> {
+        let resolved = Resolved::of(target, |key| std::env::var(key).ok());
         let mut config = tokio_postgres::Config::new();
         config
             .application_name("lazypg")
-            .connect_timeout(millis(driver.connect_timeout.get()));
-
-        for host in &target.hosts {
-            let (host, port) = host_and_port(host)?;
-            config.host(host).port(port);
+            .connect_timeout(millis(driver.connect_timeout.get()))
+            .host(&resolved.host)
+            .port(resolved.port)
+            .user(&resolved.user);
+        // Unset, the server takes the user's name, as `resolved.database` says.
+        if let Some(database) = &target.database {
+            config.dbname(database);
+        } else if let Ok(database) = std::env::var("PGDATABASE") {
+            config.dbname(database);
         }
 
-        let user = match &target.credentials {
-            Some(credentials) => {
-                // Resolved here so the plaintext never enters `lp-domain`.
-                let (user, password) = Secrets
-                    .credentials(credentials)
+        let password = match &target.password {
+            // Resolved here so the plaintext never enters `lp-domain`.
+            Some(credential) => Some(
+                Secrets
+                    .resolve(credential)
                     .await
-                    .map_err(|error| DbError::Unreachable(error.to_string()))?;
-                config.password(password);
-                user
-            }
-            None => std::env::var("PGUSER")
-                .or_else(|_| std::env::var("USER"))
-                .map_err(|_| DbError::Authentication("no username: set one".to_owned()))?,
+                    .map_err(|error| DbError::Unreachable(error.to_string()))?,
+            ),
+            None => match std::env::var("PGPASSWORD") {
+                Ok(password) => Some(password),
+                Err(_) => secret::passfile(resolved.passfile_target()).await,
+            },
         };
-        // No dbname: the server then defaults it to the user's name, as libpq.
-        config.user(user);
+        if let Some(password) = password {
+            config.password(password);
+        }
 
         // The server-side rail (architecture.md §4): a statement the domain
         // misclassifies is still refused.
@@ -106,15 +113,17 @@ impl Cluster for Postgres {
             config.options("-c default_transaction_read_only=on");
         }
 
-        let tls = match &target.tls {
-            Tls::Off => None,
-            Tls::On(settings) => Some(MakeRustlsConnect::new(
-                (*tls::client_config(settings).await?).clone(),
-            )),
-            Tls::Cqlshrc(_) => {
-                return Err(DbError::Tls(
-                    "cqlshrc is not a Postgres TLS source".to_owned(),
-                ));
+        let tls = match resolved.sslmode {
+            SslMode::Disable => None,
+            mode => {
+                config.ssl_mode(if mode == SslMode::Prefer {
+                    DriverSslMode::Prefer
+                } else {
+                    DriverSslMode::Require
+                });
+                Some(MakeRustlsConnect::new(
+                    (*tls::client_config(mode, target).await?).clone(),
+                ))
             }
         };
 
@@ -195,25 +204,64 @@ impl Cluster for Postgres {
     }
 }
 
-fn millis(value: u32) -> Duration {
-    Duration::from_millis(value.into())
+/// libpq's resolution for every field but the password, which may read a file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Resolved {
+    host: String,
+    port: u16,
+    user: String,
+    /// What the server will use: unset, the user's name.
+    database: String,
+    sslmode: SslMode,
 }
 
-fn host_and_port(host: &str) -> Result<(&str, u16), DbError> {
-    let bracketed = host.strip_prefix('[').and_then(|rest| rest.split_once(']'));
-    let (name, port) = match bracketed {
-        Some((name, rest)) => (name, rest.strip_prefix(':')),
-        None => match host.rsplit_once(':') {
-            Some((name, port)) if !name.contains(':') => (name, Some(port)),
-            _ => (host, None),
-        },
-    };
+impl Resolved {
+    fn of(target: &ConnectionConfig, env: impl Fn(&str) -> Option<String>) -> Self {
+        let user = target
+            .user
+            .clone()
+            .or_else(|| env("PGUSER"))
+            .or_else(|| env("USER"))
+            .unwrap_or_else(|| "postgres".to_owned());
+        Self {
+            host: target
+                .host
+                .clone()
+                .or_else(|| env("PGHOST"))
+                .unwrap_or_else(|| "localhost".to_owned()),
+            port: target
+                .port
+                .map(NonZeroU16::get)
+                .or_else(|| env("PGPORT").and_then(|port| port.parse().ok()))
+                .unwrap_or(5432),
+            database: target
+                .database
+                .clone()
+                .or_else(|| env("PGDATABASE"))
+                .unwrap_or_else(|| user.clone()),
+            sslmode: target
+                .sslmode
+                .or_else(|| {
+                    let word = env("PGSSLMODE")?;
+                    SslMode::ALL.into_iter().find(|mode| mode.label() == word)
+                })
+                .unwrap_or_default(),
+            user,
+        }
+    }
 
-    let port = port.map_or(Ok(5432), |port| {
-        port.parse()
-            .map_err(|_| DbError::Unreachable(format!("`{host}`: invalid port")))
-    })?;
-    Ok((name, port))
+    fn passfile_target(&self) -> secret::Target<'_> {
+        secret::Target {
+            host: &self.host,
+            port: self.port,
+            database: &self.database,
+            user: &self.user,
+        }
+    }
+}
+
+fn millis(value: u32) -> Duration {
+    Duration::from_millis(value.into())
 }
 
 /// The statement without its trailing `;`, when wrapping it in a subquery is
@@ -494,6 +542,8 @@ async fn describe(client: &Client) -> Result<Schema, DbError> {
 
 #[cfg(test)]
 mod tests {
+    use lp_domain::config::ConnectionName;
+
     use super::*;
 
     fn read(cql: &str) -> Statement {
@@ -503,13 +553,77 @@ mod tests {
         }
     }
 
+    fn env(vars: &'static [(&'static str, &'static str)]) -> impl Fn(&str) -> Option<String> {
+        |key| {
+            vars.iter()
+                .find(|(name, _)| *name == key)
+                .map(|(_, value)| (*value).to_owned())
+        }
+    }
+
+    fn named() -> ConnectionConfig {
+        ConnectionConfig::named(ConnectionName::try_new("t").unwrap())
+    }
+
     #[test]
-    fn a_host_without_a_port_dials_5432() {
-        assert_eq!(host_and_port("db").unwrap(), ("db", 5432));
-        assert_eq!(host_and_port("db:6543").unwrap(), ("db", 6543));
-        assert_eq!(host_and_port("[::1]:6543").unwrap(), ("::1", 6543));
-        assert_eq!(host_and_port("::1").unwrap(), ("::1", 5432));
-        assert!(host_and_port("db:port").is_err());
+    fn an_unstated_field_falls_back_to_its_pg_variable_then_libpq_default() {
+        let bare = Resolved::of(&named(), env(&[("USER", "ana")]));
+        assert_eq!(
+            (
+                bare.host.as_str(),
+                bare.port,
+                bare.user.as_str(),
+                bare.database.as_str()
+            ),
+            ("localhost", 5432, "ana", "ana")
+        );
+        assert_eq!(bare.sslmode, SslMode::Prefer);
+
+        let from_env = Resolved::of(
+            &named(),
+            env(&[
+                ("PGHOST", "db"),
+                ("PGPORT", "6543"),
+                ("PGUSER", "svc"),
+                ("USER", "ana"),
+                ("PGDATABASE", "orders"),
+                ("PGSSLMODE", "verify-full"),
+            ]),
+        );
+        assert_eq!(
+            (
+                from_env.host.as_str(),
+                from_env.port,
+                from_env.user.as_str()
+            ),
+            ("db", 6543, "svc")
+        );
+        assert_eq!(from_env.database, "orders");
+        assert_eq!(from_env.sslmode, SslMode::VerifyFull);
+    }
+
+    #[test]
+    fn a_stated_field_outranks_the_environment() {
+        let stated = ConnectionConfig {
+            host: Some("stated".to_owned()),
+            port: NonZeroU16::new(7000),
+            user: Some("u".to_owned()),
+            database: Some("d".to_owned()),
+            sslmode: Some(SslMode::Disable),
+            ..named()
+        };
+        let resolved = Resolved::of(&stated, env(&[("PGHOST", "env"), ("PGSSLMODE", "require")]));
+
+        assert_eq!(
+            (
+                resolved.host.as_str(),
+                resolved.port,
+                resolved.user.as_str()
+            ),
+            ("stated", 7000, "u")
+        );
+        assert_eq!(resolved.database, "d");
+        assert_eq!(resolved.sslmode, SslMode::Disable);
     }
 
     #[test]

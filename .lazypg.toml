@@ -1,13 +1,13 @@
 # The docker/compose.yaml fixture. See docs/development.md.
-#
-# LazyCassandra's connection shape until Postgres fields land
-# (docs/plan.md, Phase 0 step 3). The database defaults to the username.
 default_connection = "local"
 
 [[connections]]
 name = "local"
-hosts = ["127.0.0.1:5432"]
-username = "lazypg"
+host = "127.0.0.1"
+port = 5432
+database = "lazypg"
+user = "lazypg"
 password = "lazypg"
+sslmode = "disable"
 # Scratch fixture; `posture` defaults to read-only.
 posture = "writable"

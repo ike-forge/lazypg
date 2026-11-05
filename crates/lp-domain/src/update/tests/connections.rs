@@ -5,13 +5,8 @@ fn config_of(names: &[&str]) -> Config {
         connections: names
             .iter()
             .map(|name| ConnectionConfig {
-                name: ConnectionName::try_new(name).expect("a valid name"),
-                hosts: vec![format!("{name}.example:9042")],
                 posture: Posture::ReadOnly,
-                discovery: Discovery::default(),
-                datacenter: None,
-                credentials: None,
-                tls: crate::config::Tls::Off,
+                ..ConnectionConfig::named(ConnectionName::try_new(name).expect("a valid name"))
             })
             .collect(),
         ..Config::default()

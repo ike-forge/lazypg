@@ -6,9 +6,7 @@ use super::*;
 use crate::clock::Stamp;
 use crate::commands::{CATALOGUE, CommandsPanel, Run};
 use crate::commit::CommitPrompt;
-use crate::config::{
-    Config, ConnectionName, Diagnostic, Discovery, Icons, Origin, Span as ConfigSpan,
-};
+use crate::config::{Config, ConnectionName, Diagnostic, Icons, Origin, Span as ConfigSpan};
 use crate::connection::{Connection, SchemaState};
 use crate::contents::{ContentsState, Filter, SelectionMode, Subject};
 use crate::ddl::DdlTab;
