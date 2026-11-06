@@ -204,7 +204,7 @@ fn an_unfocused_editor_sets_no_cursor() {
 
 #[test]
 fn a_long_line_scrolls_sideways_and_keeps_the_cursor_on_screen() {
-    let long = "SELECT * FROM keyspace_with_a_long_name.table_with_a_long_name WHERE id = 7";
+    let long = "SELECT * FROM namespace_with_a_long_name.table_with_a_long_name WHERE id = 7";
     let state = with_query(long, Panel::Queries);
 
     let (buffer, cursor) = drawn_with_cursor(80, 24, &state);

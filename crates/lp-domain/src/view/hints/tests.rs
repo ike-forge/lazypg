@@ -85,7 +85,7 @@ fn the_logs_tabs_bar_advertises_a_list_not_an_editor() {
     );
     assert!(
         bar.global.iter().any(|hint| hint.action == "leave"),
-        "esc leaves the panel here as it does on Cql: {:?}",
+        "esc leaves the panel here as it does on SQL: {:?}",
         bar.global
     );
     assert!(

@@ -134,7 +134,7 @@ pub(super) fn activate(state: &mut State) -> Vec<Effect> {
                 tables.toggle(schema);
                 return Vec::new();
             }
-            Some(Node::Table { keyspace, table }) => TableRef::new(&keyspace.name, &table.name),
+            Some(Node::Table { namespace, table }) => TableRef::new(&namespace.name, &table.name),
             None => return Vec::new(),
         }
     };
@@ -184,7 +184,7 @@ pub(super) fn run(state: &mut State) -> Vec<Effect> {
             Message {
                 title: "Not run".to_owned(),
                 message: "Dropping and truncating from the buffer wait on a typed \
-                          confirmation. Drop a keyspace or a table with `d` on the Tables \
+                          confirmation. Drop a namespace or a table with `d` on the Tables \
                           panel, which asks for one."
                     .to_owned(),
                 severity: Severity::Danger,

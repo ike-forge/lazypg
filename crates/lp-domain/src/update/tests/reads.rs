@@ -264,7 +264,7 @@ fn a_refused_read_still_lands_focus_in_contents() {
 }
 
 #[test]
-fn unfolding_a_keyspace_leaves_focus_in_tables() {
+fn unfolding_a_namespace_leaves_focus_in_tables() {
     let mut state = tabled(&[("shop", &["orders"])]);
     state.focus_on(Panel::Objects);
 

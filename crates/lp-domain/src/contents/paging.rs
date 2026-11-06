@@ -279,9 +279,8 @@ impl ContentsPanel {
                     rows,
                     next,
                 } = page;
-                // An empty page can still have a successor: Cassandra ends a
-                // page on what it scanned, not what matched or survived
-                // tombstones.
+                // An empty page with a successor is skipped past rather than
+                // shown as the end.
                 let paging = match next {
                     Some(cursor) if rows.is_empty() => {
                         *outstanding = query();

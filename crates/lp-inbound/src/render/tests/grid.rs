@@ -129,7 +129,7 @@ fn a_titles_table_is_not_bold_under_the_focused_borders_own_weight() {
             .contains(Modifier::BOLD)
     };
 
-    assert!(!bold("shop"), "the keyspace kept the border's weight");
+    assert!(!bold("shop"), "the namespace kept the border's weight");
     assert!(!bold("orders"), "the table kept the border's weight");
     assert!(
         bold("[3]"),
@@ -233,10 +233,10 @@ fn the_key_columns_are_drawn_in_the_styles_that_carry_the_physical_shape() {
     let partition = Theme::default()
         .style(Token::PrimaryKey)
         .fg
-        .expect("the partition key spends a colour");
+        .expect("the primary key spends a colour");
 
     let id = drawn_column(area, 0);
-    assert_eq!(header(id).fg, partition, "id is the partition key");
+    assert_eq!(header(id).fg, partition, "id is the primary key");
     assert!(header(id).modifier.contains(Modifier::BOLD));
     assert_eq!(
         header(drawn_column(area, 1)).fg,
@@ -827,8 +827,8 @@ fn a_key_columns_heading_keeps_its_colour_under_the_wash() {
         theme
             .style(Token::PrimaryKey)
             .fg
-            .expect("the partition key spends a colour"),
-        "and `id` still reads as the partition key under it"
+            .expect("the primary key spends a colour"),
+        "and `id` still reads as the primary key under it"
     );
 }
 

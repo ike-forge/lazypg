@@ -122,7 +122,7 @@ pub(super) const STOP: Binding = Binding::new(&[ESC], "stop");
 pub(super) const DONE: Binding = Binding::new(&[ESC], "done");
 pub(super) const NEXT_MATCH: Binding = Binding::new(&[key('n')], "next match");
 
-/// "open" is true of both a keyspace and a table row.
+/// "open" is true of both a namespace and a table row.
 const OPEN: Binding = Binding::new(&[ENTER], "open");
 pub(super) const DROP: Binding = Binding::new(&[key('d')], "drop");
 
@@ -156,7 +156,7 @@ const TABS: Binding = Binding::new(&[key('['), key(']')], "tab");
 
 const DDL_HINTS: &[Binding] = &[TABS, SEARCH, SELECT];
 
-/// A keyspace's DDL draws one tab, so `[`/`]` would be inert.
+/// A namespace's DDL draws one tab, so `[`/`]` would be inert.
 const DDL_ONE_TAB_HINTS: &[Binding] = &[SEARCH, SELECT];
 
 const CONTENTS_HINTS: &[Binding] = &[

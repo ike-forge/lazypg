@@ -65,8 +65,8 @@ fn editable(state: &State) -> Result<Field, String> {
     };
     let Some(described) = state
         .schema()
-        .and_then(|schema| schema.schemas.get(&table.keyspace))
-        .and_then(|keyspace| keyspace.tables.get(&table.table))
+        .and_then(|schema| schema.schemas.get(&table.namespace))
+        .and_then(|namespace| namespace.tables.get(&table.table))
     else {
         return Err(format!(
             "The loaded schema no longer has {}.",

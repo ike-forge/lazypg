@@ -82,7 +82,7 @@ fn fold(haystack: &str) -> (String, Vec<Range<usize>>) {
     (folded, sources)
 }
 
-/// `Queries` means its Logs tab; the Cql tab takes `/` as text. Keyed off this
+/// `Queries` means its Logs tab; the SQL tab takes `/` as text. Keyed off this
 /// rather than [`Panel`] so every accessor is total.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Searched {

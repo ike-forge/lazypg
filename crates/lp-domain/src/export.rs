@@ -644,7 +644,7 @@ fn stem(subject: &Subject) -> String {
     }
 }
 
-/// On a character boundary: a CQL literal can hold anything.
+/// On a character boundary: a SQL literal can hold anything.
 fn cut(label: &str) -> String {
     if label.chars().count() <= TITLE_LIMIT {
         return label.to_owned();

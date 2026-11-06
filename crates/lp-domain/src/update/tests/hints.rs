@@ -146,7 +146,7 @@ fn catalogued() -> Vec<KeyPress> {
         .collect()
 }
 
-/// Between them every binding has somewhere to act: an overlay open, a keyspace
+/// Between them every binding has somewhere to act: an overlay open, a namespace
 /// unfolded, cursors and offsets off their ends, a loaded grid.
 fn sweep_fixtures() -> Vec<State> {
     let geometry = Geometry::new([8, 14, 20, 1], 37, 14);
@@ -363,7 +363,7 @@ fn the_ddl_bar_offers_its_tabs_only_where_it_draws_more_than_one() {
     table.focus_on(Panel::Structure);
     assert!(shows_tabs(&table), "a table draws DDL, Columns and Indexes");
 
-    let mut keyspace = browsing_tables(&[("shop", &["orders"])]);
-    press(&mut keyspace, Key::Char('2'));
-    assert!(!shows_tabs(&keyspace), "a keyspace draws one tab");
+    let mut namespace = browsing_tables(&[("shop", &["orders"])]);
+    press(&mut namespace, Key::Char('2'));
+    assert!(!shows_tabs(&namespace), "a namespace draws one tab");
 }

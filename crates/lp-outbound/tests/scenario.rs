@@ -38,7 +38,7 @@ async fn connecting_and_describing_fills_the_tables_panel() {
     assert_eq!(
         rows[0].kind,
         RowKind::Schema { limb: None },
-        "these fixtures have no tables to hang off a keyspace"
+        "these fixtures have no tables to hang off a namespace"
     );
     assert_eq!(*selected, 0);
 }
@@ -74,7 +74,7 @@ async fn a_cluster_that_connects_but_cannot_be_described_raises_a_fatal_modal() 
 }
 
 #[tokio::test]
-async fn pressing_l_unfolds_a_keyspace_and_the_view_model_shows_its_tables() {
+async fn pressing_l_unfolds_a_namespace_and_the_view_model_shows_its_tables() {
     let cluster = FakeCluster::new(
         tabled_schema_of(&[("shop", &["orders", "users"])]),
         Posture::ReadOnly,
@@ -119,7 +119,7 @@ async fn pressing_l_unfolds_a_keyspace_and_the_view_model_shows_its_tables() {
 }
 
 #[tokio::test]
-async fn pressing_h_from_a_table_lands_on_its_parent_keyspace() {
+async fn pressing_h_from_a_table_lands_on_its_parent_namespace() {
     let cluster = FakeCluster::new(
         tabled_schema_of(&[("shop", &["orders", "users"])]),
         Posture::ReadOnly,
@@ -147,7 +147,7 @@ async fn pressing_h_from_a_table_lands_on_its_parent_keyspace() {
     assert_eq!(*selected, 0);
     assert!(
         rows.iter().any(|row| row.kind.is_table()),
-        "stepping out must not fold the keyspace"
+        "stepping out must not fold the namespace"
     );
 }
 
@@ -188,7 +188,7 @@ async fn pressing_enter_on_a_table_fills_the_contents_panel() {
     schema
         .schemas
         .get_mut("shop")
-        .and_then(|keyspace| keyspace.tables.get_mut("orders"))
+        .and_then(|namespace| namespace.tables.get_mut("orders"))
         .expect("the fixture made it")
         .columns = vec![Column {
         name: "email".to_owned(),
@@ -392,7 +392,7 @@ async fn walking_the_ddl_strip_reaches_the_indexes_of_the_selected_table() {
     schema
         .schemas
         .get_mut("shop")
-        .and_then(|keyspace| keyspace.tables.get_mut("orders"))
+        .and_then(|namespace| namespace.tables.get_mut("orders"))
         .expect("the fixture has shop.orders")
         .indexes = vec![Index {
         name: "orders_by_id".to_owned(),
@@ -444,9 +444,9 @@ async fn stepping_onto_a_table_describes_it_in_the_ddl_panel() {
     let (mut state, effects) = init(support::connected_config(), Vec::new(), Stamp::default());
     run(&cluster, &mut state, effects).await;
 
-    let keyspace = ddl_details(&state);
-    assert_eq!(named(&keyspace), [("Schema", "shop")]);
-    assert_eq!(headings(&keyspace), ["Contents"]);
+    let namespace = ddl_details(&state);
+    assert_eq!(named(&namespace), [("Schema", "shop")]);
+    assert_eq!(headings(&namespace), ["Contents"]);
 
     update(&mut state, Msg::Input(KeyPress::new(Key::Char('l'))));
     let effects = update(&mut state, Msg::Input(KeyPress::new(Key::Char('l'))));
@@ -568,7 +568,7 @@ async fn a_read_only_connection_drops_nothing() {
 }
 
 #[tokio::test]
-async fn dropping_a_keyspace_takes_its_name_typed_back() {
+async fn dropping_a_namespace_takes_its_name_typed_back() {
     let cluster = FakeCluster::new(
         tabled_schema_of(&[("shop", &["orders"]), ("billing", &[])]),
         Posture::Writable,
@@ -601,7 +601,7 @@ async fn dropping_a_keyspace_takes_its_name_typed_back() {
             .iter()
             .map(|stmt| stmt.sql.as_str())
             .collect::<Vec<_>>(),
-        ["DROP KEYSPACE \"billing\""]
+        ["DROP SCHEMA \"billing\""]
     );
 
     let PanelBody::Tree { rows, .. } = &view_model(&state).panels[0].body else {

@@ -179,7 +179,7 @@ fn a_term_that_matches_nothing_leaves_the_cursor_on_the_empty_tree() {
         press(&mut state, Key::Char(character));
     }
 
-    assert_eq!(tree_rows(&state), 0, "no keyspace survives the term");
+    assert_eq!(tree_rows(&state), 0, "no namespace survives the term");
     assert_eq!(
         state.tables.cursor().index(),
         0,
@@ -221,7 +221,7 @@ fn a_term_extended_past_its_last_match_restores_the_cursor_to_origin() {
     assert_eq!(
         state.tables.cursor().index(),
         0,
-        "orders_ks is the one keyspace the term keeps, so it is the only row"
+        "orders_ks is the one namespace the term keeps, so it is the only row"
     );
 
     press(&mut state, Key::Char('x'));

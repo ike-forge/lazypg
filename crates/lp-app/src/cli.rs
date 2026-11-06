@@ -4,7 +4,7 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 
 pub(crate) const USAGE: &str = "\
-lazypg — a terminal UI for Apache Cassandra
+lazypg — a terminal UI for PostgreSQL
 
 Usage: lazypg [OPTIONS]
 
@@ -215,7 +215,7 @@ mod tests {
 
     #[test]
     fn an_unknown_argument_is_an_error_rather_than_a_file_name() {
-        let error = parse_args(&["keyspace"]).expect_err("no positional arguments exist");
-        assert!(error.contains("unknown argument `keyspace`"), "{error}");
+        let error = parse_args(&["namespace"]).expect_err("no positional arguments exist");
+        assert!(error.contains("unknown argument `namespace`"), "{error}");
     }
 }

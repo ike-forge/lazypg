@@ -86,7 +86,7 @@ pub(super) fn edit_from_grid(state: &mut State) -> Vec<Effect> {
     if !matches!(state.overlay, Some(Overlay::Inspect(_))) {
         return Vec::new();
     }
-    // A row's first column is nearly always the partition key, where `e`
+    // A row's first column is nearly always the primary key, where `e`
     // only refuses. The field stays closed so the user picks which to edit.
     if state.contents.mode == SelectionMode::Row {
         focus_first_editable(state);

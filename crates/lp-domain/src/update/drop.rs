@@ -1,4 +1,4 @@
-//! Dropping a keyspace or table, or deleting rows.
+//! Dropping a namespace or table, or deleting rows.
 
 use crate::contents::{ContentsState, Subject, TableRef};
 use crate::drop::{DropPrompt, Target};
@@ -35,9 +35,9 @@ pub(super) fn tree_target(state: &State) -> Option<Target> {
     match state.tables.selected(state.schema()?)? {
         // Not offered: dropping a database is not a tree gesture.
         Node::Database { .. } => None,
-        Node::Schema { keyspace, .. } => Some(Target::Schema(keyspace.name.clone())),
-        Node::Table { keyspace, table } => {
-            Some(Target::Table(TableRef::new(&keyspace.name, &table.name)))
+        Node::Schema { namespace, .. } => Some(Target::Schema(namespace.name.clone())),
+        Node::Table { namespace, table } => {
+            Some(Target::Table(TableRef::new(&namespace.name, &table.name)))
         }
     }
 }
@@ -55,7 +55,7 @@ pub(super) fn rows_target(state: &State) -> Option<Target> {
     let described = state
         .schema()?
         .schemas
-        .get(&table.keyspace)?
+        .get(&table.namespace)?
         .tables
         .get(&table.table)?;
 

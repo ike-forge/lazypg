@@ -28,8 +28,8 @@ pub(crate) fn insert_form(state: &State) -> Result<Inspector, String> {
     };
     let described = state
         .schema()
-        .and_then(|schema| schema.schemas.get(&table.keyspace))
-        .and_then(|keyspace| keyspace.tables.get(&table.table))
+        .and_then(|schema| schema.schemas.get(&table.namespace))
+        .and_then(|namespace| namespace.tables.get(&table.table))
         .ok_or_else(|| format!("The loaded schema no longer has {}.", table.qualified()))?;
 
     if key::columns(described).is_empty() {
@@ -126,8 +126,8 @@ fn insert_statement(state: &State, form: &Inspector) -> Result<Statement, String
     };
     let described = state
         .schema()
-        .and_then(|schema| schema.schemas.get(&table.keyspace))
-        .and_then(|keyspace| keyspace.tables.get(&table.table))
+        .and_then(|schema| schema.schemas.get(&table.namespace))
+        .and_then(|namespace| namespace.tables.get(&table.table))
         .ok_or_else(|| format!("The loaded schema no longer has {}.", table.qualified()))?;
 
     let values: Vec<(String, String)> = form
@@ -148,7 +148,7 @@ fn insert_statement(state: &State, form: &Inspector) -> Result<Statement, String
     }
 
     Ok(Statement::insert_row(
-        &table.keyspace,
+        &table.namespace,
         &table.table,
         &values,
     ))

@@ -69,9 +69,9 @@ pub fn detail_row(row: &DetailRow) -> String {
 pub fn node(node: &Node<'_>) -> String {
     let fields = match node {
         Node::Database { name, .. } => vec![(*name).to_owned()],
-        Node::Schema { keyspace, .. } => vec![keyspace.name.clone()],
-        Node::Table { keyspace, table } => {
-            vec![format!("{}.{}", keyspace.name, table.name)]
+        Node::Schema { namespace, .. } => vec![namespace.name.clone()],
+        Node::Table { namespace, table } => {
+            vec![format!("{}.{}", namespace.name, table.name)]
         }
     };
 
@@ -267,19 +267,19 @@ mod tests {
 
     #[test]
     fn a_schema_yanks_its_name_and_a_table_its_qualified_one() {
-        let keyspace = Schema::empty("demo");
+        let namespace = Schema::empty("demo");
         let users = table("users");
 
         assert_eq!(
             node(&Node::Schema {
-                keyspace: &keyspace,
+                namespace: &namespace,
                 unfolded: false
             }),
             "demo"
         );
         assert_eq!(
             node(&Node::Table {
-                keyspace: &keyspace,
+                namespace: &namespace,
                 table: &users
             }),
             "demo.users"

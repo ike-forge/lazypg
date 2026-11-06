@@ -1,4 +1,4 @@
-//! Dropping a keyspace or table, or deleting rows, behind a confirmation.
+//! Dropping a namespace or table, or deleting rows, behind a confirmation.
 
 use crate::contents::TableRef;
 use crate::key::{self, RowKey};
@@ -56,13 +56,13 @@ impl Target {
     #[must_use]
     pub fn statement(&self) -> Statement {
         match self {
-            Self::Schema(keyspace) => Statement::drop_keyspace(keyspace),
-            Self::Table(table) => Statement::drop_table(&table.keyspace, &table.table),
+            Self::Schema(namespace) => Statement::drop_schema(namespace),
+            Self::Table(table) => Statement::drop_table(&table.namespace, &table.table),
             Self::Rows { table, keys } => {
                 let pairs: Vec<Vec<(String, String)>> =
                     keys.iter().map(|key| key.pairs().to_vec()).collect();
 
-                Statement::delete_rows(&table.keyspace, &table.table, &pairs)
+                Statement::delete_rows(&table.namespace, &table.table, &pairs)
             }
         }
     }
@@ -72,7 +72,7 @@ impl Target {
     #[must_use]
     pub fn name(&self) -> &str {
         match self {
-            Self::Schema(keyspace) => keyspace,
+            Self::Schema(namespace) => namespace,
             Self::Table(table) | Self::Rows { table, .. } => &table.table,
         }
     }
@@ -80,7 +80,7 @@ impl Target {
     #[must_use]
     pub fn qualified(&self) -> String {
         match self {
-            Self::Schema(keyspace) => keyspace.clone(),
+            Self::Schema(namespace) => namespace.clone(),
             Self::Table(table) => table.qualified(),
             Self::Rows { table, keys } => {
                 format!(
@@ -96,15 +96,15 @@ impl Target {
     #[must_use]
     pub fn title(&self) -> Vec<Segment> {
         match self {
-            Self::Schema(keyspace) => {
-                let token = match SchemaKind::of(keyspace) {
+            Self::Schema(namespace) => {
+                let token = match SchemaKind::of(namespace) {
                     SchemaKind::System => Token::Faint,
                     SchemaKind::User => Token::Schema,
                 };
 
                 vec![
-                    Segment::plain("Drop keyspace "),
-                    Segment::styled(keyspace.clone(), token),
+                    Segment::plain("Drop namespace "),
+                    Segment::styled(namespace.clone(), token),
                 ]
             }
             Self::Table(table) => {
@@ -146,7 +146,7 @@ pub struct DropPrompt {
 }
 
 impl DropPrompt {
-    /// A keyspace is always typed; a protected connection raises a table to the
+    /// A namespace is always typed; a protected connection raises a table to the
     /// same bar.
     #[must_use]
     pub fn opened(target: Target, posture: Posture) -> Self {
@@ -217,7 +217,7 @@ mod tests {
     use super::*;
     use crate::style;
 
-    fn keyspace() -> Target {
+    fn namespace() -> Target {
         Target::Schema("shop".to_owned())
     }
 
@@ -233,9 +233,9 @@ mod tests {
     }
 
     #[test]
-    fn a_keyspace_is_always_typed_back() {
+    fn a_namespace_is_always_typed_back() {
         for posture in [Posture::Writable, Posture::Protected] {
-            assert!(DropPrompt::opened(keyspace(), posture).takes_text());
+            assert!(DropPrompt::opened(namespace(), posture).takes_text());
         }
     }
 
@@ -250,7 +250,7 @@ mod tests {
 
     #[test]
     fn a_typed_confirmation_runs_only_on_the_name_it_asked_for() {
-        let mut prompt = DropPrompt::opened(keyspace(), Posture::Writable);
+        let mut prompt = DropPrompt::opened(namespace(), Posture::Writable);
         assert!(!prompt.confirmed(), "an empty field confirms nothing");
 
         typing(&mut prompt, "sho");
@@ -275,14 +275,14 @@ mod tests {
     }
 
     #[test]
-    fn a_table_drops_only_the_table_and_a_keyspace_the_whole_keyspace() {
+    fn a_table_drops_only_the_table_and_a_namespace_the_whole_namespace() {
         assert_eq!(table().statement().sql, "DROP TABLE \"shop\".\"orders\"");
-        assert_eq!(keyspace().statement().sql, "DROP KEYSPACE \"shop\"");
+        assert_eq!(namespace().statement().sql, "DROP SCHEMA \"shop\"");
     }
 
     #[test]
     fn the_title_names_the_node_the_tree_was_standing_on() {
         assert_eq!(style::text(&table().title()), "Drop table shop.orders");
-        assert_eq!(style::text(&keyspace().title()), "Drop keyspace shop");
+        assert_eq!(style::text(&namespace().title()), "Drop namespace shop");
     }
 }

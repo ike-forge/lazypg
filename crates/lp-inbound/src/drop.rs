@@ -377,7 +377,7 @@ mod tests {
         )
     }
 
-    fn keyspace() -> DropPrompt {
+    fn namespace() -> DropPrompt {
         DropPrompt::opened(Target::Schema("shop".to_owned()), Posture::Writable)
     }
 
@@ -395,10 +395,10 @@ mod tests {
     }
 
     #[test]
-    fn a_keyspace_block_draws_the_name_field_rather_than_a_yes_key() {
-        let drawn = text(&drawn(80, 24, keyspace()));
+    fn a_namespace_block_draws_the_name_field_rather_than_a_yes_key() {
+        let drawn = text(&drawn(80, 24, namespace()));
 
-        assert!(drawn.contains("Drop keyspace shop"));
+        assert!(drawn.contains("Drop namespace shop"));
         assert!(drawn.contains("Type shop to confirm:"));
         assert!(
             !drawn.contains("Yes, drop it"),
@@ -408,7 +408,7 @@ mod tests {
 
     #[test]
     fn the_field_shows_what_has_been_typed() {
-        let mut prompt = keyspace();
+        let mut prompt = namespace();
         for character in "sho".chars() {
             prompt
                 .typed_mut()
@@ -442,7 +442,7 @@ mod tests {
     fn fits_agrees_with_what_the_block_actually_draws() {
         for (width, height) in [(40, 24), (80, 8), (44, 10), (80, 24)] {
             let area = ratatui::layout::Rect::new(0, 0, width, height);
-            let drew = text(&drawn(width, height, keyspace())).contains("Drop keyspace");
+            let drew = text(&drawn(width, height, namespace())).contains("Drop namespace");
 
             assert_eq!(
                 super::fits(area),

@@ -57,7 +57,7 @@ impl Mode {
             selection_fg: self.body,
             selection_bar: accent::YELLOW,
             shortcut: accent::YELLOW,
-            keyspace: accent::VIOLET,
+            namespace: accent::VIOLET,
             table: accent::BLUE,
             primary_key: accent::YELLOW,
             foreign_key: accent::CYAN,

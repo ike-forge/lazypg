@@ -1,5 +1,5 @@
 //! The TUI adapter: lays out and draws [`lp_domain::ViewModel`], and translates
-//! crossterm events in and style tokens out. Knows nothing about CQL.
+//! crossterm events in and style tokens out. Knows nothing about SQL.
 
 mod body;
 mod commit;

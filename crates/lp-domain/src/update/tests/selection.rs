@@ -112,7 +112,7 @@ fn the_trails_search_does_not_survive_a_switch_to_the_cql_tab() {
     assert_eq!(
         state.search(Searched::Queries),
         None,
-        "a stray search survived onto the Cql tab"
+        "a stray search survived onto the SQL tab"
     );
     let bar = crate::view::hints::bar(&state);
     assert!(
@@ -175,7 +175,7 @@ fn enter_on_a_table_leaves_no_selection_behind_in_tables() {
     state.tables.selection.start(1);
     state.tables.selection.stop(1);
 
-    // Row 1 is `orders`: `enter` on a keyspace would move no focus.
+    // Row 1 is `orders`: `enter` on a namespace would move no focus.
     let _ = press(&mut state, Key::Enter);
 
     assert_eq!(state.focus(), Panel::Contents);
@@ -357,7 +357,7 @@ fn a_range_over_a_list_that_shrank_is_pulled_back() {
     assert_eq!(
         state.tables.selection.ranges(state.tables.cursor().index()),
         Ranges::of(Range::new(0, 0)),
-        "folding the keyspace took the two table rows with it"
+        "folding the namespace took the two table rows with it"
     );
 }
 

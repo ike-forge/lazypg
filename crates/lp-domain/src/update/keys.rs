@@ -257,10 +257,10 @@ pub(super) fn edit(state: &mut State, key: Key) -> bool {
     true
 }
 
-/// Unqualified table names complete against the keyspace Tables is showing.
+/// Unqualified table names complete against the namespace Tables is showing.
 pub(super) fn complete(state: &mut State) {
-    let keyspace = state.visible_keyspace();
-    let completion = sql::suggest(state.queries.buffer(), state.schema(), keyspace.as_deref());
+    let namespace = state.visible_namespace();
+    let completion = sql::suggest(state.queries.buffer(), state.schema(), namespace.as_deref());
     state.queries.offer(completion);
 }
 

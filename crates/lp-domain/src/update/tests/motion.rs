@@ -461,7 +461,7 @@ fn a_new_subject_clears_the_ddl_range() {
 }
 
 #[test]
-fn unfolding_a_keyspace_leaves_the_ddl_panel_where_it_is() {
+fn unfolding_a_namespace_leaves_the_ddl_panel_where_it_is() {
     let mut state = browsing_tables(&[("shop", &["orders", "users"])]);
     state.focus_on(Panel::Structure);
     press(&mut state, Key::End);

@@ -879,7 +879,7 @@ fn item(
     };
 
     // Only the icon is bold, so a font without a bold Nerd cut loses nothing.
-    // It keeps its kind's colour while a system keyspace's name goes faint.
+    // It keeps its kind's colour while a system namespace's name goes faint.
     let icon = TextSpan::styled(
         crate::icons::tree_row(row.kind),
         theme

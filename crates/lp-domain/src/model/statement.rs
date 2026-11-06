@@ -1,4 +1,4 @@
-//! CQL statements as values: every action is shown before it runs (vision.md
+//! SQL statements as values: every action is shown before it runs (vision.md
 //! §4, principle 3).
 
 use std::fmt::Write as _;
@@ -58,17 +58,19 @@ impl Statement {
     /// Quoted: a name read back from the cluster is only safe to interpolate
     /// quoted.
     #[must_use]
-    pub fn drop_table(keyspace: &str, table: &str) -> Self {
+    pub fn drop_table(namespace: &str, table: &str) -> Self {
         Self {
-            sql: format!("DROP TABLE {}.{}", quoted(keyspace), quoted(table)),
+            sql: format!("DROP TABLE {}.{}", quoted(namespace), quoted(table)),
             kind: StatementKind::Destructive,
         }
     }
 
     #[must_use]
-    pub fn drop_keyspace(keyspace: &str) -> Self {
+    /// Without `CASCADE`: Postgres refuses a schema that still holds
+    /// anything, which is the confirmation a typed name cannot give.
+    pub fn drop_schema(schema: &str) -> Self {
         Self {
-            sql: format!("DROP KEYSPACE {}", quoted(keyspace)),
+            sql: format!("DROP SCHEMA {}", quoted(schema)),
             kind: StatementKind::Destructive,
         }
     }
@@ -77,11 +79,11 @@ impl Statement {
     /// `Destructive`, because `kind_of` classifies a typed `DELETE` so; its
     /// confirmation belongs to the key that opened it.
     #[must_use]
-    pub fn delete_row(keyspace: &str, table: &str, key: &[(String, String)]) -> Self {
+    pub fn delete_row(namespace: &str, table: &str, key: &[(String, String)]) -> Self {
         Self {
             sql: format!(
                 "DELETE FROM {}.{} WHERE {}",
-                quoted(keyspace),
+                quoted(namespace),
                 quoted(table),
                 restriction(key)
             ),
@@ -92,9 +94,9 @@ impl Statement {
     /// Logged: an unlogged batch that half-applies breaks the "3 rows" the
     /// confirmation promised. A single key is a bare `DELETE`.
     #[must_use]
-    pub fn delete_rows(keyspace: &str, table: &str, keys: &[Vec<(String, String)>]) -> Self {
+    pub fn delete_rows(namespace: &str, table: &str, keys: &[Vec<(String, String)>]) -> Self {
         if let [only] = keys {
-            return Self::delete_row(keyspace, table, only);
+            return Self::delete_row(namespace, table, only);
         }
 
         // One transaction: a failure part-way commits none of them.
@@ -103,7 +105,7 @@ impl Statement {
             let _ = writeln!(
                 sql,
                 "DELETE FROM {}.{} WHERE {};",
-                quoted(keyspace),
+                quoted(namespace),
                 quoted(table),
                 restriction(key)
             );
@@ -119,7 +121,7 @@ impl Statement {
     /// `Write`, as `kind_of` classifies a typed `UPDATE`.
     #[must_use]
     pub fn update_row(
-        keyspace: &str,
+        namespace: &str,
         table: &str,
         sets: &[(String, String)],
         key: &[(String, String)],
@@ -127,7 +129,7 @@ impl Statement {
         Self {
             sql: format!(
                 "UPDATE {}.{} SET {} WHERE {}",
-                quoted(keyspace),
+                quoted(namespace),
                 quoted(table),
                 assignments(sets),
                 restriction(key)
@@ -136,16 +138,17 @@ impl Statement {
         }
     }
 
-    /// An omitted column is left unset; writing `null` would store a tombstone.
+    /// An omitted column takes its default, its identity or its generated value;
+    /// writing `NULL` would override all three.
     #[must_use]
-    pub fn insert_row(keyspace: &str, table: &str, values: &[(String, String)]) -> Self {
+    pub fn insert_row(namespace: &str, table: &str, values: &[(String, String)]) -> Self {
         let columns: Vec<String> = values.iter().map(|(column, _)| quoted(column)).collect();
         let literals: Vec<&str> = values.iter().map(|(_, literal)| literal.as_str()).collect();
 
         Self {
             sql: format!(
                 "INSERT INTO {}.{} ({}) VALUES ({})",
-                quoted(keyspace),
+                quoted(namespace),
                 quoted(table),
                 columns.join(", "),
                 literals.join(", ")
@@ -157,9 +160,9 @@ impl Statement {
     /// Logged, for [`Self::delete_rows`]' reason. A single row is a bare
     /// `UPDATE`.
     #[must_use]
-    pub fn update_rows(keyspace: &str, table: &str, rows: &[UpdatedRow]) -> Self {
+    pub fn update_rows(namespace: &str, table: &str, rows: &[UpdatedRow]) -> Self {
         if let [(sets, key)] = rows {
-            return Self::update_row(keyspace, table, sets, key);
+            return Self::update_row(namespace, table, sets, key);
         }
 
         // One transaction: a failure part-way commits none of them.
@@ -168,7 +171,7 @@ impl Statement {
             let _ = writeln!(
                 sql,
                 "UPDATE {}.{} SET {} WHERE {};",
-                quoted(keyspace),
+                quoted(namespace),
                 quoted(table),
                 assignments(sets),
                 restriction(key)
@@ -193,7 +196,7 @@ impl Statement {
     }
 }
 
-/// `system_schema` reports true-case names, which CQL would fold unquoted.
+/// The catalog reports true-case names, which Postgres would fold unquoted.
 fn quoted(identifier: &str) -> String {
     format!("\"{}\"", identifier.replace('"', "\"\""))
 }
@@ -576,16 +579,16 @@ mod tests {
         assert_eq!(table.sql, "DROP TABLE \"MyKs\".\"Orders\"");
         assert_eq!(table.kind, StatementKind::Destructive);
 
-        let keyspace = Statement::drop_keyspace("MyKs");
-        assert_eq!(keyspace.sql, "DROP KEYSPACE \"MyKs\"");
-        assert_eq!(keyspace.kind, StatementKind::Destructive);
+        let schema = Statement::drop_schema("MyKs");
+        assert_eq!(schema.sql, "DROP SCHEMA \"MyKs\"");
+        assert_eq!(schema.kind, StatementKind::Destructive);
     }
 
     #[test]
     fn a_built_statement_classifies_as_its_own_cql_would() {
         for built in [
             Statement::drop_table("shop", "orders"),
-            Statement::drop_keyspace("shop"),
+            Statement::drop_schema("shop"),
             Statement::delete_row("shop", "orders", &key()),
             Statement::update_row("shop", "orders", &sets(), &key()),
         ] {

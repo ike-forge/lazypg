@@ -22,7 +22,7 @@ fn a_frame_that_makes_room_for_the_palette_repaints_the_bar() {
 }
 
 #[test]
-fn j_and_k_walk_the_keyspace_list() {
+fn j_and_k_walk_the_namespace_list() {
     let mut state = browsing(&["a", "b", "c"]);
 
     press(&mut state, Key::Char('j'));
@@ -264,7 +264,7 @@ fn ctrl_d_is_inert_under_a_search_prompt() {
 
 #[test]
 fn tab_walks_every_stop_in_order_and_wraps() {
-    // A keyspace with no tables, so DDL offers one tab.
+    // A namespace with no tables, so DDL offers one tab.
     let mut state = browsing(&["a"]);
 
     press(&mut state, Key::Tab);
@@ -382,7 +382,7 @@ fn brackets_do_nothing_from_a_panel_with_no_tabs() {
 }
 
 #[test]
-fn walking_on_a_keyspace_stays_on_the_only_tab_there_is() {
+fn walking_on_a_namespace_stays_on_the_only_tab_there_is() {
     let mut state = browsing_tables(&[("shop", &["orders"])]);
     press(&mut state, Key::Char('l'));
 
@@ -393,7 +393,7 @@ fn walking_on_a_keyspace_stays_on_the_only_tab_there_is() {
     assert_eq!(
         state.ddl.tab(),
         StructureTab::Columns,
-        "a keyspace has no columns, so there is no tab to walk to"
+        "a namespace has no columns, so there is no tab to walk to"
     );
 }
 

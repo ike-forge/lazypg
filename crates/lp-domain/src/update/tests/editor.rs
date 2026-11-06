@@ -57,14 +57,14 @@ fn typing_a_prefix_offers_the_keyword_it_starts() {
 }
 
 #[test]
-fn a_qualified_prefix_offers_that_keyspaces_tables() {
+fn a_qualified_prefix_offers_that_namespaces_tables() {
     let state = editing("SELECT * FROM shop.o");
 
     assert_eq!(offered(&state), vec!["orders".to_owned()]);
 }
 
 #[test]
-fn an_unqualified_table_comes_from_the_keyspace_the_tree_is_on() {
+fn an_unqualified_table_comes_from_the_namespace_the_tree_is_on() {
     // The Tables cursor is on `shop`, so a bare `orders` is completable and
     // outranks a keyword after `FROM`.
     let state = editing("SELECT * FROM ord");
@@ -165,7 +165,7 @@ fn ctrl_n_raises_a_popup_and_then_walks_it() {
     let raised = state
         .queries
         .completion()
-        .expect("s reaches a keyword and a keyspace")
+        .expect("s reaches a keyword and a namespace")
         .selected();
     assert_eq!(raised, 0);
 

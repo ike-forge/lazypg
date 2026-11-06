@@ -197,7 +197,7 @@ pub enum Effect {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Source {
-    /// `limit` is counted here rather than spliced into the CQL: a statement's
+    /// `limit` is counted here rather than spliced into the SQL: a statement's
     /// own `LIMIT` is the user's.
     Whole {
         statement: Box<Statement>,
@@ -290,7 +290,7 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<Effect> {
 enum Described {
     Database(String),
     Schema(String),
-    Table { keyspace: String, table: String },
+    Table { namespace: String, table: String },
 }
 
 fn described(state: &State) -> Option<Described> {
@@ -298,9 +298,9 @@ fn described(state: &State) -> Option<Described> {
 
     Some(match state.tables.selected(schema)? {
         Node::Database { name, .. } => Described::Database(name.to_owned()),
-        Node::Schema { keyspace, .. } => Described::Schema(keyspace.name.clone()),
-        Node::Table { keyspace, table } => Described::Table {
-            keyspace: keyspace.name.clone(),
+        Node::Schema { namespace, .. } => Described::Schema(namespace.name.clone()),
+        Node::Table { namespace, table } => Described::Table {
+            namespace: namespace.name.clone(),
             table: table.name.clone(),
         },
     })

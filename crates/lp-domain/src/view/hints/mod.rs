@@ -305,7 +305,7 @@ fn selected(state: &State) -> bool {
         Panel::Objects => state.tables.selection.is_active(),
         Panel::Structure => state.ddl.selection.is_active(),
         Panel::Contents => state.contents.rows.is_active() || state.contents.columns.is_active(),
-        // The Cql tab is an editor with no selection.
+        // The SQL tab is an editor with no selection.
         Panel::Queries => {
             state.queries.tab() == QueriesTab::Logs && state.log.selection.is_active()
         }

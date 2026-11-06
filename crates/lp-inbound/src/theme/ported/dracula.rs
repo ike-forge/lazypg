@@ -25,7 +25,7 @@ pub(crate) const DRACULA: Palette = Palette {
     selection_fg: rgb(0xf8f8f2),
     selection_bar: rgb(0xf1fa8c),
     shortcut: rgb(0xf1fa8c),
-    keyspace: rgb(0xff79c6),
+    namespace: rgb(0xff79c6),
     table: rgb(0x8be9fd),
     primary_key: rgb(0xffb86c),
     foreign_key: rgb(0x50fa7b),

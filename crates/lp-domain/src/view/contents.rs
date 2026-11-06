@@ -152,7 +152,7 @@ fn pages_may_shift(state: &State, subject: &Subject) -> bool {
     };
     let keyless = state
         .schema()
-        .and_then(|catalog| catalog.schemas.get(&table.keyspace))
+        .and_then(|catalog| catalog.schemas.get(&table.namespace))
         .and_then(|schema| schema.tables.get(&table.table))
         .is_some_and(|found| found.primary_key.is_none());
     let paged = state.contents.has_more()
@@ -333,8 +333,8 @@ const fn key_token(column: Option<Token>) -> Option<Token> {
 fn column_token(schema: Option<&Catalog>, table: Option<&TableRef>, column: &str) -> Option<Token> {
     let table = table?;
     let found = schema
-        .and_then(|schema| schema.schemas.get(&table.keyspace))
-        .and_then(|keyspace| keyspace.tables.get(&table.table))?;
+        .and_then(|schema| schema.schemas.get(&table.namespace))
+        .and_then(|namespace| namespace.tables.get(&table.table))?;
 
     if found.is_key(column) {
         Some(Token::PrimaryKey)
@@ -429,7 +429,7 @@ fn fitted(name: &str, width: usize) -> String {
     out
 }
 
-/// A typed statement's unqualified table takes the keyspace on screen.
+/// A typed statement's unqualified table takes the namespace on screen.
 fn grid_table(state: &State, subject: &Subject) -> Option<TableRef> {
     match subject {
         Subject::Table(table) => Some(table.clone()),
@@ -437,7 +437,10 @@ fn grid_table(state: &State, subject: &Subject) -> Option<TableRef> {
             let name = crate::sql::sole_table(sql)?;
 
             Some(TableRef {
-                keyspace: name.keyspace.clone().or_else(|| state.visible_keyspace())?,
+                namespace: name
+                    .namespace
+                    .clone()
+                    .or_else(|| state.visible_namespace())?,
                 table: name.table.clone(),
             })
         }
@@ -479,7 +482,7 @@ mod tests {
         }
     }
 
-    /// `id` is the partition key.
+    /// `id` is the primary key.
     fn showing(page: Page) -> State {
         let mut state = tabled(&[("shop", &["orders"])]);
         let query = QueryId::next();
@@ -505,7 +508,7 @@ mod tests {
         let orders = schema
             .schemas
             .get_mut("shop")
-            .and_then(|keyspace| keyspace.tables.get_mut("orders"))
+            .and_then(|namespace| namespace.tables.get_mut("orders"))
             .expect("the builder made it");
         orders.columns = vec![Column {
             name: "total".to_owned(),
@@ -535,8 +538,8 @@ mod tests {
         state
     }
 
-    fn showing_typed_in(keyspace: &str, sql: &str, page: Page) -> State {
-        let mut state = tabled(&[(keyspace, &["orders"])]);
+    fn showing_typed_in(namespace: &str, sql: &str, page: Page) -> State {
+        let mut state = tabled(&[(namespace, &["orders"])]);
         let query = QueryId::next();
         state.contents.requested(
             query,
@@ -589,11 +592,11 @@ mod tests {
             .to_vec()
     }
 
-    fn showing_table(keyspace: &str, table: &str) -> State {
-        let mut state = tabled(&[(keyspace, &[table])]);
+    fn showing_table(namespace: &str, table: &str) -> State {
+        let mut state = tabled(&[(namespace, &[table])]);
         state.contents.requested(
             QueryId::next(),
-            Subject::Table(TableRef::new(keyspace, table)),
+            Subject::Table(TableRef::new(namespace, table)),
             crate::model::Statement::typed("SELECT * FROM shop.orders"),
         );
         state
@@ -742,7 +745,7 @@ mod tests {
         let table = schema
             .schemas
             .get_mut("shop")
-            .and_then(|keyspace| keyspace.tables.get_mut("orders"))
+            .and_then(|namespace| namespace.tables.get_mut("orders"))
             .expect("the builder made it");
         table.primary_key = Some(PrimaryKey {
             name: "orders_pkey".to_owned(),
@@ -864,7 +867,7 @@ mod tests {
     }
 
     #[test]
-    fn an_unqualified_typed_select_takes_the_keyspace_on_screen() {
+    fn an_unqualified_typed_select_takes_the_namespace_on_screen() {
         let state = showing_typed_in(
             "shop",
             "select * from orders",
@@ -915,7 +918,7 @@ mod tests {
         let table = schema
             .schemas
             .get_mut("shop")
-            .and_then(|keyspace| keyspace.tables.get_mut("orders"))
+            .and_then(|namespace| namespace.tables.get_mut("orders"))
             .expect("the builder made it");
         table.primary_key = Some(PrimaryKey {
             name: "orders_pkey".to_owned(),

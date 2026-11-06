@@ -28,7 +28,7 @@ pub(super) fn focus_by_number(state: &mut State, key: char) {
     }
 }
 
-/// A tab the strip does not draw is skipped: a keyspace's DDL panel offers one
+/// A tab the strip does not draw is skipped: a namespace's DDL panel offers one
 /// tab.
 pub(super) fn walk_tab(state: &mut State, step: Step) {
     match state.focus() {
@@ -85,7 +85,7 @@ impl Landing {
     }
 
     /// Both, even with focus already there: [`State::focus_on`] reverts Queries
-    /// to `Cql` when focus leaves.
+    /// to `Sql` when focus leaves.
     pub(super) fn arrive(self, state: &mut State) {
         match self {
             Self::Tables => state.focus_on(Panel::Objects),
@@ -150,7 +150,7 @@ pub(super) fn go_right(state: &mut State) -> Vec<Effect> {
     Vec::new()
 }
 
-/// `⏎` folds an open keyspace; `l` steps into it.
+/// `⏎` folds an open namespace; `l` steps into it.
 pub(super) fn step_in(state: &mut State) -> Vec<Effect> {
     let table = {
         let Some((tables, schema)) = state.tables_and_schema() else {
@@ -161,7 +161,7 @@ pub(super) fn step_in(state: &mut State) -> Vec<Effect> {
             // Reading needs one table. Folding addresses the cursor's row, so
             // it is left alone.
             Some(Node::Table { .. }) if tables.selects_many() => return Vec::new(),
-            Some(Node::Table { keyspace, table }) => TableRef::new(&keyspace.name, &table.name),
+            Some(Node::Table { namespace, table }) => TableRef::new(&namespace.name, &table.name),
             Some(Node::Database {
                 name,
                 current: false,

@@ -11,7 +11,7 @@ use super::{PanelBody, PanelTitle, waiting};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TreeRow {
     pub label: String,
-    /// Not derivable from `token`: a system keyspace and its tables are both
+    /// Not derivable from `token`: a system namespace and its tables are both
     /// faint.
     pub kind: RowKind,
     pub token: Token,
@@ -173,7 +173,7 @@ fn limbs(nodes: &[Node<'_>], index: usize, nested: bool) -> Limbs {
 }
 
 fn tree_row(node: &Node<'_>, limbs: Limbs) -> TreeRow {
-    let (keyspace, label, kind) = match node {
+    let (namespace, label, kind) = match node {
         Node::Database { name, current, .. } => {
             return TreeRow {
                 label: (*name).to_owned(),
@@ -186,15 +186,15 @@ fn tree_row(node: &Node<'_>, limbs: Limbs) -> TreeRow {
                 },
             };
         }
-        Node::Schema { keyspace, .. } => (
-            *keyspace,
-            keyspace.name.clone(),
+        Node::Schema { namespace, .. } => (
+            *namespace,
+            namespace.name.clone(),
             RowKind::Schema {
                 limb: limbs.nested.then_some(limbs.own),
             },
         ),
-        Node::Table { keyspace, table } => (
-            *keyspace,
+        Node::Table { namespace, table } => (
+            *namespace,
             table.name.clone(),
             RowKind::Table {
                 limb: limbs.own,
@@ -204,7 +204,7 @@ fn tree_row(node: &Node<'_>, limbs: Limbs) -> TreeRow {
         ),
     };
 
-    let token = match (keyspace.kind(), kind) {
+    let token = match (namespace.kind(), kind) {
         (SchemaKind::System, _) => Token::Faint,
         (SchemaKind::User, RowKind::Table { .. }) => Token::Table,
         (SchemaKind::User, _) => Token::Schema,
@@ -363,14 +363,14 @@ mod tests {
         assert_eq!(
             rows[0].token,
             Token::Schema,
-            "a user keyspace is told apart from a user table"
+            "a user namespace is told apart from a user table"
         );
         assert_eq!(rows[2].token, Token::Faint);
         assert_eq!(selected, 0);
     }
 
     #[test]
-    fn a_keyspace_with_no_tables_offers_nothing_to_unfold() {
+    fn a_namespace_with_no_tables_offers_nothing_to_unfold() {
         let state = loaded(&["shop"]);
 
         let PanelBody::Tree { rows, .. } = tables_body(&state) else {
@@ -380,12 +380,12 @@ mod tests {
         assert_eq!(
             rows[0].kind,
             RowKind::Schema { limb: None },
-            "a keyspace with nothing under it is still a keyspace"
+            "a namespace with nothing under it is still a namespace"
         );
     }
 
     #[test]
-    fn a_keyspace_with_tables_is_folded_until_it_is_opened() {
+    fn a_namespace_with_tables_is_folded_until_it_is_opened() {
         let mut state = tabled(&[("shop", &["orders", "users"])]);
 
         let PanelBody::Tree { rows, .. } = tables_body(&state) else {
@@ -457,7 +457,7 @@ mod tests {
     }
 
     #[test]
-    fn a_cluster_with_no_keyspaces_says_so_rather_than_listing_nothing() {
+    fn a_cluster_with_no_namespaces_says_so_rather_than_listing_nothing() {
         assert_eq!(
             tables_body(&loaded(&[])),
             PanelBody::Notice {
@@ -482,7 +482,7 @@ mod tests {
     }
 
     #[test]
-    fn a_search_keeps_the_keyspaces_it_reaches() {
+    fn a_search_keeps_the_namespaces_it_reaches() {
         let mut state = tabled(&[("shop", &["orders"]), ("logs", &["spans"])]);
         state.apply_search(Searched::Tables, Search::new("orders"));
 
@@ -516,7 +516,7 @@ mod tests {
     }
 
     #[test]
-    fn a_keyspace_and_a_table_are_told_apart_by_colour() {
+    fn a_namespace_and_a_table_are_told_apart_by_colour() {
         let mut state = tabled(&[("shop", &["orders"])]);
         let schema = state.schema().cloned().expect("loaded");
         state.tables.open(&schema);
@@ -525,20 +525,20 @@ mod tests {
             panic!("a loaded schema draws a tree");
         };
 
-        let keyspace = rows
+        let namespace = rows
             .iter()
             .find(|row| row.kind == RowKind::Schema { limb: None })
-            .expect("a keyspace");
+            .expect("a namespace");
         let table = rows
             .iter()
             .find(|row| row.kind.is_table())
             .expect("a table");
 
-        assert_eq!(keyspace.token, Token::Schema);
+        assert_eq!(namespace.token, Token::Schema);
         assert_eq!(table.token, Token::Table);
         assert_ne!(
-            keyspace.token, table.token,
-            "the panel's whole job is the keyspace/table distinction"
+            namespace.token, table.token,
+            "the panel's whole job is the namespace/table distinction"
         );
     }
 
@@ -554,7 +554,7 @@ mod tests {
 
         assert!(
             rows.iter().all(|row| row.token == Token::Faint),
-            "a system keyspace and its tables are the server's, not the user's"
+            "a system namespace and its tables are the server's, not the user's"
         );
     }
 

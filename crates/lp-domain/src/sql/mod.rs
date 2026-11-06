@@ -1,4 +1,4 @@
-//! CQL as the editor needs it: highlighted, formatted, completed, and split
+//! SQL as the editor needs it: highlighted, formatted, completed, and split
 //! into statements. All four read the same scan, so they cannot disagree about
 //! a word.
 
@@ -252,7 +252,7 @@ mod tests {
     }
 
     #[test]
-    fn a_qualified_table_paints_its_keyspace_and_its_table_apart() {
+    fn a_qualified_table_paints_its_namespace_and_its_table_apart() {
         let lines = highlight("SELECT id FROM shop.orders");
 
         assert_eq!(
@@ -289,7 +289,7 @@ mod tests {
     }
 
     fn sole(name: Option<Name>) -> Option<(Option<String>, String)> {
-        name.map(|name| (name.keyspace, name.table))
+        name.map(|name| (name.namespace, name.table))
     }
 
     /// A trailing `;` opens a placeholder scope that must not count.

@@ -1,6 +1,6 @@
 use super::*;
 
-fn on_keyspace() -> State {
+fn on_namespace() -> State {
     droppable_tree()
 }
 
@@ -11,14 +11,14 @@ fn on_table() -> State {
 }
 
 #[test]
-fn d_on_a_keyspace_asks_for_its_name() {
-    let mut state = on_keyspace();
+fn d_on_a_namespace_asks_for_its_name() {
+    let mut state = on_namespace();
 
     press(&mut state, Key::Char('d'));
 
     let prompt = dropping(&state).expect("the confirmation is up");
     assert_eq!(prompt.target(), &Target::Schema("shop".to_owned()));
-    assert!(prompt.takes_text(), "a keyspace is always typed back");
+    assert!(prompt.takes_text(), "a namespace is always typed back");
 }
 
 #[test]
@@ -85,7 +85,7 @@ fn n_abandons_the_drop() {
 
 #[test]
 fn esc_abandons_the_drop_on_either_spelling() {
-    for mut state in [on_table(), on_keyspace()] {
+    for mut state in [on_table(), on_namespace()] {
         press(&mut state, Key::Char('d'));
         let effects = press(&mut state, Key::Escape);
 
@@ -96,7 +96,7 @@ fn esc_abandons_the_drop_on_either_spelling() {
 
 #[test]
 fn enter_on_a_mismatched_name_does_nothing() {
-    let mut state = on_keyspace();
+    let mut state = on_namespace();
     press(&mut state, Key::Char('d'));
     type_in(&mut state, "sho");
 
@@ -110,8 +110,8 @@ fn enter_on_a_mismatched_name_does_nothing() {
 }
 
 #[test]
-fn enter_on_the_typed_name_drops_the_keyspace() {
-    let mut state = on_keyspace();
+fn enter_on_the_typed_name_drops_the_namespace() {
+    let mut state = on_namespace();
     press(&mut state, Key::Char('d'));
     type_in(&mut state, "shop");
 
@@ -120,7 +120,7 @@ fn enter_on_the_typed_name_drops_the_keyspace() {
     assert!(
         effects.iter().any(|effect| matches!(
             effect,
-            Effect::Execute { stmt, .. } if stmt.sql == "DROP KEYSPACE \"shop\""
+            Effect::Execute { stmt, .. } if stmt.sql == "DROP SCHEMA \"shop\""
         )),
         "{effects:?}"
     );
@@ -148,7 +148,7 @@ fn n_is_text_on_a_typed_confirmation() {
     assert!(
         effects.iter().any(|effect| matches!(
             effect,
-            Effect::Execute { stmt, .. } if stmt.sql == "DROP KEYSPACE \"nation\""
+            Effect::Execute { stmt, .. } if stmt.sql == "DROP SCHEMA \"nation\""
         )),
         "every `n` typed itself; {effects:?}"
     );
@@ -156,7 +156,7 @@ fn n_is_text_on_a_typed_confirmation() {
 
 #[test]
 fn a_typed_confirmation_takes_text_rather_than_quitting_or_moving() {
-    let mut state = on_keyspace();
+    let mut state = on_namespace();
     press(&mut state, Key::Char('d'));
     let before = state.tables.cursor().index();
 
@@ -252,7 +252,7 @@ fn d_is_inert_while_a_drop_is_running() {
 
 #[test]
 fn d_is_inert_over_a_multi_row_selection() {
-    let mut state = on_keyspace();
+    let mut state = on_namespace();
     press(&mut state, Key::Char('v'));
     press(&mut state, Key::Char('j'));
 
@@ -395,7 +395,7 @@ fn a_frame_that_shrank_past_the_drop_block_closes_it() {
 
 #[test]
 fn a_second_d_leaves_the_open_confirmation_as_it_was() {
-    let mut state = on_keyspace();
+    let mut state = on_namespace();
     press(&mut state, Key::Char('d'));
     type_in(&mut state, "sho");
 

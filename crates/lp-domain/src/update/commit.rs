@@ -108,7 +108,7 @@ pub(super) fn pending_commit(
     let described = state
         .schema()?
         .schemas
-        .get(&table.keyspace)?
+        .get(&table.namespace)?
         .tables
         .get(&table.table)?;
     let key = key::columns(described);
@@ -138,7 +138,7 @@ pub(super) fn pending_commit(
         })
         .collect::<Option<Vec<_>>>()?;
 
-    let statement = Statement::update_rows(&table.keyspace, &table.table, &rows);
+    let statement = Statement::update_rows(&table.namespace, &table.table, &rows);
 
     Some((table.clone(), statement, rows.len(), cells))
 }

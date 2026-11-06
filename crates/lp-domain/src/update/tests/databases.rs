@@ -45,7 +45,7 @@ fn labels(state: &State) -> Vec<String> {
         .iter()
         .map(|node| match node {
             Node::Database { name, .. } => (*name).to_owned(),
-            Node::Schema { keyspace, .. } => format!("  {}", keyspace.name),
+            Node::Schema { namespace, .. } => format!("  {}", namespace.name),
             Node::Table { table, .. } => format!("    {}", table.name),
         })
         .collect()

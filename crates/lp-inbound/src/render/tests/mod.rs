@@ -176,7 +176,7 @@ fn banded(buffer: &Buffer, row: u16) -> bool {
     buffer.cell((1, 1 + row)).expect("inside the panel").bg == band
 }
 
-/// Partition key `id`.
+/// Primary key `id`.
 fn showing(page: Page) -> State {
     let mut state = State::default();
     state.connection = ConnectionState::Connected(Connection {

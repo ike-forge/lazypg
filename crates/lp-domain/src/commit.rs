@@ -72,7 +72,7 @@ impl CommitPrompt {
         &self.table
     }
 
-    /// Formatted for display only: [`Self::statement`] keeps the builders' CQL,
+    /// Formatted for display only: [`Self::statement`] keeps the builders' SQL,
     /// since a misread scan could rewrite a literal.
     #[must_use]
     pub fn lines(&self) -> Vec<Vec<Segment>> {

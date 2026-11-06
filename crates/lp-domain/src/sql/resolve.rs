@@ -28,7 +28,7 @@ pub enum Statement {
 /// Folded to lower case where unquoted: `Catalog` is indexed by the folded name.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Name {
-    pub keyspace: Option<String>,
+    pub namespace: Option<String>,
     pub table: String,
 }
 
@@ -198,8 +198,8 @@ struct Machine {
     tables: Vec<Vec<Name>>,
     scopes: Vec<Scope>,
     /// A bare name in table position is a table until a `.` proves it a
-    /// keyspace; then its role is rewritten.
-    pending_keyspace: Option<(usize, String)>,
+    /// namespace; then its role is rewritten.
+    pending_namespace: Option<(usize, String)>,
     /// Whitespace and comments do not break it. Without it `FROM shop orders`
     /// would read as one qualified name.
     dot_before: bool,
@@ -324,7 +324,7 @@ impl Machine {
             }
             "WITH" => self.enter(Expect::Property),
             "VALUES" | "LIMIT" | "OFFSET" | "IN" | "LIKE" | "ILIKE" => self.enter(Expect::Value),
-            // Before a pending table or keyspace name, `IF [NOT] EXISTS`
+            // Before a pending table or namespace name, `IF [NOT] EXISTS`
             // modifies it and opens no clause.
             "IF" if !matches!(self.expect, Expect::Table | Expect::Schema) => {
                 self.enter(Expect::Column)
@@ -384,31 +384,31 @@ impl Machine {
         match self.expect {
             Expect::Schema => {
                 self.record(Name {
-                    keyspace: None,
+                    namespace: None,
                     table: name,
                 });
                 Some(Role::Schema)
             }
             Expect::Table if after == After::Table && !self.dot_before => {
-                self.pending_keyspace = None;
+                self.pending_namespace = None;
                 Some(Role::Alias)
             }
             Expect::Table => {
                 self.after = After::Table;
                 // Only an adjacent `.` qualifies: `FROM shop orders` is a
                 // table and its alias.
-                let qualified = self.pending_keyspace.take().filter(|_| self.dot_before);
+                let qualified = self.pending_namespace.take().filter(|_| self.dot_before);
 
-                if let Some((index, keyspace)) = qualified {
+                if let Some((index, namespace)) = qualified {
                     self.roles[index] = Some(Role::Schema);
                     self.record(Name {
-                        keyspace: Some(keyspace),
+                        namespace: Some(namespace),
                         table: name,
                     });
                 } else {
-                    self.pending_keyspace = Some((self.roles.len(), name.clone()));
+                    self.pending_namespace = Some((self.roles.len(), name.clone()));
                     self.record(Name {
-                        keyspace: None,
+                        namespace: None,
                         table: name,
                     });
                 }
@@ -444,7 +444,7 @@ impl Machine {
         };
 
         match current.last_mut() {
-            Some(last) if name.keyspace.is_some() && last.keyspace.is_none() => *last = name,
+            Some(last) if name.namespace.is_some() && last.namespace.is_none() => *last = name,
             _ => current.push(name),
         }
     }
@@ -456,7 +456,7 @@ impl Machine {
         self.base = Expect::Keyword;
         self.verb = Verb::Unread;
         self.alternating = false;
-        self.pending_keyspace = None;
+        self.pending_namespace = None;
         self.last_identifier = None;
         self.has_content = false;
         self.after = After::Other;
@@ -483,7 +483,7 @@ impl Machine {
     }
 }
 
-/// CQL folds an unquoted name and keeps a quoted one exactly.
+/// SQL folds an unquoted name and keeps a quoted one exactly.
 fn fold(text: &str) -> String {
     match text
         .strip_prefix('"')
@@ -526,7 +526,7 @@ mod tests {
     }
 
     #[test]
-    fn an_unqualified_table_is_a_table_and_names_no_keyspace() {
+    fn an_unqualified_table_is_a_table_and_names_no_namespace() {
         assert_eq!(
             roles("SELECT * FROM orders"),
             vec![("orders".to_owned(), Some(Role::Table))]
@@ -536,7 +536,7 @@ mod tests {
         assert_eq!(
             resolve(&scanned).tables_at(scanned.len() - 1),
             &[Name {
-                keyspace: None,
+                namespace: None,
                 table: "orders".to_owned()
             }]
         );
@@ -550,7 +550,7 @@ mod tests {
         assert_eq!(
             analysis.tables_at(2),
             &[Name {
-                keyspace: Some("shop".to_owned()),
+                namespace: Some("shop".to_owned()),
                 table: "orders".to_owned()
             }]
         );
@@ -563,7 +563,7 @@ mod tests {
         assert_eq!(
             resolve(&scanned).tables_at(scanned.len() - 1),
             &[Name {
-                keyspace: Some("shop".to_owned()),
+                namespace: Some("shop".to_owned()),
                 table: "Orders".to_owned()
             }]
         );
@@ -579,7 +579,7 @@ mod tests {
         assert_eq!(
             qualified("SELECT * FROM shop.orders"),
             vec![Name {
-                keyspace: Some("shop".to_owned()),
+                namespace: Some("shop".to_owned()),
                 table: "orders".to_owned()
             }],
             "no space around the dot"
@@ -588,7 +588,7 @@ mod tests {
         assert_eq!(
             qualified("SELECT * FROM shop . orders"),
             vec![Name {
-                keyspace: Some("shop".to_owned()),
+                namespace: Some("shop".to_owned()),
                 table: "orders".to_owned()
             }],
             "SQL allows space around the dot"
@@ -597,7 +597,7 @@ mod tests {
         assert_eq!(
             qualified("SELECT * FROM shop AS x"),
             vec![Name {
-                keyspace: None,
+                namespace: None,
                 table: "shop".to_owned()
             }],
             "AS introduces an alias, not a second table"
@@ -613,7 +613,7 @@ mod tests {
         assert_eq!(
             qualified("SELECT * FROM shop orders"),
             vec![Name {
-                keyspace: None,
+                namespace: None,
                 table: "shop".to_owned()
             }],
             "two bare names in a row are a table and its alias, not one name"
@@ -627,7 +627,7 @@ mod tests {
         assert_eq!(
             resolve(&scanned).tables_at(scanned.len() - 1),
             &[Name {
-                keyspace: Some("shop".to_owned()),
+                namespace: Some("shop".to_owned()),
                 table: "orders".to_owned()
             }]
         );
@@ -781,21 +781,21 @@ mod tests {
         assert_eq!(
             analysis.tables_at(0),
             &[Name {
-                keyspace: None,
+                namespace: None,
                 table: "a".to_owned()
             }]
         );
         assert_eq!(
             analysis.tables_at(last),
             &[Name {
-                keyspace: None,
+                namespace: None,
                 table: "b".to_owned()
             }]
         );
     }
 
     #[test]
-    fn a_create_table_names_its_keyspace_table_columns_and_their_types() {
+    fn a_create_table_names_its_namespace_table_columns_and_their_types() {
         // `uuid` and `int` lex as keywords and carry no role.
         assert_eq!(
             roles("CREATE TABLE shop.orders (id uuid, total int, PRIMARY KEY (id))"),
@@ -911,19 +911,20 @@ mod tests {
     }
 
     const CORPUS: &[&str] = &[
-        "SELECT JSON DISTINCT id FROM t WHERE token(id) > 1 GROUP BY id ORDER BY id DESC LIMIT 10 ALLOW FILTERING",
-        "INSERT INTO t JSON '{\"id\": 1}' IF NOT EXISTS USING TTL 60",
-        "UPDATE t USING TTL 60 SET c = c + 1 WHERE id IN (1, 2) IF EXISTS",
-        "DELETE FROM t USING TIMESTAMP 1 WHERE id = 1 IF EXISTS",
-        "BEGIN UNLOGGED BATCH INSERT INTO t (id) VALUES (1); APPLY BATCH",
-        "CREATE KEYSPACE IF NOT EXISTS k WITH replication = {'class': 'SimpleStrategy'}",
-        "ALTER KEYSPACE k WITH durable_writes = true",
-        "CREATE TABLE IF NOT EXISTS k.t (id uuid PRIMARY KEY) WITH comment = 'x'",
-        "ALTER TABLE k.t DROP note",
+        "SELECT DISTINCT o.id FROM shop.orders o LEFT JOIN shop.customer c ON c.id = o.cid \
+         WHERE o.total > 1 GROUP BY o.id HAVING count(*) > 1 ORDER BY o.id DESC LIMIT 10 OFFSET 5",
+        "INSERT INTO t (id) VALUES (1) ON CONFLICT (id) DO NOTHING RETURNING id",
+        "UPDATE t SET c = c + 1 WHERE id IN (1, 2) RETURNING *",
+        "DELETE FROM t WHERE id = $1",
+        "WITH recent AS (SELECT * FROM t) SELECT * FROM recent",
+        "BEGIN; UPDATE t SET a = 1; COMMIT;",
+        "CREATE SCHEMA IF NOT EXISTS k",
+        "CREATE TABLE IF NOT EXISTS k.t (id uuid PRIMARY KEY, n numeric(10, 2)) WITH (fillfactor = 70)",
+        "ALTER TABLE k.t DROP COLUMN note",
         "DROP TABLE IF EXISTS k.t",
         "TRUNCATE TABLE k.t",
-        "USE k",
-        "CREATE TABLE t (id uuid) WITH comment = 'x' AND compaction = {'class': 'X'}",
+        "EXPLAIN ANALYZE SELECT * FROM k.t",
+        "SELECT '{1,2}'::int[], E'a\\nb', $$x$$",
         "CREATE INDEX orders_by_total ON k.t (total)",
     ];
 
@@ -1013,7 +1014,7 @@ mod tests {
         assert_eq!(
             at.tables,
             vec![Name {
-                keyspace: Some("shop".to_owned()),
+                namespace: Some("shop".to_owned()),
                 table: "orders".to_owned()
             }]
         );

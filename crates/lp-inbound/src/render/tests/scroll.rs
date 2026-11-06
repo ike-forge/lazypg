@@ -85,11 +85,11 @@ fn the_thumb_sits_at_whichever_end_of_the_track_the_viewport_is_on() {
 
     assert!(
         tables_border(&draw_state(40, 12, &browsing(&refs, 0))).starts_with(THUMB),
-        "the first keyspace is on screen, so the thumb belongs at the top"
+        "the first namespace is on screen, so the thumb belongs at the top"
     );
     assert!(
         tables_border(&draw_state(40, 12, &browsing(&refs, 11))).ends_with(THUMB),
-        "the last keyspace is on screen, so the thumb belongs at the bottom"
+        "the last namespace is on screen, so the thumb belongs at the bottom"
     );
 }
 

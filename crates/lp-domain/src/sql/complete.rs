@@ -1,4 +1,4 @@
-//! What the word under the cursor could become, from CQL's grammar and the
+//! What the word under the cursor could become, from SQL's grammar and the
 //! loaded schema.
 
 use super::keywords::{COLUMN_WORDS, KEYWORDS, PROPERTIES, TYPES};
@@ -25,7 +25,7 @@ pub enum CandidateKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Then {
     Nothing,
-    /// No CQL statement ends on a keyword, so the space is a keystroke saved.
+    /// No SQL statement ends on a keyword, so the space is a keystroke saved.
     Space,
     /// A template's first hole.
     Caret(usize),
@@ -34,7 +34,7 @@ enum Then {
 }
 
 /// `label` and `text` differ for a column offered with no table in scope, shown
-/// qualified but typed bare (`SELECT shop.orders.id` is not CQL), and for a
+/// qualified but typed bare (`SELECT shop.orders.id` is not SQL), and for a
 /// template, whose label draws its holes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Candidate {
@@ -134,13 +134,13 @@ impl Completion {
     }
 }
 
-/// `keyspace` is the one Tables shows; it makes unqualified table names
+/// `namespace` is the one Tables shows; it makes unqualified table names
 /// completable.
 #[must_use]
 pub fn suggest(
     editor: &Editor,
     schema: Option<&Catalog>,
-    keyspace: Option<&str>,
+    namespace: Option<&str>,
 ) -> Option<Completion> {
     let word = word_before(editor);
     let (qualifier, prefix) = split(&word);
@@ -161,8 +161,8 @@ pub fn suggest(
         // `WHERE id = shop.` is a value, not a table.
         (Some(qualifier), Expect::Keyword | Expect::Table) => tables_of(schema, qualifier, prefix),
         (Some(_), _) => Vec::new(),
-        (None, Expect::Column) => columns(schema, &context, keyspace, prefix),
-        (None, Expect::Table) => names_first(schema, keyspace, prefix),
+        (None, Expect::Column) => columns(schema, &context, namespace, prefix),
+        (None, Expect::Table) => names_first(schema, namespace, prefix),
         (None, Expect::Schema) => schemas(schema, prefix),
         (None, Expect::Type) => types(prefix),
         (None, Expect::Property) => properties(prefix),
@@ -173,7 +173,7 @@ pub fn suggest(
         }
         (None, Expect::Keyword) => {
             let start = at_statement_start(&scanned, offset - word.chars().count());
-            unqualified(schema, keyspace, prefix, start)
+            unqualified(schema, namespace, prefix, start)
         }
     };
 
@@ -198,7 +198,7 @@ pub fn suggest(
 /// depend on the panel.
 fn unqualified(
     schema: Option<&Catalog>,
-    keyspace: Option<&str>,
+    namespace: Option<&str>,
     prefix: &str,
     at_start: bool,
 ) -> Vec<Candidate> {
@@ -209,9 +209,9 @@ fn unqualified(
     };
 
     let schemas = schemas(schema, prefix);
-    let tables = keyspace
+    let tables = namespace
         .into_iter()
-        .flat_map(|keyspace| tables_of(schema, keyspace, prefix));
+        .flat_map(|namespace| tables_of(schema, namespace, prefix));
 
     ahead(keywords(prefix), templates)
         .into_iter()
@@ -250,7 +250,7 @@ fn types(prefix: &str) -> Vec<Candidate> {
         .collect()
 }
 
-/// Lower case, as Cassandra spells them.
+/// Lower case, as Postgres spells them.
 fn properties(prefix: &str) -> Vec<Candidate> {
     PROPERTIES
         .iter()
@@ -260,21 +260,21 @@ fn properties(prefix: &str) -> Vec<Candidate> {
         .collect()
 }
 
-fn tables_of(schema: Option<&Catalog>, keyspace: &str, prefix: &str) -> Vec<Candidate> {
+fn tables_of(schema: Option<&Catalog>, namespace: &str, prefix: &str) -> Vec<Candidate> {
     schema
-        .and_then(|schema| schema.schemas.get(keyspace))
+        .and_then(|schema| schema.schemas.get(namespace))
         .into_iter()
-        .flat_map(|keyspace| keyspace.tables.keys())
+        .flat_map(|namespace| namespace.tables.keys())
         .filter(|name| matches(name, prefix))
         .map(|name| Candidate::plain(name.clone(), CandidateKind::Table))
         .take(MOST)
         .collect()
 }
 
-fn names_first(schema: Option<&Catalog>, keyspace: Option<&str>, prefix: &str) -> Vec<Candidate> {
-    let tables = keyspace
+fn names_first(schema: Option<&Catalog>, namespace: Option<&str>, prefix: &str) -> Vec<Candidate> {
+    let tables = namespace
         .into_iter()
-        .flat_map(|keyspace| tables_of(schema, keyspace, prefix));
+        .flat_map(|namespace| tables_of(schema, namespace, prefix));
 
     tables
         .chain(schemas(schema, prefix))
@@ -317,11 +317,11 @@ fn schemas(schema: Option<&Catalog>, prefix: &str) -> Vec<Candidate> {
 fn columns(
     schema: Option<&Catalog>,
     context: &Context,
-    keyspace: Option<&str>,
+    namespace: Option<&str>,
     prefix: &str,
 ) -> Vec<Candidate> {
     let columns = match context.tables.as_slice() {
-        [table] => columns_of(schema, &resolved(table, keyspace), prefix),
+        [table] => columns_of(schema, &resolved(table, namespace), prefix),
         // A standing but empty `FROM` (`SELECT <> FROM <>`) is not missing;
         // writing one would give two.
         tables => every_column(schema, prefix, tables.is_empty() && !context.table_clause),
@@ -357,18 +357,23 @@ fn every_column(schema: Option<&Catalog>, prefix: &str, orphaned: bool) -> Vec<C
     schema
         .into_iter()
         .flat_map(Catalog::schemas_in_display_order)
-        .flat_map(|keyspace| keyspace.tables.values().map(move |table| (keyspace, table)))
-        .flat_map(|(keyspace, table)| {
-            column_names(table).map(move |name| (keyspace.name.clone(), table.name.clone(), name))
+        .flat_map(|namespace| {
+            namespace
+                .tables
+                .values()
+                .map(move |table| (namespace, table))
+        })
+        .flat_map(|(namespace, table)| {
+            column_names(table).map(move |name| (namespace.name.clone(), table.name.clone(), name))
         })
         .filter(|(_, _, name)| matches(name, prefix))
-        .map(|(keyspace, table, name)| Candidate {
-            label: format!("{keyspace}.{table}.{name}"),
+        .map(|(namespace, table, name)| Candidate {
+            label: format!("{namespace}.{table}.{name}"),
             text: name,
             kind: CandidateKind::Column,
             then: if orphaned {
                 Then::From(Name {
-                    keyspace: Some(keyspace),
+                    namespace: Some(namespace),
                     table,
                 })
             } else {
@@ -380,8 +385,8 @@ fn every_column(schema: Option<&Catalog>, prefix: &str, orphaned: bool) -> Vec<C
 }
 
 fn qualify(table: &Name) -> String {
-    match &table.keyspace {
-        Some(keyspace) => format!("{keyspace}.{}", table.table),
+    match &table.namespace {
+        Some(namespace) => format!("{namespace}.{}", table.table),
         None => table.table.clone(),
     }
 }
@@ -390,13 +395,13 @@ fn column_names(table: &Table) -> impl Iterator<Item = String> + '_ {
     table.columns().map(|column| column.name.clone())
 }
 
-/// Fills a missing keyspace from the panel's.
-fn resolved(table: &Name, keyspace: Option<&str>) -> Name {
+/// Fills a missing namespace from the panel's.
+fn resolved(table: &Name, namespace: Option<&str>) -> Name {
     Name {
-        keyspace: table
-            .keyspace
+        namespace: table
+            .namespace
             .clone()
-            .or_else(|| keyspace.map(str::to_owned)),
+            .or_else(|| namespace.map(str::to_owned)),
         table: table.table.clone(),
     }
 }
@@ -404,12 +409,12 @@ fn resolved(table: &Name, keyspace: Option<&str>) -> Name {
 fn lookup<'schema>(schema: Option<&'schema Catalog>, table: &Name) -> Option<&'schema Table> {
     schema?
         .schemas
-        .get(table.keyspace.as_deref()?)?
+        .get(table.namespace.as_deref()?)?
         .tables
         .get(&table.table)
 }
 
-/// `orders.` after `FROM shop.orders` means that table, not a keyspace.
+/// `orders.` after `FROM shop.orders` means that table, not a namespace.
 fn qualified(context: &Context, qualifier: &str) -> Name {
     context
         .tables
@@ -417,12 +422,12 @@ fn qualified(context: &Context, qualifier: &str) -> Name {
         .find(|table| table.table.eq_ignore_ascii_case(qualifier))
         .cloned()
         .unwrap_or_else(|| Name {
-            keyspace: None,
+            namespace: None,
             table: qualifier.to_owned(),
         })
 }
 
-/// Case-insensitive: CQL folds unquoted names.
+/// Case-insensitive: SQL folds unquoted names.
 fn matches(candidate: &str, prefix: &str) -> bool {
     candidate.len() >= prefix.len()
         && candidate
@@ -546,7 +551,7 @@ mod tests {
             ("secrets", &["keys"]),
         ]);
 
-        for (keyspace, table, columns, key) in [
+        for (namespace, table, columns, key) in [
             (
                 "shop",
                 "orders",
@@ -574,8 +579,8 @@ mod tests {
         ] {
             let table = schema
                 .schemas
-                .get_mut(keyspace)
-                .and_then(|keyspace| keyspace.tables.get_mut(table))
+                .get_mut(namespace)
+                .and_then(|namespace| namespace.tables.get_mut(table))
                 .expect("fixture table");
 
             table.columns = columns.iter().map(|(name, ty)| column(name, ty)).collect();
@@ -591,8 +596,8 @@ mod tests {
         schema
     }
 
-    fn offers(text: &str, keyspace: Option<&str>) -> Vec<String> {
-        suggest(&typed(text), Some(&schema()), keyspace)
+    fn offers(text: &str, namespace: Option<&str>) -> Vec<String> {
+        suggest(&typed(text), Some(&schema()), namespace)
             .map(|completion| {
                 completion
                     .candidates()
@@ -649,16 +654,16 @@ mod tests {
     }
 
     #[test]
-    fn a_keyspace_name_is_offered_beside_the_keywords() {
+    fn a_namespace_name_is_offered_beside_the_keywords() {
         assert!(offers("sh", None).contains(&"shop".to_owned()));
     }
 
     #[test]
-    fn a_qualifier_narrows_the_offers_to_that_keyspaces_tables() {
+    fn a_qualifier_narrows_the_offers_to_that_namespaces_tables() {
         assert_eq!(
             offers("SELECT * FROM shop.order", None),
             vec!["order_items".to_owned(), "orders".to_owned()],
-            "the tables of shop, and no keyword or keyspace"
+            "the tables of shop, and no keyword or namespace"
         );
     }
 
@@ -668,7 +673,7 @@ mod tests {
     }
 
     #[test]
-    fn an_unqualified_table_needs_the_keyspace_the_tables_panel_is_on() {
+    fn an_unqualified_table_needs_the_namespace_the_tables_panel_is_on() {
         assert!(!offers("cust", None).contains(&"customers".to_owned()));
         assert!(offers("cust", Some("shop")).contains(&"customers".to_owned()));
     }
@@ -827,7 +832,7 @@ mod tests {
         // An empty prefix shows all four column kinds in sequence.
         let schema = schema();
         let orders = Name {
-            keyspace: Some("shop".to_owned()),
+            namespace: Some("shop".to_owned()),
             table: "orders".to_owned(),
         };
 
@@ -839,16 +844,16 @@ mod tests {
         assert_eq!(
             names,
             ["id", "line", "region", "total"],
-            "partition, then clustering, then static, then regular"
+            "in the order the table declares them"
         );
     }
 
     #[test]
-    fn an_empty_segment_of_the_physical_order_contributes_no_columns() {
+    fn every_column_is_offered_in_table_order_whatever_its_part() {
         let schema = schema();
 
         let order_items = Name {
-            keyspace: Some("shop".to_owned()),
+            namespace: Some("shop".to_owned()),
             table: "order_items".to_owned(),
         };
         let names: Vec<String> = columns_of(Some(&schema), &order_items, "")
@@ -858,11 +863,11 @@ mod tests {
         assert_eq!(
             names,
             ["sku", "created"],
-            "a clustering column with no static or regular one to chain in"
+            "a table whose last columns are its key"
         );
 
         let customers = Name {
-            keyspace: Some("shop".to_owned()),
+            namespace: Some("shop".to_owned()),
             table: "customers".to_owned(),
         };
         let names: Vec<String> = columns_of(Some(&schema), &customers, "")
@@ -872,22 +877,18 @@ mod tests {
         assert_eq!(
             names,
             ["email", "verified"],
-            "a static column with an empty clustering list ahead of it"
+            "a table with one column past its key"
         );
 
         let keys = Name {
-            keyspace: Some("secrets".to_owned()),
+            namespace: Some("secrets".to_owned()),
             table: "keys".to_owned(),
         };
         let names: Vec<String> = columns_of(Some(&schema), &keys, "")
             .into_iter()
             .map(|candidate| candidate.text)
             .collect();
-        assert_eq!(
-            names,
-            ["fingerprint"],
-            "clustering, static and regular all empty"
-        );
+        assert_eq!(names, ["fingerprint"], "a table that is all key");
     }
 
     #[test]
@@ -925,7 +926,7 @@ mod tests {
         let column = &completion.candidates()[at];
 
         assert_eq!(column.label, "shop.orders.id", "the label says which table");
-        assert_eq!(column.text, "id", "accepting types CQL, not the label");
+        assert_eq!(column.text, "id", "accepting types SQL, not the label");
 
         for _ in 0..at {
             completion.next();
@@ -1099,8 +1100,8 @@ mod tests {
         assert_eq!(editor.text(), text.replace("SELECT to", "SELECT total"));
     }
 
-    fn labels(text: &str, keyspace: Option<&str>) -> Vec<String> {
-        suggest(&typed(text), Some(&schema()), keyspace)
+    fn labels(text: &str, namespace: Option<&str>) -> Vec<String> {
+        suggest(&typed(text), Some(&schema()), namespace)
             .map(|completion| {
                 completion
                     .candidates()
@@ -1119,7 +1120,7 @@ mod tests {
 
     #[test]
     fn keywords_never_crowd_the_shapes_out_of_the_popup() {
-        assert!(labels("a", Some("shop")).contains(&"ALTER TABLE <> ADD <> <>".to_owned()));
+        assert!(labels("a", Some("shop")).contains(&"ALTER TABLE <> ADD COLUMN <> <>".to_owned()));
     }
 
     #[test]
@@ -1174,21 +1175,21 @@ mod tests {
     }
 
     #[test]
-    fn a_batch_shape_is_written_across_the_lines_it_needs() {
+    fn a_transaction_shape_is_written_across_the_lines_it_needs() {
         let mut editor = typed("beg");
         let mut completion = suggest(&editor, None, None).expect("offers");
         let at = completion
             .candidates()
             .iter()
             .position(|candidate| candidate.kind == CandidateKind::Template)
-            .expect("the BEGIN BATCH shape is offered");
+            .expect("the transaction shape is offered");
 
         for _ in 0..at {
             completion.next();
         }
         completion.accept(&mut editor);
 
-        assert_eq!(editor.lines(), ["BEGIN BATCH", "", "APPLY BATCH;"]);
+        assert_eq!(editor.lines(), ["BEGIN;", "", "COMMIT;"]);
         assert_eq!(
             editor.cursor(),
             crate::editor::Position { line: 1, column: 0 }
@@ -1201,7 +1202,7 @@ mod tests {
 
         assert!(
             !offered.contains(&"shop".to_owned()),
-            "a keyspace is not a value"
+            "a namespace is not a value"
         );
     }
 

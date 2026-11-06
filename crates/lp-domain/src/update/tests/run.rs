@@ -330,7 +330,7 @@ fn every_mutating_statement_typed_by_hand_is_refused_and_says_why() {
         "REVOKE SELECT ON shop.orders FROM reader",
         "DROP TABLE shop.orders",
         "TRUNCATE shop.orders",
-        "-- innocent\nDROP KEYSPACE shop",
+        "-- innocent\nDROP SCHEMA shop",
         "SELECT * FROM shop.orders; DROP TABLE shop.orders",
     ] {
         let mut state = editing(sql);

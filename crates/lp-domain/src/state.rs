@@ -107,7 +107,7 @@ impl State {
         self.queries.show(tab);
     }
 
-    /// Queries takes text only while its Cql buffer is open.
+    /// Queries takes text only while its SQL buffer is open.
     #[must_use]
     pub fn takes_text(&self) -> bool {
         self.focus() == Panel::Queries && self.queries.is_editing()
@@ -164,25 +164,25 @@ impl State {
     pub fn browse(&self, table: &crate::contents::TableRef) -> Statement {
         let key = self
             .schema()
-            .and_then(|catalog| catalog.schemas.get(&table.keyspace))
+            .and_then(|catalog| catalog.schemas.get(&table.namespace))
             .and_then(|schema| schema.tables.get(&table.table))
             .and_then(|found| found.primary_key.as_ref())
             .map(|key| key.columns.clone())
             .unwrap_or_default();
 
-        Statement::select_all(&table.keyspace, &table.table, &key)
+        Statement::select_all(&table.namespace, &table.table, &key)
     }
 
-    /// The one answer to "which keyspace is on screen", shared by completion
+    /// The one answer to "which namespace is on screen", shared by completion
     /// and the grid.
     #[must_use]
-    pub fn visible_keyspace(&self) -> Option<String> {
+    pub fn visible_namespace(&self) -> Option<String> {
         let schema = self.schema()?;
 
         self.tables.selected(schema).and_then(|node| match node {
             Node::Database { .. } => None,
-            Node::Schema { keyspace, .. } | Node::Table { keyspace, .. } => {
-                Some(keyspace.name.clone())
+            Node::Schema { namespace, .. } | Node::Table { namespace, .. } => {
+                Some(namespace.name.clone())
             }
         })
     }

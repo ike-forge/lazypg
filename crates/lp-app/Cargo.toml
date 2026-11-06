@@ -7,7 +7,7 @@ publish.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "A terminal UI for Apache Cassandra"
+description = "A terminal UI for PostgreSQL"
 
 [[bin]]
 name = "lazypg"

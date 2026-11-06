@@ -55,7 +55,7 @@ pub(super) fn lit(state: &State) -> Flash {
             spanned(&state.ddl.selection, state.ddl.cursor.index()),
             Ranges::default(),
         ),
-        // Only reached over Logs: over Cql `yank` has already returned.
+        // Only reached over Logs: over SQL `yank` has already returned.
         Panel::Queries => (
             spanned(&state.log.selection, state.log.cursor.index()),
             Ranges::default(),

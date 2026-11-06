@@ -340,7 +340,7 @@ const QUERIES: &[Command] = &[
         Run::In(Panel::Queries),
     ),
     Command::new(&[Stroke::key(Key::Escape)], "stop editing", Run::Editing),
-    // On the closed Cql tab, rows are statements.
+    // On the closed SQL tab, rows are statements.
     Command::new(
         &[Stroke::key(Key::Char('j'))],
         "next statement",

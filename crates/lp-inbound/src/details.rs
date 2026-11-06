@@ -510,7 +510,7 @@ mod tests {
     fn an_identity_row_puts_the_name_at_the_margin_behind_a_labelled_icon() {
         assert_eq!(
             named(IdentityKind::Schema, "shop", 23),
-            [format!("  {}Schema         shop", crate::icons::KEYSPACE)]
+            [format!("  {}Schema         shop", crate::icons::SCHEMA)]
         );
         assert_eq!(
             named(
@@ -541,17 +541,17 @@ mod tests {
     fn an_identity_row_carries_the_kinds_colour_over_both_its_halves() {
         let theme = Theme::default();
         let lines = identity_lines(IdentityKind::Schema, "shop", 23, None, theme);
-        let keyspace = theme.style(Token::Schema).fg;
+        let namespace = theme.style(Token::Schema).fg;
 
-        assert!(keyspace.is_some(), "the token has to spend a colour");
+        assert!(namespace.is_some(), "the token has to spend a colour");
         assert_eq!(
             lines[0].spans[0].content,
-            format!("  {}Schema", crate::icons::KEYSPACE)
+            format!("  {}Schema", crate::icons::SCHEMA)
         );
 
         for span in &lines[0].spans {
             assert_eq!(
-                span.style.fg, keyspace,
+                span.style.fg, namespace,
                 "{:?} lost the colour",
                 span.content
             );

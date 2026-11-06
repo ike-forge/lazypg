@@ -4,34 +4,34 @@ use crate::style::{Segment, Token};
 /// Owned: a result outlives the schema reload that dropped its table.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TableRef {
-    pub keyspace: String,
+    pub namespace: String,
     pub table: String,
 }
 
 impl TableRef {
     #[must_use]
-    pub fn new(keyspace: &str, table: &str) -> Self {
+    pub fn new(namespace: &str, table: &str) -> Self {
         Self {
-            keyspace: keyspace.to_owned(),
+            namespace: namespace.to_owned(),
             table: table.to_owned(),
         }
     }
 
     #[must_use]
     pub fn qualified(&self) -> String {
-        format!("{}.{}", self.keyspace, self.table)
+        format!("{}.{}", self.namespace, self.table)
     }
 
-    /// A system keyspace is faint on both halves, as in the tree.
+    /// A system namespace is faint on both halves, as in the tree.
     #[must_use]
     pub fn segments(&self) -> Vec<Segment> {
-        let (keyspace, table) = match SchemaKind::of(&self.keyspace) {
+        let (namespace, table) = match SchemaKind::of(&self.namespace) {
             SchemaKind::System => (Token::Faint, Token::Faint),
             SchemaKind::User => (Token::Schema, Token::Table),
         };
 
         vec![
-            Segment::styled(self.keyspace.clone(), keyspace),
+            Segment::styled(self.namespace.clone(), namespace),
             Segment::styled(".", Token::Faint),
             Segment::styled(self.table.clone(), table),
         ]

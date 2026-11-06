@@ -11,9 +11,11 @@ pub(crate) struct Template {
 
 impl Template {
     pub(crate) fn keyword(self) -> &'static str {
-        self.head
-            .split_once(' ')
-            .map_or(self.head, |(word, _)| word)
+        let end = self
+            .head
+            .find(|c: char| !c.is_ascii_alphabetic())
+            .unwrap_or(self.head.len());
+        &self.head[..end]
     }
 
     pub(crate) fn text(self) -> String {
@@ -27,7 +29,7 @@ impl Template {
 
 /// Data statements first: the panel exists to read rows. No functions,
 /// aggregates or views: a skeleton of a code body is worse than an empty line.
-/// `BEGIN BATCH` is the wrapper alone.
+/// A transaction is the wrapper alone.
 pub(crate) const TEMPLATES: &[Template] = &[
     Template {
         label: "SELECT <> FROM <>",
@@ -50,24 +52,24 @@ pub(crate) const TEMPLATES: &[Template] = &[
         tail: " WHERE ;",
     },
     Template {
-        label: "BEGIN BATCH <> APPLY BATCH",
-        head: "BEGIN BATCH\n",
-        tail: "\nAPPLY BATCH;",
+        label: "BEGIN; <> COMMIT;",
+        head: "BEGIN;\n",
+        tail: "\nCOMMIT;",
     },
     Template {
-        label: "CREATE KEYSPACE <> WITH replication = {…}",
-        head: "CREATE KEYSPACE ",
-        tail: " WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};",
+        label: "CREATE SCHEMA <>",
+        head: "CREATE SCHEMA ",
+        tail: ";",
     },
     Template {
-        label: "CREATE TABLE <> (<> PRIMARY KEY)",
+        label: "CREATE TABLE <> (id … PRIMARY KEY, <>)",
         head: "CREATE TABLE ",
-        tail: " ( PRIMARY KEY);",
+        tail: " (id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY, );",
     },
     Template {
-        label: "ALTER TABLE <> ADD <> <>",
+        label: "ALTER TABLE <> ADD COLUMN <> <>",
         head: "ALTER TABLE ",
-        tail: " ADD  ;",
+        tail: " ADD COLUMN  ;",
     },
     Template {
         label: "CREATE INDEX <> ON <> (<>)",

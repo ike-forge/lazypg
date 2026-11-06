@@ -25,7 +25,7 @@ fn a_loaded_schema_pulls_the_selection_back_inside_it() {
 }
 
 #[test]
-fn enter_toggles_a_keyspace() {
+fn enter_toggles_a_namespace() {
     let mut state = browsing_tables(&[("shop", &["orders", "users"])]);
 
     let effects = press(&mut state, Key::Enter);
@@ -107,12 +107,12 @@ fn space_is_not_a_second_name_for_enter() {
 
     let effects = press(&mut state, Key::Char(' '));
 
-    assert_eq!(row_count(&state), 1, "space unfolded a keyspace");
+    assert_eq!(row_count(&state), 1, "space unfolded a namespace");
     assert!(effects.is_empty(), "space read a table");
 }
 
 #[test]
-fn l_and_right_open_a_keyspace() {
+fn l_and_right_open_a_namespace() {
     for key in [Key::Char('l'), Key::Right] {
         let mut state = browsing_tables(&[("shop", &["orders"])]);
 
@@ -127,7 +127,7 @@ fn l_and_right_open_a_keyspace() {
 }
 
 #[test]
-fn h_and_left_close_a_keyspace() {
+fn h_and_left_close_a_namespace() {
     for key in [Key::Char('h'), Key::Left] {
         let mut state = browsing_tables(&[("shop", &["orders"])]);
         press(&mut state, Key::Char('l'));
@@ -192,7 +192,7 @@ fn l_on_a_table_is_inert_over_a_range_of_many() {
 }
 
 #[test]
-fn h_from_a_table_steps_out_to_its_keyspace_before_folding() {
+fn h_from_a_table_steps_out_to_its_namespace_before_folding() {
     let mut state = browsing_tables(&[("shop", &["orders", "users"])]);
     press(&mut state, Key::Char('l'));
     press(&mut state, Key::Char('l'));
@@ -220,7 +220,7 @@ fn enter_on_a_table_leaves_the_tree_where_it_is() {
 }
 
 #[test]
-fn j_walks_into_an_unfolded_keyspaces_tables() {
+fn j_walks_into_an_unfolded_namespaces_tables() {
     let mut state = browsing_tables(&[("shop", &["orders", "users"]), ("typezoo", &[])]);
     press(&mut state, Key::Char('l'));
 
@@ -328,7 +328,7 @@ fn enter_still_reads_a_table_under_a_search() {
     assert_eq!(
         row_count(&state),
         2,
-        "the keyspace and the one table the term reaches"
+        "the namespace and the one table the term reaches"
     );
 
     state.move_tree_cursor(1);

@@ -136,14 +136,14 @@ mod tests {
     fn a_value_with_no_break_in_it_is_broken_anyway() {
         assert_eq!(
             plain(
-                "org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy",
+                "pg_catalog.pg_stat_statements_reset_everything_since_startup",
                 23,
                 2
             ),
             [
-                "  org.apache.cassandra.",
-                "  db.compaction.SizeTie",
-                "  redCompactionStrategy",
+                "  pg_catalog.pg_stat_st",
+                "  atements_reset_everyt",
+                "  hing_since_startup",
             ]
         );
     }

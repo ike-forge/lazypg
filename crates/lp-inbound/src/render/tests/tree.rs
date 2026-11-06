@@ -33,8 +33,8 @@ fn a_tree_row_wears_the_icon_of_what_it_names() {
     let buffer = draw_state(40, 12, &state);
 
     assert!(
-        row(&buffer, 1).contains(&format!("{}shop", crate::icons::KEYSPACE)),
-        "the keyspace icon precedes the keyspace"
+        row(&buffer, 1).contains(&format!("{}shop", crate::icons::SCHEMA)),
+        "the namespace icon precedes the namespace"
     );
     assert!(
         row(&buffer, 2).contains(&format!("{}orders", crate::icons::TABLE)),
@@ -49,8 +49,8 @@ fn the_ddl_identity_rows_wear_the_tree_icons_and_each_heading_its_own() {
     let rows = ddl_rows(&buffer);
 
     assert!(
-        rows[0].starts_with(&format!("▌  {}Schema", crate::icons::KEYSPACE)),
-        "the panel names its keyspace as the tree does, got {:?}",
+        rows[0].starts_with(&format!("▌  {}Schema", crate::icons::SCHEMA)),
+        "the panel names its namespace as the tree does, got {:?}",
         rows[0]
     );
     assert!(
@@ -79,7 +79,7 @@ fn a_name_with_no_room_beside_its_label_wraps_rather_than_abbreviating() {
         ddl_rows(&buffer)[..3],
         [
             // The cursor opens on this row.
-            format!("▌  {}Schema         shop", crate::icons::KEYSPACE),
+            format!("▌  {}Schema         shop", crate::icons::SCHEMA),
             format!("   {}Table", crate::icons::TABLE),
             "     orders_by_customer".to_owned(),
         ]
@@ -87,7 +87,7 @@ fn a_name_with_no_room_beside_its_label_wraps_rather_than_abbreviating() {
 }
 
 #[test]
-fn an_unfolded_keyspaces_tables_are_indented_beneath_it() {
+fn an_unfolded_namespaces_tables_are_indented_beneath_it() {
     let mut state = State::default();
     state.connection = ConnectionState::Connected(Connection {
         id: ConnId::next(),
@@ -120,7 +120,7 @@ fn an_unfolded_keyspaces_tables_are_indented_beneath_it() {
 
 #[test]
 fn a_match_is_painted_where_it_sits() {
-    // A search forces the matching keyspace open.
+    // A search forces the matching namespace open.
     let mut state = State::default();
     state.connection = ConnectionState::Connected(Connection {
         id: ConnId::next(),
@@ -171,12 +171,12 @@ fn a_search_drops_the_tables_it_does_not_reach() {
     assert_eq!(
         row(&buffer, 1),
         "│▌\u{f084} shop       ││Press Enter on a table│",
-        "the keyspace is still drawn"
+        "the namespace is still drawn"
     );
     assert_eq!(
         row(&buffer, 2),
         "│ └─ \u{f0ce} orders  ││                      │",
-        "the matching row is drawn, and is now the last of its keyspace"
+        "the matching row is drawn, and is now the last of its namespace"
     );
     assert_eq!(
         row(&buffer, 3),
@@ -206,12 +206,12 @@ fn a_dimmed_rows_icon_keeps_the_colour_of_what_it_names() {
     let icon = |y: u16| buffer.cell((2, y)).expect("inside the panel").fg;
     let theme = Theme::default();
     let faint = theme.style(Token::Faint).fg.expect("faint spends a colour");
-    let keyspace = theme
+    let namespace = theme
         .style(Token::Schema)
         .fg
-        .expect("a keyspace spends a colour");
+        .expect("a namespace spends a colour");
 
-    assert_eq!(icon(2), keyspace, "the icon says what the row is");
+    assert_eq!(icon(2), namespace, "the icon says what the row is");
     assert_eq!(
         buffer.cell((4, 2)).expect("inside the panel").fg,
         faint,

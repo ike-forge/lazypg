@@ -47,7 +47,7 @@ impl Flavour {
             selection_fg: self.text,
             selection_bar: self.yellow,
             shortcut: self.yellow,
-            keyspace: self.mauve,
+            namespace: self.mauve,
             table: self.blue,
             primary_key: self.yellow,
             foreign_key: self.teal,

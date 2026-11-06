@@ -14,7 +14,7 @@ pub struct TablesPanel {
     cursor: Cursor,
     pub scroll: Scroll,
     pub selection: Selection,
-    /// Private: only the transitions below write it, so no keyspace outside the
+    /// Private: only the transitions below write it, so no namespace outside the
     /// schema is unfolded.
     unfolded: BTreeSet<String>,
     /// The current database opens unfolded; this is the user folding it.
@@ -33,11 +33,11 @@ pub enum Node<'a> {
         unfolded: bool,
     },
     Schema {
-        keyspace: &'a Schema,
+        namespace: &'a Schema,
         unfolded: bool,
     },
     Table {
-        keyspace: &'a Schema,
+        namespace: &'a Schema,
         table: &'a Table,
     },
 }
@@ -82,21 +82,24 @@ impl TablesPanel {
     fn schema_rows<'a>(&self, schema: &'a Catalog) -> Vec<Node<'a>> {
         let mut rows = Vec::new();
 
-        for keyspace in schema.schemas_in_display_order() {
-            if !self.retains(keyspace) {
+        for namespace in schema.schemas_in_display_order() {
+            if !self.retains(namespace) {
                 continue;
             }
 
-            let unfolded = self.is_unfolded(keyspace) || self.holds_a_match(keyspace);
-            rows.push(Node::Schema { keyspace, unfolded });
+            let unfolded = self.is_unfolded(namespace) || self.holds_a_match(namespace);
+            rows.push(Node::Schema {
+                namespace,
+                unfolded,
+            });
 
             if unfolded {
                 rows.extend(
-                    keyspace
+                    namespace
                         .tables
                         .values()
-                        .filter(|table| self.reaches(keyspace, table))
-                        .map(|table| Node::Table { keyspace, table }),
+                        .filter(|table| self.reaches(namespace, table))
+                        .map(|table| Node::Table { namespace, table }),
                 );
             }
         }
@@ -104,31 +107,31 @@ impl TablesPanel {
         rows
     }
 
-    fn retains(&self, keyspace: &Schema) -> bool {
+    fn retains(&self, namespace: &Schema) -> bool {
         let Some(search) = &self.search else {
             return true;
         };
 
-        search.matches(&keyspace.name)
-            || keyspace
+        search.matches(&namespace.name)
+            || namespace
                 .tables
                 .values()
                 .any(|table| search.matches(&table.name))
     }
 
-    /// A term matching the keyspace keeps every table in it: `l` and `⏎` are
+    /// A term matching the namespace keeps every table in it: `l` and `⏎` are
     /// swallowed under a search, so nothing else could open it.
-    fn reaches(&self, keyspace: &Schema, table: &Table) -> bool {
+    fn reaches(&self, namespace: &Schema, table: &Table) -> bool {
         let Some(search) = &self.search else {
             return true;
         };
 
-        search.matches(&table.name) || search.matches(&keyspace.name)
+        search.matches(&table.name) || search.matches(&namespace.name)
     }
 
-    /// A keyspace with no tables has nothing to open.
-    fn holds_a_match(&self, keyspace: &Schema) -> bool {
-        self.search.is_some() && !keyspace.tables.is_empty() && self.retains(keyspace)
+    /// A namespace with no tables has nothing to open.
+    fn holds_a_match(&self, namespace: &Schema) -> bool {
+        self.search.is_some() && !namespace.tables.is_empty() && self.retains(namespace)
     }
 
     /// `from` is exclusive. Derived from `rows`, not a stored match list, which
@@ -146,7 +149,7 @@ impl TablesPanel {
             })
             .find(|at| match rows[*at] {
                 Node::Database { name, .. } => search.matches(name),
-                Node::Schema { keyspace, .. } => search.matches(&keyspace.name),
+                Node::Schema { namespace, .. } => search.matches(&namespace.name),
                 Node::Table { table, .. } => search.matches(&table.name),
             })
     }
@@ -180,7 +183,7 @@ impl TablesPanel {
         self.rows(schema).into_iter().nth(self.cursor.index())
     }
 
-    /// Swallowed under a search: the keyspace is drawn open regardless, so
+    /// Swallowed under a search: the namespace is drawn open regardless, so
     /// folding would only write `unfolded`. Every caller goes through here.
     pub fn toggle(&mut self, schema: &Catalog) {
         if self.search.is_some() {
@@ -188,11 +191,14 @@ impl TablesPanel {
         }
 
         match self.selected(schema) {
-            Some(Node::Schema { keyspace, unfolded }) => {
+            Some(Node::Schema {
+                namespace,
+                unfolded,
+            }) => {
                 if unfolded {
-                    self.fold(&keyspace.name, schema);
+                    self.fold(&namespace.name, schema);
                 } else {
-                    self.unfold(keyspace);
+                    self.unfold(namespace);
                 }
             }
             Some(Node::Database { current: true, .. }) => {
@@ -218,7 +224,7 @@ impl TablesPanel {
                     ..
                 },
             ) => self.cursor.down(self.rows(schema).len()),
-            Some(Node::Schema { keyspace, .. }) => self.unfold(keyspace),
+            Some(Node::Schema { namespace, .. }) => self.unfold(namespace),
             Some(Node::Database { current: true, .. }) => self.database_folded = false,
             _ => {}
         }
@@ -232,10 +238,10 @@ impl TablesPanel {
 
         match self.selected(schema) {
             Some(Node::Schema {
-                keyspace,
+                namespace,
                 unfolded: true,
-            }) => self.fold(&keyspace.name, schema),
-            Some(Node::Table { keyspace, .. }) => self.select_keyspace(&keyspace.name, schema),
+            }) => self.fold(&namespace.name, schema),
+            Some(Node::Table { namespace, .. }) => self.select_namespace(&namespace.name, schema),
             Some(Node::Schema { .. }) => self.select_current_database(schema),
             Some(Node::Database {
                 current: true,
@@ -249,14 +255,14 @@ impl TablesPanel {
         }
     }
 
-    /// Never for a keyspace with no tables, which also makes stale names inert.
-    fn is_unfolded(&self, keyspace: &Schema) -> bool {
-        !keyspace.tables.is_empty() && self.unfolded.contains(&keyspace.name)
+    /// Never for a namespace with no tables, which also makes stale names inert.
+    fn is_unfolded(&self, namespace: &Schema) -> bool {
+        !namespace.tables.is_empty() && self.unfolded.contains(&namespace.name)
     }
 
-    fn unfold(&mut self, keyspace: &Schema) {
-        if !keyspace.tables.is_empty() {
-            self.unfolded.insert(keyspace.name.clone());
+    fn unfold(&mut self, namespace: &Schema) {
+        if !namespace.tables.is_empty() {
+            self.unfolded.insert(namespace.name.clone());
         }
     }
 
@@ -265,10 +271,10 @@ impl TablesPanel {
         self.clamp(schema);
     }
 
-    fn select_keyspace(&mut self, name: &str, schema: &Catalog) {
+    fn select_namespace(&mut self, name: &str, schema: &Catalog) {
         let rows = self.rows(schema);
         let found = rows.iter().position(
-            |node| matches!(node, Node::Schema { keyspace, .. } if keyspace.name == name),
+            |node| matches!(node, Node::Schema { namespace, .. } if namespace.name == name),
         );
 
         if let Some(index) = found {
@@ -347,14 +353,14 @@ mod tests {
             .iter()
             .map(|node| match node {
                 Node::Database { name, .. } => (0, (*name).to_owned()),
-                Node::Schema { keyspace, .. } => (0, keyspace.name.clone()),
+                Node::Schema { namespace, .. } => (0, namespace.name.clone()),
                 Node::Table { table, .. } => (1, table.name.clone()),
             })
             .collect()
     }
 
     #[test]
-    fn a_folded_tree_is_just_its_keyspaces() {
+    fn a_folded_tree_is_just_its_namespaces() {
         let schema = schema_of(&[("shop", &["orders", "users"]), ("system", &["local"])]);
 
         assert_eq!(
@@ -364,7 +370,7 @@ mod tests {
     }
 
     #[test]
-    fn an_unfolded_keyspace_lists_its_tables_alphabetically_beneath_it() {
+    fn an_unfolded_namespace_lists_its_tables_alphabetically_beneath_it() {
         let schema = schema_of(&[("shop", &["users", "orders"]), ("typezoo", &["t"])]);
         let mut panel = TablesPanel::default();
 
@@ -382,7 +388,7 @@ mod tests {
     }
 
     #[test]
-    fn the_clusters_own_keyspaces_stay_last_when_one_is_unfolded() {
+    fn the_clusters_own_namespaces_stay_last_when_one_is_unfolded() {
         let schema = schema_of(&[("system_schema", &["tables"]), ("shop", &["orders"])]);
         let mut panel = TablesPanel::default();
 
@@ -395,12 +401,12 @@ mod tests {
                 (1, "orders".to_owned()),
                 (0, "system_schema".to_owned()),
             ],
-            "display order is the keyspace list's rule, unchanged by unfolding"
+            "display order is the namespace list's rule, unchanged by unfolding"
         );
     }
 
     #[test]
-    fn toggling_opens_a_folded_keyspace_and_closes_an_open_one() {
+    fn toggling_opens_a_folded_namespace_and_closes_an_open_one() {
         let schema = schema_of(&[("shop", &["orders"])]);
         let mut panel = TablesPanel::default();
 
@@ -412,7 +418,7 @@ mod tests {
     }
 
     #[test]
-    fn a_keyspace_with_no_tables_never_unfolds() {
+    fn a_namespace_with_no_tables_never_unfolds() {
         let schema = schema_of(&[("empty", &[])]);
         let mut panel = TablesPanel::default();
 
@@ -434,7 +440,7 @@ mod tests {
     }
 
     #[test]
-    fn opening_an_already_open_keyspace_steps_into_its_first_table() {
+    fn opening_an_already_open_namespace_steps_into_its_first_table() {
         let schema = schema_of(&[("shop", &["orders", "users"])]);
         let mut panel = TablesPanel::default();
 
@@ -448,7 +454,7 @@ mod tests {
     }
 
     #[test]
-    fn closing_from_a_table_lands_on_its_keyspace_without_folding_it() {
+    fn closing_from_a_table_lands_on_its_namespace_without_folding_it() {
         let schema = schema_of(&[("shop", &["orders", "users"])]);
         let mut panel = TablesPanel::default();
         panel.open(&schema);
@@ -469,7 +475,7 @@ mod tests {
     }
 
     #[test]
-    fn closing_from_the_second_keyspace_folds_that_one_and_not_the_first() {
+    fn closing_from_the_second_namespace_folds_that_one_and_not_the_first() {
         let schema = schema_of(&[("a", &["t1"]), ("b", &["t2"])]);
         let mut panel = TablesPanel::default();
         panel.open(&schema);
@@ -490,7 +496,7 @@ mod tests {
     }
 
     #[test]
-    fn closing_an_already_folded_keyspace_does_nothing() {
+    fn closing_an_already_folded_namespace_does_nothing() {
         let schema = schema_of(&[("shop", &["orders"])]);
         let mut panel = TablesPanel::default();
 
@@ -507,7 +513,7 @@ mod tests {
         panel.open(&schema);
         panel.cursor.go_to(3, panel.rows(&schema).len());
 
-        // Reach the keyspace row and fold from there.
+        // Reach the namespace row and fold from there.
         panel.close(&schema);
         panel.close(&schema);
 
@@ -523,7 +529,7 @@ mod tests {
     }
 
     #[test]
-    fn an_unfolded_keyspace_stays_open_across_a_reload() {
+    fn an_unfolded_namespace_stays_open_across_a_reload() {
         let before = schema_of(&[("shop", &["orders"])]);
         let mut panel = TablesPanel::default();
         panel.open(&before);
@@ -534,7 +540,7 @@ mod tests {
     }
 
     #[test]
-    fn a_keyspace_that_vanished_leaves_no_trace_in_the_tree() {
+    fn a_namespace_that_vanished_leaves_no_trace_in_the_tree() {
         let before = schema_of(&[("gone", &["t"]), ("shop", &["orders"])]);
         let mut panel = TablesPanel::default();
         panel.open(&before);
@@ -570,7 +576,7 @@ mod tests {
             .iter()
             .map(|node| match node {
                 Node::Database { name, .. } => (*name).to_owned(),
-                Node::Schema { keyspace, .. } => keyspace.name.clone(),
+                Node::Schema { namespace, .. } => namespace.name.clone(),
                 Node::Table { table, .. } => format!("  {}", table.name),
             })
             .collect()
@@ -581,15 +587,17 @@ mod tests {
         let index = panel
             .rows(schema)
             .iter()
-            .position(|node| matches!(node, Node::Schema { keyspace, .. } if keyspace.name == name))
-            .expect("the keyspace is in the schema");
+            .position(
+                |node| matches!(node, Node::Schema { namespace, .. } if namespace.name == name),
+            )
+            .expect("the namespace is in the schema");
         panel.cursor.go_to(index, panel.rows(schema).len());
         panel.open(schema);
         panel
     }
 
     #[test]
-    fn a_matching_keyspace_is_forced_open_and_a_sibling_it_misses_is_dropped() {
+    fn a_matching_namespace_is_forced_open_and_a_sibling_it_misses_is_dropped() {
         let schema = shop_and_logs();
         let mut panel = TablesPanel::default();
         panel.set_search(Search::new("shop"));
@@ -602,7 +610,7 @@ mod tests {
     }
 
     #[test]
-    fn a_keyspace_kept_by_one_matching_table_shows_only_that_table() {
+    fn a_namespace_kept_by_one_matching_table_shows_only_that_table() {
         let schema = shop_and_logs();
         let mut panel = TablesPanel::default();
         panel.set_search(Search::new("users"));
@@ -615,7 +623,7 @@ mod tests {
     }
 
     #[test]
-    fn a_keyspace_the_term_names_keeps_every_table_it_has() {
+    fn a_namespace_the_term_names_keeps_every_table_it_has() {
         let schema = shop_and_logs();
         let mut panel = TablesPanel::default();
         panel.set_search(Search::new("shop"));
@@ -637,7 +645,7 @@ mod tests {
     }
 
     #[test]
-    fn a_keyspace_holding_a_match_stays_open_whatever_its_fold_state() {
+    fn a_namespace_holding_a_match_stays_open_whatever_its_fold_state() {
         let schema = shop_and_logs();
         let mut panel = TablesPanel::default();
 
@@ -672,7 +680,7 @@ mod tests {
     }
 
     #[test]
-    fn a_keyspace_matching_by_name_is_kept_but_open_only_when_it_has_tables() {
+    fn a_namespace_matching_by_name_is_kept_but_open_only_when_it_has_tables() {
         let schema = schema_of(&[("empty", &[][..])]);
         let mut panel = TablesPanel::default();
         panel.set_search(Search::new("empty"));
@@ -687,7 +695,7 @@ mod tests {
     }
 
     #[test]
-    fn clearing_a_search_brings_back_the_keyspaces_it_dropped() {
+    fn clearing_a_search_brings_back_the_namespaces_it_dropped() {
         let schema = shop_and_logs();
         let mut panel = TablesPanel::default();
 
@@ -699,7 +707,7 @@ mod tests {
     }
 
     #[test]
-    fn a_keyspace_holding_a_match_is_drawn_open() {
+    fn a_namespace_holding_a_match_is_drawn_open() {
         let schema = shop_and_logs();
         let mut panel = TablesPanel::default();
         panel.set_search(Search::new("order"));
@@ -708,7 +716,7 @@ mod tests {
 
         assert!(
             labels.iter().any(|label| label.contains("orders")),
-            "a match inside a folded keyspace is not left hidden: {labels:?}"
+            "a match inside a folded namespace is not left hidden: {labels:?}"
         );
     }
 
@@ -764,7 +772,7 @@ mod tests {
     }
 
     #[test]
-    fn a_keyspace_holding_no_match_keeps_its_fold_state() {
+    fn a_namespace_holding_no_match_keeps_its_fold_state() {
         let schema = shop_and_logs();
         let mut panel = TablesPanel::default();
         let folded = search_labels(&panel, &schema);

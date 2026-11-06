@@ -9,7 +9,7 @@ use lp_domain::view::{Group, RowKind};
 
 pub(crate) const DATABASE: &str = "\u{f1c0} ";
 /// The solid cut reads larger at one cell.
-pub(crate) const KEYSPACE: &str = "\u{f084} ";
+pub(crate) const SCHEMA: &str = "\u{f084} ";
 /// The outline cut: a filled table reads as noise at one cell.
 pub(crate) const TABLE: &str = "\u{f0ce} ";
 /// A grid of grids: rows live in its partitions.
@@ -20,7 +20,7 @@ pub(crate) const VIEW: &str = "\u{f06e} ";
 pub(crate) const MATERIALIZED_VIEW: &str = "\u{f1b2} ";
 /// The rows are on another server.
 pub(crate) const FOREIGN: &str = "\u{f0c1} ";
-/// Not the keyspace's key: one glyph for two things would equate them.
+/// Not the namespace's key: one glyph for two things would equate them.
 pub(crate) const KEY: &str = "\u{f030b} ";
 /// The outline cut: a filled cog is a blob at one cell.
 pub(crate) const SETTINGS: &str = "\u{f013} ";
@@ -31,7 +31,7 @@ pub(crate) const INDEX: &str = "\u{f002} ";
 pub(crate) const fn tree_row(kind: RowKind) -> &'static str {
     match kind {
         RowKind::Database { .. } => DATABASE,
-        RowKind::Schema { .. } => KEYSPACE,
+        RowKind::Schema { .. } => SCHEMA,
         RowKind::Table { relation, .. } => match relation {
             RelationKind::Table => TABLE,
             RelationKind::Partitioned => PARTITIONED,
@@ -54,7 +54,7 @@ pub(crate) const fn token(kind: RowKind) -> Token {
 pub(crate) fn identity(token: Token) -> &'static str {
     match token {
         Token::Database => DATABASE,
-        Token::Schema => KEYSPACE,
+        Token::Schema => SCHEMA,
         Token::Table => TABLE,
         _ => "",
     }

@@ -92,7 +92,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn scalars_render_the_way_cqlsh_prints_them() {
+    fn scalars_render_the_way_psql_prints_them() {
         assert_eq!(text(&Value::Null), "null");
         assert_eq!(text(&Value::Boolean(true)), "true");
         assert_eq!(text(&Value::Int(-42)), "-42");

@@ -70,11 +70,11 @@ fn showing_columns(columns: usize) -> State {
 }
 
 #[test]
-fn a_click_on_a_keyspace_folds_and_unfolds_it() {
+fn a_click_on_a_namespace_folds_and_unfolds_it() {
     let mut state = browsing_tables(&[("shop", &["orders", "users"])]);
 
     click_row(&mut state, Panel::Objects, 0);
-    assert_eq!(row_count(&state), 3, "the keyspace unfolded");
+    assert_eq!(row_count(&state), 3, "the namespace unfolded");
 
     click_row(&mut state, Panel::Objects, 0);
     assert_eq!(row_count(&state), 1, "and folded again");
@@ -282,7 +282,7 @@ fn a_click_focuses_the_panel_it_landed_in() {
     click_row(&mut state, Panel::Objects, 0);
 
     assert_eq!(state.focus(), Panel::Objects, "one click focuses and acts");
-    assert_eq!(row_count(&state), 2, "the keyspace unfolded on that click");
+    assert_eq!(row_count(&state), 2, "the namespace unfolded on that click");
 }
 
 #[test]
@@ -324,7 +324,7 @@ fn a_click_dismisses_the_overlay_and_does_nothing_else() {
     assert_eq!(
         row_count(&state),
         1,
-        "the keyspace the overlay covered did not unfold"
+        "the namespace the overlay covered did not unfold"
     );
 }
 

@@ -82,7 +82,7 @@ pub(super) fn row_count(state: &State, panel: Panel) -> usize {
     }
 }
 
-/// The Cql arm is unreachable: the editor claims motion keys first.
+/// The SQL arm is unreachable: the editor claims motion keys first.
 pub(super) fn panel_cursor(state: &mut State, panel: Panel) -> Option<&mut Cursor> {
     match panel {
         Panel::Objects => Some(state.tables.cursor_mut()),

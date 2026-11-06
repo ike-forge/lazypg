@@ -178,13 +178,15 @@ pub(super) fn of(state: &State) -> Option<Details> {
     let catalog = state.schema()?;
 
     let details = match (state.tables.selected(catalog)?, shown_tab(state)) {
-        (Node::Table { keyspace, table }, StructureTab::Columns | StructureTab::Summary) => {
-            columns_of(keyspace, table)
+        (Node::Table { namespace, table }, StructureTab::Columns | StructureTab::Summary) => {
+            columns_of(namespace, table)
         }
-        (Node::Table { keyspace, table }, StructureTab::Keys) => keys_of(catalog, keyspace, table),
-        (Node::Table { keyspace, table }, StructureTab::Indexes) => indexes_of(keyspace, table),
-        (Node::Table { keyspace, table }, StructureTab::Ddl) => ddl_of(keyspace, table),
-        (Node::Schema { keyspace, .. }, _) => of_schema(keyspace),
+        (Node::Table { namespace, table }, StructureTab::Keys) => {
+            keys_of(catalog, namespace, table)
+        }
+        (Node::Table { namespace, table }, StructureTab::Indexes) => indexes_of(namespace, table),
+        (Node::Table { namespace, table }, StructureTab::Ddl) => ddl_of(namespace, table),
+        (Node::Schema { namespace, .. }, _) => of_schema(namespace),
         (Node::Database { name, current, .. }, _) => of_database(catalog, name, current),
     };
 
