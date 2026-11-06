@@ -1,9 +1,9 @@
-use crate::connection::{ConnectionState, SchemaState};
+use crate::connection::{ConnectionState, SchemaState, Transaction};
 use crate::feedback::Flash;
 use crate::model::{Catalog, RelationKind, SchemaKind};
 use crate::panel::Panel;
 use crate::state::State;
-use crate::style::{Segment, Token};
+use crate::style::{Segment, Severity, Token};
 use crate::tree::{Node, TablesPanel};
 
 use super::{PanelBody, PanelTitle, waiting};
@@ -59,22 +59,33 @@ impl RowKind {
 /// posture can read as another.
 pub(super) fn title(state: &State, number: char) -> PanelTitle {
     const BASE: &str = "Objects";
-    let short = vec![Segment::plain(BASE)];
+    let mut short = vec![Segment::plain(BASE)];
 
     let ConnectionState::Connected(connection) = &state.connection else {
         return PanelTitle::abbreviated(number, short.clone(), short);
     };
     let posture = connection.posture;
+    let mut long = vec![
+        Segment::plain(format!("{BASE} ({}, ", connection.name.as_str())),
+        Segment::styled(posture.label(), Token::Posture(posture)),
+    ];
 
-    PanelTitle::abbreviated(
-        number,
-        vec![
-            Segment::plain(format!("{BASE} ({}, ", connection.name.as_str())),
-            Segment::styled(posture.label(), Token::Posture(posture)),
-            Segment::plain(")"),
-        ],
-        short,
-    )
+    // Kept in the short form too: every grid read runs inside it.
+    let block = match state.transaction {
+        Transaction::Idle => None,
+        Transaction::Open => Some(("in transaction", "tx", Severity::Warning)),
+        Transaction::Failed => Some(("transaction failed", "tx failed", Severity::Danger)),
+    };
+    if let Some((label, abbreviated, severity)) = block {
+        long.push(Segment::plain(", "));
+        long.push(Segment::styled(label, Token::Severity(severity)));
+        short.push(Segment::plain(" ("));
+        short.push(Segment::styled(abbreviated, Token::Severity(severity)));
+        short.push(Segment::plain(")"));
+    }
+    long.push(Segment::plain(")"));
+
+    PanelTitle::abbreviated(number, long, short)
 }
 
 pub(super) fn body(state: &State) -> PanelBody {

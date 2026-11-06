@@ -50,3 +50,15 @@ impl ConnectionState {
         }
     }
 }
+
+/// The session's transaction block, as the server last reported it. One
+/// client serves every request, so a `BEGIN` the user typed holds the grid's
+/// reads and writes too.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Transaction {
+    #[default]
+    Idle,
+    Open,
+    /// Aborted by an error: every statement but `ROLLBACK` is refused.
+    Failed,
+}

@@ -130,6 +130,14 @@ pub(crate) fn run(
 
         Effect::Cancel(query) => running.abort(*query),
 
+        Effect::ProbeTransaction(conn) => {
+            let (tx, cluster, conn) = (tx.clone(), Arc::clone(cluster), *conn);
+            tokio::spawn(async move {
+                let transaction = cluster.transaction(conn).await;
+                let _sent = tx.send(Msg::Transaction { conn, transaction }.into());
+            });
+        }
+
         Effect::RecordHistory(_) | Effect::OpenEditor { .. } | Effect::Quit => {}
     }
 }

@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 use lp_domain::config::{
     ConnectionConfig, ConnectionName, Credential, DriverConfig, Millis, PageSize, SslMode,
 };
+use lp_domain::connection::Transaction;
 use lp_domain::model::{
     ColumnDefault, ConnId, ConstraintKind, DbError, Page, RelationKind, RelationRef, Statement,
     StatementKind, Value,
@@ -519,4 +520,28 @@ async fn rows_yanked_as_inserts_recreate_themselves_in_a_copy() {
         matched.rows[0].values[0],
         Value::Int(i64::try_from(page.rows.len()).expect("fits"))
     );
+}
+
+#[tokio::test]
+async fn the_probe_follows_a_transaction_through_open_failed_and_rolled_back() {
+    let db = connected(Posture::Writable, DriverConfig::default()).await;
+    let run = |sql: &str| Statement {
+        sql: sql.to_owned(),
+        kind: StatementKind::Write,
+    };
+    let probed = async || db.transaction(conn()).await.expect("answers");
+
+    assert_eq!(probed().await, Transaction::Idle);
+
+    db.execute(conn(), &run("BEGIN")).await.expect("begins");
+    assert_eq!(probed().await, Transaction::Open);
+
+    let failed = db.execute(conn(), &run("SELECT 1 / 0")).await;
+    assert!(failed.is_err());
+    assert_eq!(probed().await, Transaction::Failed);
+
+    db.execute(conn(), &run("ROLLBACK"))
+        .await
+        .expect("rolls back");
+    assert_eq!(probed().await, Transaction::Idle);
 }

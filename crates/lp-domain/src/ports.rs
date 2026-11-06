@@ -10,6 +10,7 @@ use crate::config::{
     ClipboardMb, Config, ConnectionConfig, ConnectionName, Credential, Diagnostic, DriverConfig,
     HistoryLimit, PageSize,
 };
+use crate::connection::Transaction;
 use crate::history::Histories;
 use crate::model::{Catalog, ConnId, DbError, Page, PagingState, Statement};
 use crate::posture::Posture;
@@ -27,6 +28,7 @@ pub trait Cluster: Send + Sync {
         driver: &DriverConfig,
     ) -> Result<Posture, DbError>;
     async fn describe(&self, conn: ConnId) -> Result<Catalog, DbError>;
+    async fn transaction(&self, conn: ConnId) -> Result<Transaction, DbError>;
     async fn execute(&self, conn: ConnId, stmt: &Statement) -> Result<Page, DbError>;
 
     /// Needs the statement as well as the cursor: a paging state alone resumes

@@ -12,6 +12,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use lp_domain::config::{ConnectionConfig, DriverConfig, PageSize, SslMode};
+use lp_domain::connection::Transaction;
 use lp_domain::model::{
     Catalog, ConnId, DbError, Page, PagingState, Row, Statement, StatementKind, Value,
 };
@@ -157,6 +158,32 @@ impl Cluster for Postgres {
     async fn describe(&self, conn: ConnId) -> Result<Catalog, DbError> {
         let open = self.session(conn).await?;
         crate::catalog::describe(&open.client).await
+    }
+
+    /// Inside a block a later statement starts after the block did; an aborted
+    /// block refuses the question outright.
+    async fn transaction(&self, conn: ConnId) -> Result<Transaction, DbError> {
+        let open = self.session(conn).await?;
+        let asked = open
+            .client
+            .simple_query("SELECT transaction_timestamp() <> statement_timestamp()");
+
+        match tokio::time::timeout(open.request_timeout, asked).await {
+            Err(_) => Err(DbError::Timeout),
+            Ok(Ok(messages)) => Ok(
+                if messages.iter().any(|message| {
+                    matches!(message, SimpleQueryMessage::Row(row) if row.get(0) == Some("t"))
+                }) {
+                    Transaction::Open
+                } else {
+                    Transaction::Idle
+                },
+            ),
+            Ok(Err(error)) if error.code() == Some(&SqlState::IN_FAILED_SQL_TRANSACTION) => {
+                Ok(Transaction::Failed)
+            }
+            Ok(Err(error)) => Err(db_error(&error)),
+        }
     }
 
     async fn execute(&self, conn: ConnId, stmt: &Statement) -> Result<Page, DbError> {

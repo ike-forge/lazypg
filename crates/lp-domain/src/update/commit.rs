@@ -1,6 +1,7 @@
 //! Committing or discarding cell edits.
 
 use crate::commit::CommitPrompt;
+use crate::connection::Transaction;
 use crate::contents::{ContentsState, Subject, TableRef};
 use crate::edit::CommitScope;
 use crate::jobs::Committing;
@@ -139,6 +140,11 @@ pub(super) fn pending_commit(
         .collect::<Option<Vec<_>>>()?;
 
     let statement = Statement::update_rows(&table.namespace, &table.table, &rows);
+    let statement = if state.transaction == Transaction::Idle {
+        statement
+    } else {
+        statement.joining()
+    };
 
     Some((table.clone(), statement, rows.len(), cells))
 }

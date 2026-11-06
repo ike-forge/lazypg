@@ -139,24 +139,49 @@ impl CommitPrompt {
 pub struct Discard {
     cells: usize,
     rows: usize,
+    /// Closing the session rolls it back.
+    transaction: bool,
 }
 
 impl Discard {
     #[must_use]
     pub const fn of(cells: usize, rows: usize) -> Self {
-        Self { cells, rows }
+        Self {
+            cells,
+            rows,
+            transaction: false,
+        }
+    }
+
+    #[must_use]
+    pub const fn with_transaction(self) -> Self {
+        Self {
+            transaction: true,
+            ..self
+        }
     }
 
     #[must_use]
     pub fn message(&self) -> String {
-        format!(
-            "{} {} in {} {} {} not been written to the database.",
-            self.cells,
-            noun(self.cells, "cell", "cells"),
-            self.rows,
-            noun(self.rows, "row", "rows"),
-            noun(self.cells, "has", "have")
-        )
+        let edits = (self.cells > 0).then(|| {
+            format!(
+                "{} {} in {} {} {} not been written to the database.",
+                self.cells,
+                noun(self.cells, "cell", "cells"),
+                self.rows,
+                noun(self.rows, "row", "rows"),
+                noun(self.cells, "has", "have")
+            )
+        });
+        let transaction = self
+            .transaction
+            .then_some("The open transaction will be rolled back.".to_owned());
+
+        edits
+            .into_iter()
+            .chain(transaction)
+            .collect::<Vec<_>>()
+            .join(" ")
     }
 }
 
@@ -292,6 +317,42 @@ mod tests {
         assert_eq!(
             Discard::of(3, 2).message(),
             "3 cells in 2 rows have not been written to the database."
+        );
+    }
+
+    #[test]
+    fn an_open_transaction_is_warned_of_alone_or_after_the_edits() {
+        assert_eq!(
+            Discard::of(0, 0).with_transaction().message(),
+            "The open transaction will be rolled back."
+        );
+        assert_eq!(
+            Discard::of(1, 1).with_transaction().message(),
+            "1 cell in 1 row has not been written to the database. \
+             The open transaction will be rolled back."
+        );
+    }
+
+    #[test]
+    fn a_batch_joining_an_open_transaction_loses_its_own_begin_and_commit() {
+        let batch = Statement::delete_rows(
+            "shop",
+            "orders",
+            &[
+                vec![("id".to_owned(), "7".to_owned())],
+                vec![("id".to_owned(), "8".to_owned())],
+            ],
+        );
+
+        assert_eq!(
+            batch.joining().sql,
+            "DELETE FROM \"shop\".\"orders\" WHERE \"id\" = 7;\n\
+             DELETE FROM \"shop\".\"orders\" WHERE \"id\" = 8;"
+        );
+        assert_eq!(
+            Statement::typed("BEGIN; SELECT 1").joining().sql,
+            "BEGIN; SELECT 1",
+            "only the wrapping the builders write is taken off"
         );
     }
 }

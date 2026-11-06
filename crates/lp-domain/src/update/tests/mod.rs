@@ -58,6 +58,7 @@ mod run;
 mod search;
 mod selection;
 mod themes;
+mod transaction;
 mod tree;
 mod yank;
 

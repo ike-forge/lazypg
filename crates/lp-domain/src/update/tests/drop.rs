@@ -300,7 +300,11 @@ fn a_completed_drop_re_reads_the_schema() {
         },
     );
 
-    assert_eq!(effects, vec![Effect::LoadSchema(current_conn(&state))]);
+    let conn = current_conn(&state);
+    assert_eq!(
+        effects,
+        vec![Effect::ProbeTransaction(conn), Effect::LoadSchema(conn)]
+    );
     assert!(state.dropping.is_none(), "the round trip is over");
     assert_eq!(
         toasted(&state),
@@ -329,7 +333,11 @@ fn a_failed_drop_reloads_nothing_and_says_why() {
         },
     );
 
-    assert!(effects.is_empty(), "the schema did not change");
+    assert_eq!(
+        effects,
+        vec![Effect::ProbeTransaction(current_conn(&state))],
+        "the schema did not change; the transaction may have"
+    );
     assert!(state.dropping.is_none());
     assert!(
         matches!(&state.overlay, Some(Overlay::Message(message))

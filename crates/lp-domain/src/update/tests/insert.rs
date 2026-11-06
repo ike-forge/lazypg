@@ -383,7 +383,10 @@ fn a_failed_insert_is_raised_and_nothing_is_re_read() {
         },
     );
 
-    assert!(effects.is_empty());
+    assert_eq!(
+        effects,
+        vec![Effect::ProbeTransaction(current_conn(&state))]
+    );
     assert!(refusal(&state).is_some_and(|message| message.contains("boom")));
 }
 

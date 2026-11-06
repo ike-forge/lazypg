@@ -62,6 +62,8 @@ pub struct State {
     pub dropping: Option<Dropping>,
     /// One at a time: a second would race the first's write-back.
     pub committing: Option<Committing>,
+    /// Reset on every connect: a new session starts outside one.
+    pub transaction: crate::connection::Transaction,
 }
 
 impl State {

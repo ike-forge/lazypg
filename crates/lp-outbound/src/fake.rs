@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use async_trait::async_trait;
 use lp_domain::config::PageSize;
+use lp_domain::connection::Transaction;
 use lp_domain::model::{Catalog, ConnId, DbError, Page, PagingState, Statement};
 use lp_domain::ports::{Cluster, ExportError, Sink, Writer};
 use lp_domain::posture::Posture;
@@ -31,6 +32,8 @@ pub struct FakeCluster {
     pages: Vec<Page>,
     /// Earlier pages are still delivered, so a mid-export abort is testable.
     failing_page: Option<(usize, DbError)>,
+    /// What every probe answers.
+    transaction: Transaction,
 }
 
 impl FakeCluster {
@@ -138,6 +141,10 @@ impl Cluster for FakeCluster {
             Some(changed) if !first => changed.clone(),
             _ => self.schema.clone(),
         })
+    }
+
+    async fn transaction(&self, _conn: ConnId) -> Result<Transaction, DbError> {
+        Ok(self.transaction)
     }
 
     async fn execute(&self, _conn: ConnId, stmt: &Statement) -> Result<Page, DbError> {

@@ -250,6 +250,7 @@ pub(super) fn connected(
     let name = name.clone();
     state.notify(Severity::Info, format!("connected to {}", name.as_str()));
 
+    state.transaction = crate::connection::Transaction::Idle;
     state.connection = ConnectionState::Connected(Connection {
         id: conn,
         name,

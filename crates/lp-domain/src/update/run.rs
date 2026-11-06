@@ -1,7 +1,7 @@
-use crate::connection::ConnectionState;
+use crate::connection::{ConnectionState, Transaction};
 use crate::contents::{ContentsState, Continue, Failure, Landed, Subject, TableRef};
 use crate::log::{Outcome, Trace};
-use crate::model::{DbError, Page, QueryId, Statement};
+use crate::model::{ConnId, DbError, Page, QueryId, Statement};
 use crate::overlay::Message;
 use crate::panel::Panel;
 use crate::state::State;
@@ -19,9 +19,10 @@ pub(super) fn page_ready(
     page: Page,
     took: Duration,
 ) -> Vec<Effect> {
-    if state.in_flight.remove(&query).is_none() {
+    let Some(stmt) = state.in_flight.remove(&query) else {
         return Vec::new();
-    }
+    };
+    let probe = probe(state, &stmt);
     let rows = page.rows.len();
     // A drop's result reaches the panel too and is dropped there: the panel is
     // not waiting on that id.
@@ -33,7 +34,8 @@ pub(super) fn page_ready(
     );
     state.mark_dirty();
 
-    match landed {
+    let mut effects: Vec<Effect> = probe.into_iter().collect();
+    effects.extend(match landed {
         Landed::Elsewhere | Landed::Read => {
             state.log.complete(
                 Trace::Query(query),
@@ -53,13 +55,57 @@ pub(super) fn page_ready(
             follow(state, Some(next))
         }
         Landed::Appended(next) => follow(state, next),
+    });
+    effects
+}
+
+/// What may have opened, ended or aborted a transaction asks the server:
+/// where a batch failed is not knowable from its text.
+fn probe(state: &State, stmt: &Statement) -> Option<Effect> {
+    let asks = state.posture().permits_mutation()
+        && (stmt.mutates() || state.transaction != Transaction::Idle);
+
+    state
+        .conn_id()
+        .filter(|_| asks)
+        .map(Effect::ProbeTransaction)
+}
+
+pub(super) fn transaction_reported(
+    state: &mut State,
+    conn: ConnId,
+    reported: &Result<Transaction, DbError>,
+) {
+    // A failed probe shares the session's fate, which the statement reported.
+    let Ok(transaction) = *reported else {
+        return;
+    };
+    if !state.connection.is_current(conn) || state.transaction == transaction {
+        return;
     }
+
+    let was = std::mem::replace(&mut state.transaction, transaction);
+    match transaction {
+        Transaction::Open => state.notify(
+            Severity::Info,
+            "transaction open, COMMIT or ROLLBACK to end it",
+        ),
+        Transaction::Failed => {
+            state.notify(Severity::Warning, "transaction failed, ROLLBACK to end it");
+        }
+        Transaction::Idle if was == Transaction::Failed => {
+            state.notify(Severity::Info, "transaction rolled back");
+        }
+        Transaction::Idle => state.notify(Severity::Info, "transaction ended"),
+    }
+    state.mark_dirty();
 }
 
 pub(super) fn query_failed(state: &mut State, query: QueryId, error: &DbError) -> Vec<Effect> {
-    if state.in_flight.remove(&query).is_none() {
+    let Some(stmt) = state.in_flight.remove(&query) else {
         return Vec::new();
-    }
+    };
+    let probe = probe(state, &stmt);
     let outcome = Outcome::Failed {
         detail: error.to_string(),
     };
@@ -79,7 +125,8 @@ pub(super) fn query_failed(state: &mut State, query: QueryId, error: &DbError) -
         state.log.complete(Trace::Query(query), outcome);
     }
     state.mark_dirty();
-    let mut effects = finish_drop(state, query, Some(error));
+    let mut effects: Vec<Effect> = probe.into_iter().collect();
+    effects.extend(finish_drop(state, query, Some(error)));
     effects.extend(finish_commit(state, query, Some(error)));
     effects
 }

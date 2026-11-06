@@ -1,5 +1,6 @@
 //! Dropping a namespace or table, or deleting rows.
 
+use crate::connection::Transaction;
 use crate::contents::{ContentsState, Subject, TableRef};
 use crate::drop::{DropPrompt, Target};
 use crate::jobs::Dropping;
@@ -162,7 +163,11 @@ pub(super) fn start_drop(state: &mut State) -> Vec<Effect> {
     };
 
     let target = prompt.target().clone();
-    let stmt = prompt.statement();
+    let stmt = if state.transaction == Transaction::Idle {
+        prompt.statement()
+    } else {
+        prompt.statement().joining()
+    };
     let log_subject = statement_subject(&stmt);
 
     match submit(state, stmt) {

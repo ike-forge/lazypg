@@ -185,6 +185,20 @@ impl Statement {
         }
     }
 
+    /// Inside a transaction the user opened: the wrapping `COMMIT` would end
+    /// theirs, so the rows join it instead. Only [`Self::delete_rows`] and
+    /// [`Self::update_rows`] wrap.
+    #[must_use]
+    pub fn joining(self) -> Self {
+        let sql = self
+            .sql
+            .strip_prefix("BEGIN;\n")
+            .and_then(|body| body.strip_suffix("COMMIT;"))
+            .map_or(self.sql.clone(), |body| body.trim_end().to_owned());
+
+        Self { sql, ..self }
+    }
+
     /// Every statement in the buffer is classified and the most restricted
     /// wins, so a `SELECT` ahead of a `DROP` cannot launder it.
     #[must_use]

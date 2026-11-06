@@ -141,6 +141,11 @@ pub enum Msg {
         result: Result<Exported, ExportError>,
         took: Duration,
     },
+    /// Answers [`Effect::ProbeTransaction`].
+    Transaction {
+        conn: ConnId,
+        transaction: Result<crate::connection::Transaction, DbError>,
+    },
     Quit,
 }
 
@@ -167,6 +172,8 @@ pub enum Effect {
         cursor: Option<PagingState>,
     },
     Cancel(QueryId),
+    /// Asked after a write, and after anything while a transaction is open.
+    ProbeTransaction(ConnId),
     RecordHistory(Box<Statement>),
     /// The whole list: a save replaces, so a lost one is repaired by the next.
     SaveHistory {
@@ -347,6 +354,10 @@ fn apply(state: &mut State, msg: Msg) -> Vec<Effect> {
 
         // No overlay: a failed browse disables one panel, not the application.
         Msg::Failed { query, error, .. } => query_failed(state, query, &error),
+        Msg::Transaction { conn, transaction } => {
+            run::transaction_reported(state, conn, &transaction);
+            Vec::new()
+        }
 
         Msg::EditorClosed { buffer } => editor_closed(state, &buffer),
 
@@ -423,9 +434,15 @@ fn editor_failed(state: &mut State, reason: String) -> Vec<Effect> {
 /// The guard lives here so every route to quit passes it.
 fn quit(state: &mut State) -> Vec<Effect> {
     let (cells, rows) = uncommitted(state);
+    let transaction = state.transaction != crate::connection::Transaction::Idle;
 
-    if cells > 0 {
-        state.overlay = Some(Overlay::Discard(Discard::of(cells, rows)));
+    if cells > 0 || transaction {
+        let discard = Discard::of(cells, rows);
+        state.overlay = Some(Overlay::Discard(if transaction {
+            discard.with_transaction()
+        } else {
+            discard
+        }));
         state.mark_dirty();
         return Vec::new();
     }

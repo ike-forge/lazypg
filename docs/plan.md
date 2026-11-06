@@ -128,9 +128,12 @@ without `CASCADE`. An integration test round-trips every type in
 `zoo.everything`. `Y` on a table's grid copies the selected rows as
 `INSERT`s. Cassandra's table health and value kinds are gone.
 
-Still to do:
-
-- An explicit transaction mode with the open transaction visible.
+Transactions are the user's: a typed `BEGIN` holds every later request, as
+one client serves them all. After a write, and after anything while one is
+open, the server is asked (`transaction_timestamp() <> statement_timestamp()`,
+or `25P02` when aborted). The Objects border names an open or failed
+transaction; grid commits join it rather than `COMMIT` it; quitting inside
+one asks first.
 
 ## Phase 3 — Understand
 
