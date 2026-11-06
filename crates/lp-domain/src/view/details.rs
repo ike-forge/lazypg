@@ -1,8 +1,12 @@
 //! The Structure panel's projection of what the Tables cursor is on. Nothing
 //! selected shows nothing: the Tables panel already narrates the connection.
 
+use std::fmt::Write as _;
+
 use crate::ddl::StructureTab;
-use crate::model::{Catalog, Column, Index, RelationKind, RelationRef, Schema, Table};
+use crate::model::{
+    Catalog, Column, ColumnDefault, Index, RelationKind, RelationRef, Schema, Table,
+};
 use crate::panel::Panel;
 use crate::search::{Direction, Search};
 use crate::state::State;
@@ -89,6 +93,10 @@ pub enum DetailRow {
         kind: IdentityKind,
         name: String,
     },
+    /// A line of SQL, drawn and yanked as written.
+    Code {
+        text: String,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -170,9 +178,12 @@ pub(super) fn of(state: &State) -> Option<Details> {
     let catalog = state.schema()?;
 
     let details = match (state.tables.selected(catalog)?, shown_tab(state)) {
-        (Node::Table { keyspace, table }, StructureTab::Ddl) => of_table(catalog, keyspace, table),
-        (Node::Table { keyspace, table }, StructureTab::Columns) => columns_of(keyspace, table),
+        (Node::Table { keyspace, table }, StructureTab::Columns | StructureTab::Summary) => {
+            columns_of(keyspace, table)
+        }
+        (Node::Table { keyspace, table }, StructureTab::Keys) => keys_of(catalog, keyspace, table),
         (Node::Table { keyspace, table }, StructureTab::Indexes) => indexes_of(keyspace, table),
+        (Node::Table { keyspace, table }, StructureTab::Ddl) => ddl_of(keyspace, table),
         (Node::Schema { keyspace, .. }, _) => of_schema(keyspace),
         (Node::Database { name, current, .. }, _) => of_database(catalog, name, current),
     };
@@ -180,24 +191,22 @@ pub(super) fn of(state: &State) -> Option<Details> {
     Some(details)
 }
 
-/// No Columns tab for a schema: an empty tab teaches the wrong thing.
+/// A schema or database has no columns, keys or DDL of its own here: an
+/// empty tab teaches the wrong thing.
 pub(super) fn tabs_for(state: &State) -> &'static [StructureTab] {
     if describes_a_table(state) {
         &StructureTab::ALL
     } else {
-        &[StructureTab::Ddl]
+        &[StructureTab::Summary]
     }
 }
 
 /// The held tab is not reset, so stepping to the schema and back keeps it.
 pub(super) fn shown_tab(state: &State) -> StructureTab {
     let tab = state.ddl.tab();
+    let tabs = tabs_for(state);
 
-    if tabs_for(state).contains(&tab) {
-        tab
-    } else {
-        StructureTab::Ddl
-    }
+    if tabs.contains(&tab) { tab } else { tabs[0] }
 }
 
 fn describes_a_table(state: &State) -> bool {
@@ -240,6 +249,7 @@ impl DetailRow {
             Self::Property { name, value } => search.matches(name) || search.matches(value),
             // Labels are the same on every table and would tell `n` nothing.
             Self::Identity { name, .. } => search.matches(name),
+            Self::Code { text } => search.matches(text),
         }
     }
 }
@@ -362,39 +372,58 @@ fn settings(heading: &str, rows: Vec<DetailRow>) -> Section {
     }
 }
 
-fn of_table(catalog: &Catalog, schema: &Schema, table: &Table) -> Details {
-    let constraints = table
+/// Every constraint: the key leading, references out and in, then the rules
+/// rows are held to.
+fn keys_of(catalog: &Catalog, schema: &Schema, table: &Table) -> Details {
+    let rules = table
         .constraints
         .iter()
-        .map(|constraint| property(constraint.name.clone(), constraint.definition.clone()))
+        .map(|constraint| {
+            property(
+                format!("{} {}", constraint.kind.label(), constraint.name),
+                constraint.definition.clone(),
+            )
+        })
         .collect();
-    let partitions = table
-        .partitions
-        .iter()
-        .map(|partition| property(partition.clone(), ""))
-        .collect();
-    let about = table
-        .comment
-        .iter()
-        .map(|comment| property("comment", comment.clone()))
-        .chain(
-            table
-                .definition
-                .iter()
-                .map(|definition| property("definition", definition.trim().to_owned())),
-        )
-        .collect();
+    let mut sections = populated([
+        identity(schema, Some(table)),
+        primary_key_section(table),
+        foreign_keys_section(table),
+        referenced_by_section(catalog, schema, table),
+        settings("Constraints", rules),
+    ]);
+    if sections.len() == 1 {
+        sections.push(none("Keys", Group::Shape));
+    }
 
+    Details { sections }
+}
+
+fn ddl_of(schema: &Schema, table: &Table) -> Details {
     Details {
         sections: populated([
             identity(schema, Some(table)),
-            primary_key_section(table),
-            foreign_keys_section(table),
-            referenced_by_section(catalog, schema, table),
-            settings("Constraints", constraints),
-            settings("Partitions", partitions),
-            settings("About", about),
+            Section {
+                heading: None,
+                group: Group::Settings,
+                token: None,
+                rows: crate::create::statements(schema, table)
+                    .into_iter()
+                    .map(|text| DetailRow::Code { text })
+                    .collect(),
+            },
         ]),
+    }
+}
+
+/// A row, not a bare heading: a heading with nothing under it reads as a failed
+/// load.
+fn none(heading: &str, group: Group) -> Section {
+    Section {
+        heading: Some(Heading::new(heading, Token::Section)),
+        group,
+        token: None,
+        rows: vec![property("none", "")],
     }
 }
 
@@ -415,7 +444,7 @@ fn index_sections(table: &Table) -> Vec<Section> {
         .filter(|index| !index.primary)
         .collect();
     if indexes.is_empty() {
-        return vec![no_indexes()];
+        return vec![none("Indexes", Group::Indexes)];
     }
 
     indexes
@@ -450,17 +479,6 @@ fn index_rows(table: &Table, index: &Index) -> Vec<DetailRow> {
     keys.chain(traits.into_iter().flatten()).collect()
 }
 
-/// A row, not a bare heading: a heading with nothing under it reads as a failed
-/// load.
-fn no_indexes() -> Section {
-    Section {
-        heading: Some(Heading::new("Indexes", Token::Section)),
-        group: Group::Indexes,
-        token: None,
-        rows: vec![property("none", "")],
-    }
-}
-
 /// Flat and in column order, as `SELECT *` returns them; the kind travels
 /// with each row.
 fn columns_of(schema: &Schema, table: &Table) -> Details {
@@ -473,30 +491,64 @@ fn columns_of(schema: &Schema, table: &Table) -> Details {
         })
         .collect();
 
+    let about = table
+        .comment
+        .iter()
+        .map(|comment| property("comment", comment.clone()))
+        .chain(
+            table
+                .partition_key
+                .iter()
+                .map(|key| property("partitioned by", key.clone())),
+        )
+        .chain(
+            table
+                .partitions
+                .iter()
+                .map(|partition| property("partition", partition.clone())),
+        )
+        .collect();
+
     Details {
         sections: populated([
             identity(schema, Some(table)),
             Section {
                 heading: Some(Heading::new(
-                    format!("{} columns", table.columns.len()),
+                    match table.columns.len() {
+                        1 => "1 column".to_owned(),
+                        n => format!("{n} columns"),
+                    },
                     Token::Section,
                 )),
                 group: Group::Shape,
                 token: None,
                 rows,
             },
+            settings("About", about),
         ]),
     }
 }
 
-/// `not null` beside the type: whether a cell can be empty is part of its
-/// type to anyone writing a query.
+/// `not null` and the default beside the type: whether a cell can be empty,
+/// and what it holds when unstated, are part of its type to anyone writing a
+/// query. Lower case, so the type stays the loudest word.
 fn column_type(column: &Column) -> String {
-    if column.nullable {
-        column.data_type.clone()
-    } else {
-        format!("{} not null", column.data_type)
+    let mut text = column.data_type.clone();
+    if !column.nullable {
+        text.push_str(" not null");
     }
+    match &column.default {
+        Some(ColumnDefault::Expression(expression)) => {
+            let _ = write!(text, " default {expression}");
+        }
+        Some(ColumnDefault::Identity { always: true }) => text.push_str(" identity always"),
+        Some(ColumnDefault::Identity { always: false }) => text.push_str(" identity by default"),
+        Some(ColumnDefault::Generated(expression)) => {
+            let _ = write!(text, " generated from {expression}");
+        }
+        None => {}
+    }
+    text
 }
 
 fn of_schema(schema: &Schema) -> Details {
@@ -740,18 +792,35 @@ mod tests {
     }
 
     #[test]
-    fn a_table_reads_key_references_then_settings() {
+    fn the_keys_tab_reads_the_key_then_references_out_then_in() {
         assert_eq!(
-            headings(&details(&browsing(order_line()))),
-            ["Primary Key", "Foreign Keys", "Constraints", "About"],
+            headings(&keys(&browsing(order_line()))),
+            ["Primary Key", "Foreign Keys", "Constraints"],
             "nothing references it, so no Referenced By"
+        );
+    }
+
+    fn keys(state: &State) -> Details {
+        details(&on_tab(state, StructureTab::Keys))
+    }
+
+    #[test]
+    fn a_table_with_no_key_and_no_reference_says_so() {
+        let bare = Table {
+            name: "bare".to_owned(),
+            ..Table::default()
+        };
+
+        assert_eq!(
+            section(&keys(&browsing(bare)), "Keys").rows,
+            [property("none", "")]
         );
     }
 
     #[test]
     fn the_primary_key_is_listed_in_key_order_with_types() {
         assert_eq!(
-            section(&details(&browsing(order_line())), "Primary Key").rows,
+            section(&keys(&browsing(order_line())), "Primary Key").rows,
             [
                 DetailRow::KeyColumn {
                     name: "order_id".to_owned(),
@@ -768,7 +837,7 @@ mod tests {
     #[test]
     fn a_foreign_key_names_its_columns_and_where_they_point() {
         assert_eq!(
-            section(&details(&browsing(order_line())), "Foreign Keys").rows,
+            section(&keys(&browsing(order_line())), "Foreign Keys").rows,
             [DetailRow::Property {
                 name: "customer_id".to_owned(),
                 value: "shop.customer(id)".to_owned(),
@@ -781,7 +850,7 @@ mod tests {
         let state = browsing_first(vec![customer(), order_line()]);
 
         assert_eq!(
-            section(&details(&state), "Referenced By").rows,
+            section(&keys(&state), "Referenced By").rows,
             [DetailRow::Property {
                 name: "shop.order_line(customer_id)".to_owned(),
                 value: "on delete cascade".to_owned(),
@@ -798,18 +867,21 @@ mod tests {
             definition: Some(" SELECT sum(1) AS total;".to_owned()),
             ..Table::default()
         };
-        let details = details(&browsing(view));
+        let details = details(&on_tab(&browsing(view), StructureTab::Ddl));
 
         assert_eq!(
             identity_rows(&details),
             [("Schema", "shop"), ("View", "totals")]
         );
         assert_eq!(
-            section(&details, "About").rows,
-            [DetailRow::Property {
-                name: "definition".to_owned(),
-                value: "SELECT sum(1) AS total;".to_owned(),
-            }]
+            details
+                .rows()
+                .filter_map(|row| match row {
+                    DetailRow::Code { text } => Some(text.as_str()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>(),
+            ["CREATE VIEW shop.totals AS", "  SELECT sum(1) AS total;"]
         );
     }
 
@@ -823,11 +895,8 @@ mod tests {
         };
 
         assert_eq!(
-            section(&details(&browsing(parent)), "Partitions").rows,
-            [DetailRow::Property {
-                name: "measurement_2026".to_owned(),
-                value: String::new(),
-            }]
+            section(&details(&browsing(parent)), "About").rows,
+            [property("partition", "measurement_2026")]
         );
     }
 
@@ -838,14 +907,14 @@ mod tests {
             ..order_line()
         };
 
-        assert!(!headings(&details(&browsing(keyless))).contains(&"Primary Key"));
+        assert!(!headings(&keys(&browsing(keyless))).contains(&"Primary Key"));
     }
 
     #[test]
     fn the_columns_tab_lists_every_column_in_table_order_with_its_part() {
-        let details = details(&on_tab(&browsing(order_line()), StructureTab::Columns));
+        let details = details(&browsing(order_line()));
 
-        assert_eq!(headings(&details), ["4 columns"]);
+        assert_eq!(headings(&details), ["4 columns", "About"]);
         assert_eq!(
             section(&details, "4 columns").rows,
             [
@@ -930,8 +999,8 @@ mod tests {
         let mut state = tabled(&[("shop", &["orders", "users"])]);
         state.ddl.show(StructureTab::Columns);
 
-        assert_eq!(tabs_for(&state), [StructureTab::Ddl]);
-        assert_eq!(shown_tab(&state), StructureTab::Ddl);
+        assert_eq!(tabs_for(&state), [StructureTab::Summary]);
+        assert_eq!(shown_tab(&state), StructureTab::Summary);
         assert_eq!(identity_rows(&details(&state)), [("Schema", "shop")]);
         assert_eq!(
             section(&details(&state), "Contents").rows,
@@ -1094,6 +1163,78 @@ mod tests {
         assert_eq!(
             section(&details, "Contents").rows,
             [property("not open", "⏎ or l switches the session to it")]
+        );
+    }
+
+    #[test]
+    fn the_keys_tab_ends_with_the_other_constraints_named_by_kind() {
+        let details = keys(&browsing(order_line()));
+
+        assert_eq!(
+            section(&details, "Constraints").rows,
+            [property(
+                "check order_line_line_no_check",
+                "CHECK ((line_no >= 0))"
+            )]
+        );
+    }
+
+    fn details_of_tab(table: Table, tab: StructureTab) -> Details {
+        details(&on_tab(&browsing(table), tab))
+    }
+
+    #[test]
+    fn the_ddl_tab_is_the_create_statement_line_by_line() {
+        let details = details_of_tab(customer(), StructureTab::Ddl);
+
+        assert_eq!(
+            details
+                .rows()
+                .filter_map(|row| match row {
+                    DetailRow::Code { text } => Some(text.as_str()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>(),
+            [
+                "CREATE TABLE shop.customer (",
+                "    id bigint NOT NULL,",
+                "    CONSTRAINT customer_pkey PRIMARY KEY (id)",
+                ");",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_column_shows_its_default_beside_its_type() {
+        let table = Table {
+            name: "t".to_owned(),
+            columns: vec![
+                Column {
+                    default: Some(ColumnDefault::Identity { always: true }),
+                    ..not_null("id", "bigint")
+                },
+                Column {
+                    default: Some(ColumnDefault::Expression("'Open'::text".to_owned())),
+                    ..Column::new("state", "text")
+                },
+            ],
+            ..Table::default()
+        };
+        let types: Vec<String> = details(&browsing(table))
+            .rows()
+            .filter_map(|row| match row {
+                DetailRow::Column { data_type, .. } => Some(data_type.clone()),
+                _ => None,
+            })
+            .collect();
+
+        assert_eq!(
+            types,
+            [
+                "bigint not null identity always",
+                "text default 'Open'::text"
+            ],
+            "the expression is kept as written, case and all"
         );
     }
 }

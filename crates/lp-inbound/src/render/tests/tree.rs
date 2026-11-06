@@ -45,7 +45,7 @@ fn a_tree_row_wears_the_icon_of_what_it_names() {
 #[test]
 fn the_ddl_identity_rows_wear_the_tree_icons_and_each_heading_its_own() {
     // Wide enough for every icon.
-    let buffer = draw_state(160, 41, &describing(orders()));
+    let buffer = draw_state(160, 41, &keyed(orders()));
     let rows = ddl_rows(&buffer);
 
     assert!(

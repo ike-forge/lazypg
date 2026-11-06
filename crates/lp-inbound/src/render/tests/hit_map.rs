@@ -229,15 +229,15 @@ fn a_press_on_the_chrome_of_a_panel_names_that_panel() {
 
 #[test]
 fn the_map_resolves_every_drawn_tab_to_its_place_in_the_strip() {
-    let (buffer, map) = draw_mapped(104, 41, &listing(orders()));
+    let (buffer, map) = draw_mapped(120, 41, &listing(orders()));
     let strip = row(&buffer, DDL_BORDER);
 
     assert!(
-        strip.contains("DDL") && strip.contains("Cols") && strip.contains("Idx"),
+        strip.contains("Col - Key - Idx - DDL"),
         "row {DDL_BORDER} must be the strip this test is about: {strip:?}"
     );
 
-    for (label, tab) in [("DDL", 0), ("Cols", 1), ("Idx", 2)] {
+    for (label, tab) in [("Col", 0), ("Key", 1), ("Idx", 2), ("DDL", 3)] {
         assert_eq!(
             map.hit(column_of(&buffer, DDL_BORDER, label), DDL_BORDER),
             Some(Click::Tab {

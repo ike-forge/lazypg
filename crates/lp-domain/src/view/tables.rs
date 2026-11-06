@@ -1,6 +1,6 @@
 use crate::connection::{ConnectionState, SchemaState};
 use crate::feedback::Flash;
-use crate::model::{Catalog, SchemaKind};
+use crate::model::{Catalog, RelationKind, SchemaKind};
 use crate::panel::Panel;
 use crate::state::State;
 use crate::style::{Segment, Token};
@@ -31,6 +31,7 @@ pub enum RowKind {
     Table {
         limb: Limb,
         outer: Option<Limb>,
+        relation: RelationKind,
     },
 }
 
@@ -198,6 +199,7 @@ fn tree_row(node: &Node<'_>, limbs: Limbs) -> TreeRow {
             RowKind::Table {
                 limb: limbs.own,
                 outer: limbs.outer,
+                relation: table.kind,
             },
         ),
     };
@@ -407,14 +409,16 @@ mod tests {
                 (
                     RowKind::Table {
                         limb: Limb::Middle,
-                        outer: None
+                        outer: None,
+                        relation: RelationKind::Table
                     },
                     "orders"
                 ),
                 (
                     RowKind::Table {
                         limb: Limb::Last,
-                        outer: None
+                        outer: None,
+                        relation: RelationKind::Table
                     },
                     "users"
                 ),
@@ -618,7 +622,8 @@ mod tests {
                     "customer".to_owned(),
                     RowKind::Table {
                         limb: Limb::Middle,
-                        outer: Some(Limb::Middle)
+                        outer: Some(Limb::Middle),
+                        relation: RelationKind::Table
                     },
                     Token::Table
                 ),
@@ -626,7 +631,8 @@ mod tests {
                     "orders".to_owned(),
                     RowKind::Table {
                         limb: Limb::Last,
-                        outer: Some(Limb::Middle)
+                        outer: Some(Limb::Middle),
+                        relation: RelationKind::Table
                     },
                     Token::Table
                 ),

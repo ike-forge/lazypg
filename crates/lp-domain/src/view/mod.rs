@@ -760,7 +760,7 @@ mod tests {
             [
                 // Nothing selected, so no Columns tab.
                 "[1]-Objects",
-                "[2]-DDL",
+                "[2]-Structure",
                 "[3]-Table contents",
                 "[4]-Queries - [5]-Logs"
             ]

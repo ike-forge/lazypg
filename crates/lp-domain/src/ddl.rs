@@ -1,56 +1,74 @@
-//! The DDL panel's state: a cursor over rows, a viewport over the lines they
+//! The Structure panel's state: a cursor over rows, a viewport over the lines they
 //! wrapped to, and a search.
 
 use crate::search::Search;
 use crate::selection::Selection;
 use crate::viewport::{Cursor, Scroll};
 
+/// A relation's tabs, plus `Summary` for a schema or database, which has no
+/// columns to list.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum StructureTab {
     #[default]
-    Ddl,
     Columns,
+    /// Every constraint: the key, references both ways, unique, check and
+    /// exclusion.
+    Keys,
     Indexes,
+    Ddl,
+    Summary,
 }
 
 impl StructureTab {
-    pub const ALL: [Self; 3] = [Self::Ddl, Self::Columns, Self::Indexes];
+    /// A relation's, in strip order.
+    pub const ALL: [Self; 4] = [Self::Columns, Self::Keys, Self::Indexes, Self::Ddl];
 
     /// No key per tab: `]` and `[` walk them.
     #[must_use]
     pub const fn next(self) -> Self {
         match self {
-            Self::Ddl => Self::Columns,
-            Self::Columns => Self::Indexes,
+            Self::Columns => Self::Keys,
+            Self::Keys => Self::Indexes,
             Self::Indexes => Self::Ddl,
+            Self::Ddl => Self::Columns,
+            Self::Summary => Self::Summary,
         }
     }
 
     #[must_use]
     pub const fn previous(self) -> Self {
         match self {
-            Self::Ddl => Self::Indexes,
             Self::Columns => Self::Ddl,
-            Self::Indexes => Self::Columns,
+            Self::Keys => Self::Columns,
+            Self::Indexes => Self::Keys,
+            Self::Ddl => Self::Indexes,
+            Self::Summary => Self::Summary,
         }
     }
 
     #[must_use]
     pub const fn label(self) -> &'static str {
         match self {
-            Self::Ddl => "DDL",
             Self::Columns => "Columns",
+            Self::Keys => "Keys",
             Self::Indexes => "Indexes",
+            Self::Ddl => "DDL",
+            // The panel's own name: a schema's or database's one tab is the
+            // whole panel.
+            Self::Summary => "Structure",
         }
     }
 
-    /// Three tabs no longer fit a usual sidebar. `DDL` has nothing to drop.
+    /// Three letters each: the strip then fits a 29-column sidebar, a
+    /// 116-column terminal.
     #[must_use]
     pub const fn short_label(self) -> &'static str {
         match self {
-            Self::Ddl => "DDL",
-            Self::Columns => "Cols",
+            Self::Columns => "Col",
+            Self::Keys => "Key",
             Self::Indexes => "Idx",
+            Self::Ddl => "DDL",
+            Self::Summary => "Structure",
         }
     }
 }
@@ -105,8 +123,8 @@ mod tests {
     use crate::selection::{Range, Ranges};
 
     #[test]
-    fn a_panel_opens_on_the_tab_that_describes_the_table() {
-        assert_eq!(DdlPanel::default().tab(), StructureTab::Ddl);
+    fn a_panel_opens_on_the_columns() {
+        assert_eq!(DdlPanel::default().tab(), StructureTab::Columns);
     }
 
     #[test]
@@ -128,9 +146,9 @@ mod tests {
     fn showing_a_tab_draws_it() {
         let mut panel = DdlPanel::default();
 
-        panel.show(StructureTab::Columns);
+        panel.show(StructureTab::Keys);
 
-        assert_eq!(panel.tab(), StructureTab::Columns);
+        assert_eq!(panel.tab(), StructureTab::Keys);
     }
 
     #[test]
@@ -139,7 +157,7 @@ mod tests {
         panel.cursor.go_to(4, 8);
         panel.scroll.down(40, 10);
 
-        panel.show(StructureTab::Columns);
+        panel.show(StructureTab::Keys);
 
         assert_eq!(panel.cursor.index(), 0);
         assert_eq!(panel.scroll.offset(), 0);
@@ -152,7 +170,7 @@ mod tests {
         panel.cursor.go_to(4, 8);
         panel.scroll.down(40, 10);
 
-        panel.show(StructureTab::Ddl);
+        panel.show(StructureTab::Columns);
 
         assert_eq!(panel.cursor.index(), 4);
         assert_eq!(panel.scroll.offset(), 1);
@@ -164,7 +182,7 @@ mod tests {
         panel.selection.start(1);
         panel.selection.stop(3);
 
-        panel.show(StructureTab::Columns);
+        panel.show(StructureTab::Keys);
 
         assert!(!panel.selection.is_active());
     }
@@ -175,7 +193,7 @@ mod tests {
         panel.selection.start(1);
         panel.selection.stop(3);
 
-        panel.show(StructureTab::Ddl);
+        panel.show(StructureTab::Columns);
 
         assert_eq!(panel.selection.ranges(0), Ranges::of(Range::new(1, 3)));
     }
@@ -186,7 +204,7 @@ mod tests {
         let mut panel = DdlPanel::default();
         panel.set_search(Search::new("id"));
 
-        panel.show(StructureTab::Columns);
+        panel.show(StructureTab::Keys);
 
         assert_eq!(panel.search().map(Search::as_str), Some("id"));
     }

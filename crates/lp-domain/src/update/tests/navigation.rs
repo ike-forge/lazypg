@@ -148,7 +148,7 @@ fn shift_tab_from_tables_lands_on_queries_logs() {
 fn tab_steps_ddls_two_tabs_as_separate_stops() {
     let mut state = browsing_a_table();
     state.focus_on(Panel::Structure);
-    assert_eq!(state.ddl.tab(), StructureTab::Ddl);
+    assert_eq!(state.ddl.tab(), StructureTab::Columns);
 
     press(&mut state, Key::Tab);
 
@@ -157,7 +157,7 @@ fn tab_steps_ddls_two_tabs_as_separate_stops() {
         Panel::Structure,
         "the cycle has not left the panel yet"
     );
-    assert_eq!(state.ddl.tab(), StructureTab::Columns);
+    assert_eq!(state.ddl.tab(), StructureTab::Keys);
 }
 
 #[test]
@@ -348,7 +348,7 @@ fn a_repeated_number_changes_neither_focus_nor_tab() {
         press(&mut state, Key::Char(panel.number()));
 
         assert_eq!(state.focus(), panel, "the second press does not move focus");
-        assert_eq!(state.ddl.tab(), StructureTab::Ddl, "nor walk a tab");
+        assert_eq!(state.ddl.tab(), StructureTab::Columns, "nor walk a tab");
     }
 }
 
@@ -358,10 +358,10 @@ fn brackets_walk_the_focused_panels_tabs_both_ways() {
     state.focus_on(Panel::Structure);
 
     press(&mut state, Key::Char(']'));
-    assert_eq!(state.ddl.tab(), StructureTab::Columns);
+    assert_eq!(state.ddl.tab(), StructureTab::Keys);
 
     press(&mut state, Key::Char('['));
-    assert_eq!(state.ddl.tab(), StructureTab::Ddl);
+    assert_eq!(state.ddl.tab(), StructureTab::Columns);
 }
 
 #[test]
@@ -375,7 +375,7 @@ fn brackets_do_nothing_from_a_panel_with_no_tabs() {
         assert_eq!(state.focus(), panel, "a bracket moves no focus");
         assert_eq!(
             state.ddl.tab(),
-            StructureTab::Ddl,
+            StructureTab::Columns,
             "and reaches no panel it is not in"
         );
     }
@@ -392,7 +392,7 @@ fn walking_on_a_keyspace_stays_on_the_only_tab_there_is() {
     assert_eq!(state.focus(), Panel::Structure);
     assert_eq!(
         state.ddl.tab(),
-        StructureTab::Ddl,
+        StructureTab::Columns,
         "a keyspace has no columns, so there is no tab to walk to"
     );
 }
@@ -423,7 +423,7 @@ fn a_bracket_is_text_in_a_panel_that_takes_text() {
     assert_eq!(state.queries.text(), "]");
     assert_eq!(
         state.ddl.tab(),
-        StructureTab::Ddl,
+        StructureTab::Columns,
         "and no tab changed under it"
     );
 }

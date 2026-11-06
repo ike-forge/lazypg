@@ -224,7 +224,7 @@ fn a_click_on_a_tab_focuses_its_panel_and_draws_it() {
 
     assert!(effects.is_empty());
     assert_eq!(state.focus(), Panel::Structure);
-    assert_eq!(state.ddl.tab(), StructureTab::Columns);
+    assert_eq!(state.ddl.tab(), StructureTab::Keys);
 }
 
 #[test]
@@ -257,7 +257,7 @@ fn a_click_on_a_tab_the_strip_no_longer_draws_only_focuses() {
     );
 
     assert_eq!(state.focus(), Panel::Structure);
-    assert_eq!(state.ddl.tab(), StructureTab::Ddl);
+    assert_eq!(state.ddl.tab(), StructureTab::Columns);
 }
 
 #[test]

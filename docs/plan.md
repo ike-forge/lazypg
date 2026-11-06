@@ -78,11 +78,14 @@ Every LazyCassandra module falls into one of three buckets.
 1. **Objects panel.** *Done.* Database → schema → relation tree, the
    configured database open and preselected on start; opening another
    reconnects to it (architecture.md §7). System schemas are not read;
-   partitions are listed under their parent in the Structure panel. Still
-   to do: an icon per relation kind, and naming the panel Objects.
-2. **Structure panel.** Tabs: Columns (type, nullability, default, PK
-   marker), Keys (PK, outgoing and incoming FKs), Indexes, Constraints, DDL
-   (reconstructed `CREATE`, with `pg_get_*def` where Postgres provides one).
+   partitions are listed under their parent in the Structure panel. Each
+   relation kind has its own icon.
+2. **Structure panel.** *Done.* Tabs: Columns (type, `not null`, default,
+   key and reference markers; comment and partitions beneath), Keys (primary
+   key, foreign keys out and in, unique/check/exclusion), Indexes, DDL (a
+   `CREATE` rebuilt from the catalog, with indexes and comments). A schema or
+   database has one tab, named for the panel. Constraints share Keys: a fifth
+   tab would not fit the border at usual widths.
 3. **Contents grid.** `LIMIT/OFFSET` paging (architecture.md §6); `PgValue`
    rendering for every type family; NULL distinct from empty; local filter
    and sort.

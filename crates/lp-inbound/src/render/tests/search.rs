@@ -20,7 +20,7 @@ fn the_marker_is_drawn_muted() {
     let mut state = browsing(&["shop"], 0);
     state.apply_search(Searched::Ddl, Search::new("ord"));
 
-    let buffer = draw_state(80, 24, &state);
+    let buffer = draw_state(100, 24, &state);
     let (fg, _bg, modifier) = style_of_first(&buffer, "/ord");
     let expected = Theme::default().style(Token::Muted);
 

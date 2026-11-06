@@ -109,8 +109,9 @@ fn the_four_panels_are_drawn_where_the_draft_puts_them() {
     assert_eq!(row(&buffer, 0), "╭─ [1]-Objects ╮╭── [3]-Table contents ╮");
     assert_eq!(row(&buffer, 1), "│Not connected ││Press Enter on a table│");
     assert_eq!(row(&buffer, 4), "╰──────────────╯│                      │");
-    // No Columns tab: nothing is selected.
-    assert_eq!(row(&buffer, 5), "╭── [2]-DDL ───╮│                      │");
+    // Nothing is selected, so the panel's one tab bears its name, as much of
+    // it as the floor holds.
+    assert_eq!(row(&buffer, 5), "╭ [2]-Structure╮│                      │");
     assert_eq!(row(&buffer, 8), "│              │╰──────────────────────╯");
     // `[5]-Logs` does not fit, so only the active tab shows.
     assert_eq!(row(&buffer, 9), "│              │╭── [4]-Queries ───────╮");

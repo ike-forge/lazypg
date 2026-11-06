@@ -14,8 +14,8 @@ pub use ids::{ConnId, JobId, QueryId};
 pub use input::{Key, KeyPress, Modifiers};
 pub use page::{Page, PagingState, Row};
 pub use schema::{
-    Catalog, Column, Constraint, ConstraintKind, ForeignKey, Function, FunctionKind, Index,
-    PrimaryKey, RelationKind, RelationRef, Schema, SchemaKind, Sequence, Server, Table,
+    Catalog, Column, ColumnDefault, Constraint, ConstraintKind, ForeignKey, Function, FunctionKind,
+    Index, PrimaryKey, RelationKind, RelationRef, Schema, SchemaKind, Sequence, Server, Table,
 };
 pub use statement::{Statement, StatementKind, UpdatedRow};
 pub use value::CqlValue;

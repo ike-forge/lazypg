@@ -4,7 +4,8 @@ use lp_domain::clock::Stamp;
 use lp_domain::config::{PageRows, PageSize};
 use lp_domain::log::Outcome;
 use lp_domain::model::{
-    Column, CqlValue, DbError, Index, Key, KeyPress, Page, PagingState, Row, Statement,
+    Column, CqlValue, DbError, Index, Key, KeyPress, Page, PagingState, RelationKind, Row,
+    Statement,
 };
 use lp_domain::panel::Panel;
 use lp_domain::posture::Posture;
@@ -100,14 +101,16 @@ async fn pressing_l_unfolds_a_keyspace_and_the_view_model_shows_its_tables() {
             (
                 RowKind::Table {
                     limb: Limb::Middle,
-                    outer: None
+                    outer: None,
+                    relation: RelationKind::Table
                 },
                 "orders"
             ),
             (
                 RowKind::Table {
                     limb: Limb::Last,
-                    outer: None
+                    outer: None,
+                    relation: RelationKind::Table
                 },
                 "users"
             ),
@@ -461,8 +464,8 @@ async fn stepping_onto_a_table_describes_it_in_the_ddl_panel() {
     );
     assert_eq!(
         headings(&table),
-        ["Primary Key", "About"],
-        "these fixtures have no references or constraints, so those sections are absent"
+        ["1 column", "About"],
+        "the panel opens on the columns, the table's comment beneath them"
     );
     assert_eq!(
         section(&table, "About").rows,

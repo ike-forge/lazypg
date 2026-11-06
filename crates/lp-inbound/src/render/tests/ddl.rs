@@ -238,14 +238,16 @@ fn the_narrowest_sidebar_gives_its_border_to_the_title_alone() {
 
 #[test]
 fn a_border_wide_enough_names_every_tab_and_fades_the_ones_not_drawn() {
-    // 132 columns: a 33-column sidebar holds all three full names.
-    let buffer = draw_state(132, 41, &describing(orders()));
-    let border = row(&buffer, top_border(&buffer, "DDL").1);
+    // 152 columns: a 38-column sidebar holds all four full names.
+    let buffer = draw_state(152, 41, &describing(orders()));
+    let border = row(&buffer, top_border(&buffer, "Columns").1);
 
-    assert!(border.contains("DDL - Columns - Indexes"), "got {border:?}");
+    assert!(
+        border.contains("Columns - Keys - Indexes - DDL"),
+        "got {border:?}"
+    );
 
-    // Past its 'C', which the separator also holds.
-    let (fg, _, modifier) = style_of_first(&buffer, "olumns");
+    let (fg, _, modifier) = style_of_first(&buffer, "ndexes");
     let faint = Theme::default().style(Token::Faint);
 
     assert_eq!(fg, faint.fg.expect("faint spends a colour"));
@@ -254,11 +256,11 @@ fn a_border_wide_enough_names_every_tab_and_fades_the_ones_not_drawn() {
 
 #[test]
 fn a_sidebar_on_its_usual_width_still_names_every_tab() {
-    // A 26-column sidebar: short names, not two dropped tabs.
-    let buffer = draw_state(104, 41, &listing(orders()));
-    let border = row(&buffer, top_border(&buffer, "DDL").1);
+    // A 30-column sidebar: short names, not three dropped tabs.
+    let buffer = draw_state(120, 41, &listing(orders()));
+    let border = row(&buffer, top_border(&buffer, "Col").1);
 
-    assert!(border.contains("DDL - Cols - Idx"), "got {border:?}");
+    assert!(border.contains("Col - Key - Idx - DDL"), "got {border:?}");
 }
 
 #[test]
@@ -273,11 +275,11 @@ fn a_border_too_narrow_for_either_strip_keeps_the_tab_it_is_drawing_whole() {
 }
 
 #[test]
-fn a_selected_tables_shape_is_drawn_above_its_settings() {
-    let buffer = draw_state(104, 41, &describing(orders()));
+fn the_keys_tab_draws_the_key_then_the_references_then_the_rules() {
+    let buffer = draw_state(104, 41, &keyed(orders()));
 
     assert_eq!(
-        ddl_rows(&buffer)[..18],
+        ddl_rows(&buffer)[..16],
         [
             // The cursor opens on this row.
             "▌  \u{f084} Schema         shop",
@@ -297,16 +299,36 @@ fn a_selected_tables_shape_is_drawn_above_its_settings() {
             // Between what the table is and the rules it keeps.
             "",
             "\u{f013} Constraints",
-            "   recent",
+            "   check recent",
             "     CHECK (order_date >",
             "     '2020-01-01')",
-            "\u{f013} About",
-            "   comment   Order list.",
         ]
     );
-    assert!(
-        ddl_rows(&buffer)[18..].iter().all(String::is_empty),
-        "`About` comes last, and the panel has room to spare beneath it"
+    assert!(ddl_rows(&buffer)[16..].iter().all(String::is_empty));
+}
+
+#[test]
+fn the_ddl_tab_draws_the_create_statement_keeping_its_indentation() {
+    let mut state = describing(orders());
+    state.ddl.show(StructureTab::Ddl);
+    let buffer = draw_state(104, 41, &state);
+
+    assert_eq!(
+        ddl_rows(&buffer)[3..13],
+        [
+            "",
+            "   CREATE TABLE",
+            // A name wider than the panel is broken, not dropped.
+            "     shop.orders_by_cust",
+            "     omer (",
+            "       customer_id uuid,",
+            "       order_date date,",
+            "       order_id bigint,",
+            "       CONSTRAINT",
+            "         orders_by_custo",
+            "         mer_pkey",
+        ],
+        "a line too long for the panel wraps two in from its own indentation"
     );
 }
 
@@ -325,7 +347,7 @@ fn highlighted_rows(buffer: &Buffer) -> Vec<u16> {
 
 #[test]
 fn every_line_of_a_selected_property_is_highlighted() {
-    let mut state = describing(orders());
+    let mut state = keyed(orders());
     state.focus_on(Panel::Structure);
     // The foreign key's target wraps: one row on two lines. Five rows in.
     state.ddl.cursor.go_to(5, lp_domain::view::ddl_rows(&state));
@@ -344,20 +366,21 @@ fn every_line_of_a_selected_property_is_highlighted() {
 fn a_one_line_property_has_exactly_its_own_line_reversed() {
     let mut state = describing(orders());
     state.focus_on(Panel::Structure);
-    state.ddl.cursor.go_to(7, lp_domain::view::ddl_rows(&state));
+    // The comment, under About, past three columns.
+    state.ddl.cursor.go_to(5, lp_domain::view::ddl_rows(&state));
 
     let buffer = draw_state(104, 41, &state);
 
     assert_eq!(
         highlighted_rows(&buffer),
-        [34],
+        [27],
         "comment fits one line, so exactly it is the selection"
     );
 }
 
 #[test]
 fn the_ddl_body_reserves_a_column_for_the_selection_bar() {
-    let mut state = describing(orders());
+    let mut state = keyed(orders());
     state.focus_on(Panel::Structure);
     // The foreign key wraps: one cursor stop on two lines.
     state.ddl.cursor.go_to(5, lp_domain::view::ddl_rows(&state));
@@ -372,9 +395,9 @@ fn the_ddl_body_reserves_a_column_for_the_selection_bar() {
     );
     assert_eq!(bar(26), "▌");
     assert_eq!(bar(27), "▌");
-    // 20 and 28 are group blanks; 21, 25, 29 and 33 headings; none pays the
-    // bar column.
-    for y in [17, 18, 19, 22, 23, 24, 30, 31, 32, 34] {
+    // 20 and 28 are group blanks; 21, 25 and 29 headings; none pays the bar
+    // column.
+    for y in [17, 18, 19, 22, 23, 24, 30, 31, 32] {
         assert_eq!(bar(y), " ", "row {y} is a row the cursor is not on");
     }
     assert_eq!(
@@ -503,7 +526,7 @@ fn a_selected_block_scrolled_partly_out_of_view_keeps_its_visible_lines_highligh
 #[test]
 fn the_key_columns_are_drawn_in_the_tokens_that_mark_them_as_the_key() {
     // The cursor is off the key rows, so they show their own colours.
-    let mut state = describing(orders());
+    let mut state = keyed(orders());
     let details = ddl_details(&state);
     state
         .ddl

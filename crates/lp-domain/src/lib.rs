@@ -10,6 +10,7 @@ pub mod config;
 pub mod connection;
 pub mod contents;
 pub mod cql;
+pub mod create;
 pub mod ddl;
 pub mod drop;
 pub mod edit;

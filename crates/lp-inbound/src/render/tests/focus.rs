@@ -70,7 +70,7 @@ fn each_panel_opens_its_title_with_the_key_that_focuses_it() {
 
     for (panel, opening) in [
         (Panel::Objects, "[1]-Objects"),
-        (Panel::Structure, "[2]-DDL"),
+        (Panel::Structure, "[2]-Structure"),
         (Panel::Contents, "[3]-Table contents"),
         (Panel::Queries, "[4]-Queries"),
     ] {

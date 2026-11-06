@@ -75,7 +75,7 @@ Four panels, mirroring LazyCassandra:
 | # | Panel | Holds |
 |---|---|---|
 | 1 | Objects | schema → tables, views, materialized views, sequences, functions |
-| 2 | Structure | columns, keys and foreign keys (both directions), indexes, constraints, DDL |
+| 2 | Structure | columns, keys and constraints (references both directions), indexes, DDL |
 | 3 | Contents | the result grid: table rows or query results, paged |
 | 4 | Queries | SQL editor and session log |
 

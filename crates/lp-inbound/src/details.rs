@@ -193,6 +193,10 @@ fn row_lines(
             property_lines(name, value, width, style, search, theme)
         }
         DetailRow::Identity { kind, name } => identity_lines(*kind, name, width, search, theme),
+        DetailRow::Code { text } => code_lines(text, width)
+            .into_iter()
+            .map(|text| Line::from(crate::highlight::spans(&text, search, style, theme)))
+            .collect(),
     }
 }
 
@@ -226,6 +230,23 @@ fn identity_lines(
             }
         })
         .collect()
+}
+
+/// The SQL's own indentation is kept; a line too long for the panel wraps two
+/// columns in from it.
+fn code_lines(text: &str, width: usize) -> Vec<String> {
+    let line = format!("{}{text}", " ".repeat(INDENT));
+    if count(&line) <= width {
+        return vec![line];
+    }
+
+    let rest = text.trim_start();
+    let lead = INDENT + (text.len() - rest.len());
+    let mut lines = crate::wrap::plain(rest, width, lead + 2);
+    if let Some(first) = lines.first_mut() {
+        first.replace_range(..2, "");
+    }
+    lines
 }
 
 fn key_column_lines(name: &str, data_type: &str, width: usize) -> Vec<String> {
@@ -389,6 +410,19 @@ mod tests {
             None,
             Theme::default(),
         ))
+    }
+
+    #[test]
+    fn a_line_of_sql_keeps_its_indentation_and_wraps_inside_it() {
+        assert_eq!(code_lines("    id bigint,", 30), ["      id bigint,"]);
+        assert_eq!(
+            code_lines("    CONSTRAINT fk FOREIGN KEY (a) REFERENCES t (b)", 30),
+            [
+                "      CONSTRAINT fk FOREIGN",
+                "        KEY (a) REFERENCES t",
+                "        (b)",
+            ]
+        );
     }
 
     #[test]

@@ -867,12 +867,14 @@ fn item(
     };
     let limb = match row.kind {
         RowKind::Database { .. } | RowKind::Schema { limb: None } => String::new(),
-        RowKind::Schema { limb: Some(limb) } | RowKind::Table { limb, outer: None } => {
-            glyph(limb).to_owned()
-        }
+        RowKind::Schema { limb: Some(limb) }
+        | RowKind::Table {
+            limb, outer: None, ..
+        } => glyph(limb).to_owned(),
         RowKind::Table {
             limb,
             outer: Some(outer),
+            ..
         } => format!("{}{}", guide(outer), glyph(limb)),
     };
 

@@ -50,6 +50,8 @@ pub fn grid_column(rows: &[Row], column: usize) -> String {
 #[must_use]
 pub fn detail_row(row: &DetailRow) -> String {
     let fields = match row {
+        // SQL, pasted as written: CSV quoting would break it.
+        DetailRow::Code { text } => return text.clone(),
         DetailRow::Identity { kind, name } => vec![kind.label().to_owned(), name.clone()],
         DetailRow::KeyColumn { name, data_type } => vec![name.clone(), data_type.clone()],
         DetailRow::Column {

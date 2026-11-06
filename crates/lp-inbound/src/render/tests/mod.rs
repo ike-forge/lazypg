@@ -365,6 +365,12 @@ fn listing(table: Table) -> State {
     state
 }
 
+fn keyed(table: Table) -> State {
+    let mut state = describing(table);
+    state.ddl.show(StructureTab::Keys);
+    state
+}
+
 fn ddl_details(state: &State) -> lp_domain::view::Details {
     let PanelBody::Details { details, .. } = view_model(state).panels[1].body.clone() else {
         panic!("a selected row has something to describe");

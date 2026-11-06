@@ -8,8 +8,8 @@ use lp_domain::config::{
     ConnectionConfig, ConnectionName, Credential, DriverConfig, Millis, PageSize, SslMode,
 };
 use lp_domain::model::{
-    ConnId, ConstraintKind, CqlValue, DbError, Page, RelationKind, RelationRef, Statement,
-    StatementKind,
+    ColumnDefault, ConnId, ConstraintKind, CqlValue, DbError, Page, RelationKind, RelationRef,
+    Statement, StatementKind,
 };
 use lp_domain::ports::Cluster;
 use lp_domain::posture::Posture;
@@ -149,8 +149,13 @@ async fn columns_carry_type_nullability_and_default_in_table_order() {
     let id = &customer.columns[0];
     assert_eq!(id.data_type, "bigint");
     assert!(!id.nullable);
-    assert_eq!(id.default.as_deref(), Some("generated always as identity"));
-    assert_eq!(customer.columns[3].default.as_deref(), Some("now()"));
+    assert_eq!(id.default, Some(ColumnDefault::Identity { always: true }));
+    assert_eq!(
+        customer.columns[3].default,
+        Some(ColumnDefault::Expression("now()".to_owned()))
+    );
+    let edge = &catalog.schemas["Edge Cases"].tables["measurement"];
+    assert_eq!(edge.partition_key.as_deref(), Some("RANGE (logdate)"));
     assert_eq!(
         catalog.schemas["zoo"].tables["everything"].columns[7].data_type,
         "character varying(16)"
