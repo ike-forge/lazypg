@@ -72,8 +72,8 @@ pub(super) fn step_statement(state: &mut State, motion: Motion) {
 
 pub(super) fn row_count(state: &State, panel: Panel) -> usize {
     match panel {
-        Panel::Tables => tree_rows(state),
-        Panel::Ddl => crate::view::ddl_rows(state),
+        Panel::Objects => tree_rows(state),
+        Panel::Structure => crate::view::ddl_rows(state),
         Panel::Contents => state.contents.row_count(),
         Panel::Queries => match state.queries.tab() {
             QueriesTab::Cql => 0,
@@ -85,8 +85,8 @@ pub(super) fn row_count(state: &State, panel: Panel) -> usize {
 /// The Cql arm is unreachable: the editor claims motion keys first.
 pub(super) fn panel_cursor(state: &mut State, panel: Panel) -> Option<&mut Cursor> {
     match panel {
-        Panel::Tables => Some(state.tables.cursor_mut()),
-        Panel::Ddl => Some(&mut state.ddl.cursor),
+        Panel::Objects => Some(state.tables.cursor_mut()),
+        Panel::Structure => Some(&mut state.ddl.cursor),
         Panel::Contents => Some(&mut state.contents.cursor),
         Panel::Queries => match state.queries.tab() {
             QueriesTab::Cql => None,
@@ -140,7 +140,7 @@ pub(super) fn follow_viewports(state: &mut State, previous: Geometry, geometry: 
     // Here rather than in the epilogue, whose geometry is the previous frame's.
     // A wheel changes no height, so `lp-app` sends no measurement for it.
     let before = state.ddl.scroll;
-    let height = geometry.height(Panel::Ddl);
+    let height = geometry.height(Panel::Structure);
     state
         .ddl
         .scroll
@@ -230,13 +230,13 @@ pub(super) fn refit_overlay(state: &mut State, geometry: Geometry) {
 }
 
 /// Ddl is followed by span in `measured`: its offset counts wrapped lines.
-pub(super) const LISTS: [Panel; 2] = [Panel::Tables, Panel::Contents];
+pub(super) const LISTS: [Panel; 2] = [Panel::Objects, Panel::Contents];
 
 pub(super) fn panel_scroll(state: &mut State, panel: Panel) -> Option<&mut Scroll> {
     match panel {
-        Panel::Tables => Some(&mut state.tables.scroll),
+        Panel::Objects => Some(&mut state.tables.scroll),
         Panel::Contents => Some(&mut state.contents.scroll),
-        Panel::Ddl => Some(&mut state.ddl.scroll),
+        Panel::Structure => Some(&mut state.ddl.scroll),
         Panel::Queries => match state.queries.tab() {
             QueriesTab::Cql => None,
             QueriesTab::Logs => Some(&mut state.log.scroll),
@@ -246,8 +246,8 @@ pub(super) fn panel_scroll(state: &mut State, panel: Panel) -> Option<&mut Scrol
 
 pub(super) fn scroll_len(state: &State, panel: Panel) -> usize {
     match panel {
-        Panel::Ddl => state.geometry.ddl_lines(),
-        Panel::Tables | Panel::Contents => row_count(state, panel),
+        Panel::Structure => state.geometry.ddl_lines(),
+        Panel::Objects | Panel::Contents => row_count(state, panel),
         Panel::Queries => match state.queries.tab() {
             QueriesTab::Cql => 0,
             QueriesTab::Logs => state.geometry.log_lines(),
@@ -257,8 +257,8 @@ pub(super) fn scroll_len(state: &State, panel: Panel) -> usize {
 
 pub(super) fn cursor_index(state: &State, panel: Panel) -> usize {
     match panel {
-        Panel::Tables => state.tables.cursor().index(),
-        Panel::Ddl => state.ddl.cursor.index(),
+        Panel::Objects => state.tables.cursor().index(),
+        Panel::Structure => state.ddl.cursor.index(),
         Panel::Contents => state.contents.cursor.index(),
         Panel::Queries => match state.queries.tab() {
             QueriesTab::Cql => 0,

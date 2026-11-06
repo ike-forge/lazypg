@@ -75,7 +75,7 @@ fn the_first_catalog_seats_the_cursor_on_the_database_it_describes() {
 #[test]
 fn the_current_database_folds_and_unfolds_like_a_schema() {
     let mut state = serving("lazypg");
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
 
     press(&mut state, Key::Char('h'));
     assert_eq!(labels(&state), ["analytics", "lazypg", "postgres"]);
@@ -87,7 +87,7 @@ fn the_current_database_folds_and_unfolds_like_a_schema() {
 #[test]
 fn leaving_a_folded_schema_steps_up_to_its_database() {
     let mut state = serving("lazypg");
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     press(&mut state, Key::Char('j'));
     press(&mut state, Key::Char('j'));
 
@@ -99,7 +99,7 @@ fn leaving_a_folded_schema_steps_up_to_its_database() {
 #[test]
 fn opening_another_database_reconnects_the_same_entry_to_it() {
     let mut state = serving("lazypg");
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     let before = current_conn(&state);
     press(&mut state, Key::Char('k'));
 
@@ -128,7 +128,7 @@ fn opening_another_database_reconnects_the_same_entry_to_it() {
 #[test]
 fn l_on_another_database_switches_as_enter_does() {
     let mut state = serving("lazypg");
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     press(&mut state, Key::Char('G'));
 
     let effects = press(&mut state, Key::Char('l'));
@@ -142,7 +142,7 @@ fn l_on_another_database_switches_as_enter_does() {
 #[test]
 fn the_switched_to_database_is_seated_on_when_its_catalog_lands() {
     let mut state = serving("lazypg");
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     press(&mut state, Key::Char('k'));
     let effects = press(&mut state, Key::Enter);
     let Some(Effect::Connect { conn, .. }) = effects.first() else {
@@ -177,7 +177,7 @@ fn the_switched_to_database_is_seated_on_when_its_catalog_lands() {
 #[test]
 fn a_reread_after_ddl_leaves_the_cursor_where_it_was() {
     let mut state = serving("lazypg");
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     press(&mut state, Key::Char('j'));
     press(&mut state, Key::Char('j'));
     let conn = current_conn(&state);

@@ -104,7 +104,7 @@ fn a_typed_statement_has_no_table_to_insert_into() {
 #[test]
 fn i_is_inert_outside_table_contents() {
     let mut state = editable_grid(1);
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
 
     press(&mut state, Key::Char('i'));
 

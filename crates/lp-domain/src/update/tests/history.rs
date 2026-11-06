@@ -168,7 +168,7 @@ fn ctrl_g_opens_nothing_where_the_frame_cannot_draw_it() {
 #[test]
 fn ctrl_g_belongs_to_queries() {
     let mut state = having_run(&["SELECT 1;"]);
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
 
     open_history(&mut state);
 
@@ -384,7 +384,7 @@ fn the_toast_leaves_after_its_ticks() {
 #[test]
 fn ctrl_g_outside_queries_toasts_nothing() {
     let mut state = disabled();
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
 
     open_history(&mut state);
 

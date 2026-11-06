@@ -75,19 +75,19 @@ fn showing_columns(columns: usize) -> State {
 fn a_click_on_a_keyspace_folds_and_unfolds_it() {
     let mut state = browsing_tables(&[("shop", &["orders", "users"])]);
 
-    click_row(&mut state, Panel::Tables, 0);
+    click_row(&mut state, Panel::Objects, 0);
     assert_eq!(row_count(&state), 3, "the keyspace unfolded");
 
-    click_row(&mut state, Panel::Tables, 0);
+    click_row(&mut state, Panel::Objects, 0);
     assert_eq!(row_count(&state), 1, "and folded again");
 }
 
 #[test]
 fn a_click_on_a_table_reads_it() {
     let mut state = browsing_tables(&[("shop", &["orders"])]);
-    click_row(&mut state, Panel::Tables, 0);
+    click_row(&mut state, Panel::Objects, 0);
 
-    let effects = click_row(&mut state, Panel::Tables, 1);
+    let effects = click_row(&mut state, Panel::Objects, 1);
 
     assert!(
         matches!(
@@ -183,25 +183,25 @@ fn a_click_on_a_column_that_has_gone_is_dropped_rather_than_clamped() {
 #[test]
 fn a_click_on_a_ddl_row_moves_the_cursor() {
     let mut state = browsing_tables(&[("shop", &["orders"])]);
-    click_row(&mut state, Panel::Tables, 0);
-    click_row(&mut state, Panel::Tables, 1);
+    click_row(&mut state, Panel::Objects, 0);
+    click_row(&mut state, Panel::Objects, 1);
     let rows = crate::view::ddl_rows(&state);
     assert!(rows > 2, "the fixture must describe something, got {rows}");
 
-    let effects = click_row(&mut state, Panel::Ddl, 2);
+    let effects = click_row(&mut state, Panel::Structure, 2);
 
     assert!(effects.is_empty(), "a selection runs no query");
-    assert_eq!(state.focus(), Panel::Ddl);
+    assert_eq!(state.focus(), Panel::Structure);
     assert_eq!(state.ddl.cursor.index(), 2);
 }
 
 #[test]
 fn a_click_on_a_ddl_row_that_has_gone_is_dropped_rather_than_clamped() {
     let mut state = browsing_tables(&[("shop", &["orders"])]);
-    click_row(&mut state, Panel::Tables, 0);
+    click_row(&mut state, Panel::Objects, 0);
 
     // Nothing is selected, so the panel describes nothing.
-    let effects = click_row(&mut state, Panel::Ddl, 3);
+    let effects = click_row(&mut state, Panel::Structure, 3);
 
     assert!(effects.is_empty());
     assert_eq!(state.ddl.cursor.index(), 0);
@@ -210,21 +210,21 @@ fn a_click_on_a_ddl_row_that_has_gone_is_dropped_rather_than_clamped() {
 #[test]
 fn a_click_on_a_tab_focuses_its_panel_and_draws_it() {
     let mut state = browsing_tables(&[("shop", &["orders"])]);
-    click_row(&mut state, Panel::Tables, 0);
-    click_row(&mut state, Panel::Tables, 1);
+    click_row(&mut state, Panel::Objects, 0);
+    click_row(&mut state, Panel::Objects, 1);
     state.focus_on(Panel::Queries);
 
     let effects = point(
         &mut state,
         Pointer::Click(Click::Tab {
-            panel: Panel::Ddl,
+            panel: Panel::Structure,
             tab: 1,
         }),
     );
 
     assert!(effects.is_empty());
-    assert_eq!(state.focus(), Panel::Ddl);
-    assert_eq!(state.ddl.tab(), DdlTab::Columns);
+    assert_eq!(state.focus(), Panel::Structure);
+    assert_eq!(state.ddl.tab(), StructureTab::Columns);
 }
 
 #[test]
@@ -251,13 +251,13 @@ fn a_click_on_a_tab_the_strip_no_longer_draws_only_focuses() {
     point(
         &mut state,
         Pointer::Click(Click::Tab {
-            panel: Panel::Ddl,
+            panel: Panel::Structure,
             tab: 1,
         }),
     );
 
-    assert_eq!(state.focus(), Panel::Ddl);
-    assert_eq!(state.ddl.tab(), DdlTab::Ddl);
+    assert_eq!(state.focus(), Panel::Structure);
+    assert_eq!(state.ddl.tab(), StructureTab::Ddl);
 }
 
 #[test]
@@ -268,12 +268,12 @@ fn a_click_on_a_single_tab_panels_title_focuses_it() {
     point(
         &mut state,
         Pointer::Click(Click::Tab {
-            panel: Panel::Tables,
+            panel: Panel::Objects,
             tab: 0,
         }),
     );
 
-    assert_eq!(state.focus(), Panel::Tables);
+    assert_eq!(state.focus(), Panel::Objects);
 }
 
 #[test]
@@ -281,9 +281,9 @@ fn a_click_focuses_the_panel_it_landed_in() {
     let mut state = browsing_tables(&[("shop", &["orders"])]);
     state.focus_on(Panel::Queries);
 
-    click_row(&mut state, Panel::Tables, 0);
+    click_row(&mut state, Panel::Objects, 0);
 
-    assert_eq!(state.focus(), Panel::Tables, "one click focuses and acts");
+    assert_eq!(state.focus(), Panel::Objects, "one click focuses and acts");
     assert_eq!(row_count(&state), 2, "the keyspace unfolded on that click");
 }
 
@@ -292,7 +292,7 @@ fn a_click_on_chrome_focuses_and_does_nothing_else() {
     let mut state = browsing_tables(&[("shop", &["orders"])]);
     let before = state.tables.clone();
 
-    let effects = point(&mut state, Pointer::Click(Click::Panel(Panel::Tables)));
+    let effects = point(&mut state, Pointer::Click(Click::Panel(Panel::Objects)));
 
     assert!(effects.is_empty());
     assert_eq!(
@@ -304,11 +304,11 @@ fn a_click_on_chrome_focuses_and_does_nothing_else() {
 #[test]
 fn a_click_on_a_row_that_has_gone_is_dropped_rather_than_clamped() {
     let mut state = browsing_tables(&[("shop", &["orders", "users"])]);
-    click_row(&mut state, Panel::Tables, 0);
-    click_row(&mut state, Panel::Tables, 0);
+    click_row(&mut state, Panel::Objects, 0);
+    click_row(&mut state, Panel::Objects, 0);
 
     // Row 2 was `users` a frame ago; the tree is one row long now.
-    let effects = click_row(&mut state, Panel::Tables, 2);
+    let effects = click_row(&mut state, Panel::Objects, 2);
 
     assert!(effects.is_empty(), "a stale row reads nothing");
     assert_eq!(state.tables.cursor().index(), 0, "and moves nothing");
@@ -319,7 +319,7 @@ fn a_click_dismisses_the_overlay_and_does_nothing_else() {
     let mut state = browsing_tables(&[("shop", &["orders"])]);
     state.overlay = Some(failure());
 
-    let effects = click_row(&mut state, Panel::Tables, 0);
+    let effects = click_row(&mut state, Panel::Objects, 0);
 
     assert!(state.overlay.is_none());
     assert!(effects.is_empty());
@@ -334,7 +334,7 @@ fn a_click_dismisses_the_overlay_and_does_nothing_else() {
 fn a_wheel_scrolls_the_panel_under_it_without_focusing_it() {
     let mut state = showing_rows(20);
     state.geometry = Geometry::new([8, 8, 8, 1], 0, 0);
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
 
     point(
         &mut state,
@@ -350,7 +350,7 @@ fn a_wheel_scrolls_the_panel_under_it_without_focusing_it() {
         0,
         "the wheel does not move the selection"
     );
-    assert_eq!(state.focus(), Panel::Tables, "focus stays where it was");
+    assert_eq!(state.focus(), Panel::Objects, "focus stays where it was");
 }
 
 #[test]
@@ -383,7 +383,7 @@ fn a_wheel_over_the_ddl_panel_scrolls_its_lines() {
     point(
         &mut state,
         Pointer::Wheel {
-            panel: Panel::Ddl,
+            panel: Panel::Structure,
             direction: Wheel::Down,
         },
     );
@@ -405,7 +405,7 @@ fn a_wheel_over_a_panel_with_nothing_to_scroll_is_inert() {
             },
         );
     }
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     let cursor_before = state.queries.cursor();
     let text_before = state.queries.text();
 
@@ -419,7 +419,7 @@ fn a_wheel_over_a_panel_with_nothing_to_scroll_is_inert() {
 
     assert!(effects.is_empty());
     assert_eq!(state.tables.cursor().index(), 0, "no other panel moved");
-    assert_eq!(state.focus(), Panel::Tables);
+    assert_eq!(state.focus(), Panel::Objects);
     assert_eq!(
         state.queries.cursor(),
         cursor_before,
@@ -444,7 +444,7 @@ fn a_wheel_over_tables_moves_the_viewport_rather_than_the_selection() {
     let effects = point(
         &mut state,
         Pointer::Wheel {
-            panel: Panel::Tables,
+            panel: Panel::Objects,
             direction: Wheel::Down,
         },
     );
@@ -599,14 +599,14 @@ fn a_click_on_a_scrolled_row_needs_no_correction() {
 fn a_list_that_shrank_pulls_its_offset_back() {
     let mut state = browsing_tables(&[("shop", &["a", "b", "c", "d", "e", "f"])]);
     state.geometry = Geometry::new([3, 3, 3, 1], 0, 0);
-    click_row(&mut state, Panel::Tables, 0);
+    click_row(&mut state, Panel::Objects, 0);
     for _ in 0..3 {
-        roll(&mut state, Panel::Tables, Wheel::Down);
+        roll(&mut state, Panel::Objects, Wheel::Down);
     }
     assert_eq!(state.tables.scroll.offset(), 4, "seven rows, three visible");
 
     // Folding leaves one row, which no offset can be past.
-    click_row(&mut state, Panel::Tables, 0);
+    click_row(&mut state, Panel::Objects, 0);
 
     assert_eq!(row_count(&state), 1);
     assert_eq!(state.tables.scroll.offset(), 0);
@@ -616,12 +616,12 @@ fn a_list_that_shrank_pulls_its_offset_back() {
 fn a_wheel_over_tables_no_longer_scrolls_the_ddl_panel_back() {
     let mut state = browsing_tables(&[("shop", &["a", "b", "c", "d", "e", "f"])]);
     state.geometry = Geometry::new([3, 3, 3, 1], 40, 0);
-    click_row(&mut state, Panel::Tables, 0);
+    click_row(&mut state, Panel::Objects, 0);
     state.ddl.scroll.page_down(40, 3);
     let before = state.ddl.scroll;
     assert_ne!(before.offset(), 0, "the fixture starts scrolled");
 
-    roll(&mut state, Panel::Tables, Wheel::Down);
+    roll(&mut state, Panel::Objects, Wheel::Down);
 
     assert_eq!(
         state.ddl.scroll, before,
@@ -798,7 +798,7 @@ fn a_click_on_the_modal_off_its_buttons_answers_nothing() {
 fn a_click_outside_the_modal_closes_it() {
     let mut state = asked_to_drop_a_table();
 
-    let effects = click_row(&mut state, Panel::Tables, 0);
+    let effects = click_row(&mut state, Panel::Objects, 0);
 
     assert!(effects.is_empty());
     assert!(dropping(&state).is_none());

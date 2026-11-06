@@ -204,8 +204,8 @@ impl Panel {
     #[must_use]
     pub const fn hints(self) -> &'static [Binding] {
         match self {
-            Self::Tables => TABLES_HINTS,
-            Self::Ddl => DDL_HINTS,
+            Self::Objects => TABLES_HINTS,
+            Self::Structure => DDL_HINTS,
             Self::Contents => CONTENTS_HINTS,
             Self::Queries => QUERIES_HINTS,
         }
@@ -224,7 +224,7 @@ impl State {
                 Some(CqlMode::Editing) => QUERIES_HINTS,
             },
             Panel::Contents if self.contents.mode == SelectionMode::Column => CONTENTS_COLUMN_HINTS,
-            Panel::Ddl if crate::view::ddl_tabs(self).len() < 2 => DDL_ONE_TAB_HINTS,
+            Panel::Structure if crate::view::ddl_tabs(self).len() < 2 => DDL_ONE_TAB_HINTS,
             panel => panel.hints(),
         }
     }

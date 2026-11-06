@@ -1,7 +1,7 @@
 //! The Structure panel's projection of what the Tables cursor is on. Nothing
 //! selected shows nothing: the Tables panel already narrates the connection.
 
-use crate::ddl::DdlTab;
+use crate::ddl::StructureTab;
 use crate::model::{Catalog, Column, Index, RelationKind, RelationRef, Schema, Table};
 use crate::panel::Panel;
 use crate::search::{Direction, Search};
@@ -170,9 +170,9 @@ pub(super) fn of(state: &State) -> Option<Details> {
     let catalog = state.schema()?;
 
     let details = match (state.tables.selected(catalog)?, shown_tab(state)) {
-        (Node::Table { keyspace, table }, DdlTab::Ddl) => of_table(catalog, keyspace, table),
-        (Node::Table { keyspace, table }, DdlTab::Columns) => columns_of(keyspace, table),
-        (Node::Table { keyspace, table }, DdlTab::Indexes) => indexes_of(keyspace, table),
+        (Node::Table { keyspace, table }, StructureTab::Ddl) => of_table(catalog, keyspace, table),
+        (Node::Table { keyspace, table }, StructureTab::Columns) => columns_of(keyspace, table),
+        (Node::Table { keyspace, table }, StructureTab::Indexes) => indexes_of(keyspace, table),
         (Node::Schema { keyspace, .. }, _) => of_schema(keyspace),
         (Node::Database { name, current, .. }, _) => of_database(catalog, name, current),
     };
@@ -181,22 +181,22 @@ pub(super) fn of(state: &State) -> Option<Details> {
 }
 
 /// No Columns tab for a schema: an empty tab teaches the wrong thing.
-pub(super) fn tabs_for(state: &State) -> &'static [DdlTab] {
+pub(super) fn tabs_for(state: &State) -> &'static [StructureTab] {
     if describes_a_table(state) {
-        &DdlTab::ALL
+        &StructureTab::ALL
     } else {
-        &[DdlTab::Ddl]
+        &[StructureTab::Ddl]
     }
 }
 
 /// The held tab is not reset, so stepping to the schema and back keeps it.
-pub(super) fn shown_tab(state: &State) -> DdlTab {
+pub(super) fn shown_tab(state: &State) -> StructureTab {
     let tab = state.ddl.tab();
 
     if tabs_for(state).contains(&tab) {
         tab
     } else {
-        DdlTab::Ddl
+        StructureTab::Ddl
     }
 }
 
@@ -214,7 +214,7 @@ fn scrolled(state: &State, details: Details) -> PanelBody {
         return PanelBody::Blank;
     }
 
-    let flash = super::flash_over(state, Panel::Ddl);
+    let flash = super::flash_over(state, Panel::Structure);
 
     PanelBody::Details {
         details,
@@ -733,7 +733,7 @@ mod tests {
         browsing_first(vec![table])
     }
 
-    fn on_tab(state: &State, tab: DdlTab) -> State {
+    fn on_tab(state: &State, tab: StructureTab) -> State {
         let mut state = state.clone();
         state.ddl.show(tab);
         state
@@ -843,7 +843,7 @@ mod tests {
 
     #[test]
     fn the_columns_tab_lists_every_column_in_table_order_with_its_part() {
-        let details = details(&on_tab(&browsing(order_line()), DdlTab::Columns));
+        let details = details(&on_tab(&browsing(order_line()), StructureTab::Columns));
 
         assert_eq!(headings(&details), ["4 columns"]);
         assert_eq!(
@@ -875,7 +875,7 @@ mod tests {
 
     #[test]
     fn the_indexes_tab_leads_with_the_key_and_skips_the_index_behind_it() {
-        let details = details(&on_tab(&browsing(order_line()), DdlTab::Indexes));
+        let details = details(&on_tab(&browsing(order_line()), StructureTab::Indexes));
 
         assert_eq!(
             headings(&details),
@@ -886,7 +886,7 @@ mod tests {
 
     #[test]
     fn an_index_lists_its_keys_its_method_and_its_predicate() {
-        let details = details(&on_tab(&browsing(order_line()), DdlTab::Indexes));
+        let details = details(&on_tab(&browsing(order_line()), StructureTab::Indexes));
 
         assert_eq!(
             section(&details, "order_line_customer_idx").rows,
@@ -914,7 +914,7 @@ mod tests {
 
     #[test]
     fn a_table_with_no_index_says_so_in_a_row_rather_than_a_bare_heading() {
-        let details = details(&on_tab(&browsing(customer()), DdlTab::Indexes));
+        let details = details(&on_tab(&browsing(customer()), StructureTab::Indexes));
 
         assert_eq!(
             section(&details, "Indexes").rows,
@@ -928,10 +928,10 @@ mod tests {
     #[test]
     fn a_schema_counts_what_it_holds_and_offers_only_its_own_tab() {
         let mut state = tabled(&[("shop", &["orders", "users"])]);
-        state.ddl.show(DdlTab::Columns);
+        state.ddl.show(StructureTab::Columns);
 
-        assert_eq!(tabs_for(&state), [DdlTab::Ddl]);
-        assert_eq!(shown_tab(&state), DdlTab::Ddl);
+        assert_eq!(tabs_for(&state), [StructureTab::Ddl]);
+        assert_eq!(shown_tab(&state), StructureTab::Ddl);
         assert_eq!(identity_rows(&details(&state)), [("Schema", "shop")]);
         assert_eq!(
             section(&details(&state), "Contents").rows,
@@ -945,10 +945,10 @@ mod tests {
     #[test]
     fn a_table_is_offered_every_tab_and_keeps_the_one_it_was_left_on() {
         let mut state = browsing(order_line());
-        state.ddl.show(DdlTab::Columns);
+        state.ddl.show(StructureTab::Columns);
 
-        assert_eq!(tabs_for(&state), DdlTab::ALL);
-        assert_eq!(shown_tab(&state), DdlTab::Columns);
+        assert_eq!(tabs_for(&state), StructureTab::ALL);
+        assert_eq!(shown_tab(&state), StructureTab::Columns);
     }
 
     #[test]

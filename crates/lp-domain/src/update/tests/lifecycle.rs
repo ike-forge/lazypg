@@ -319,7 +319,7 @@ fn each_wait_belongs_to_the_panel_it_will_fill() {
 
     assert_eq!(
         working_panels(&state),
-        vec![Panel::Tables],
+        vec![Panel::Objects],
         "a schema still loading is the tree filling"
     );
 

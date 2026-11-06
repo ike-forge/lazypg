@@ -54,7 +54,7 @@ fn motion_in_one_panel_never_reaches_another() {
     let mut state = read_shop_orders();
     let tree_row = state.tables.cursor().index();
 
-    state.focus_on(Panel::Ddl);
+    state.focus_on(Panel::Structure);
     press(&mut state, Key::Char('j'));
 
     assert_eq!(state.tables.cursor().index(), tree_row);
@@ -64,7 +64,7 @@ fn motion_in_one_panel_never_reaches_another() {
 #[test]
 fn motion_in_the_ddl_panel_walks_the_rows_it_describes() {
     let mut state = read_shop_orders();
-    state.focus_on(Panel::Ddl);
+    state.focus_on(Panel::Structure);
     let rows = crate::view::ddl_rows(&state);
     assert!(rows > 2, "the fixture describes a key and some options");
 
@@ -87,11 +87,11 @@ fn motion_in_the_ddl_panel_walks_the_rows_it_describes() {
 #[test]
 fn describing_another_node_opens_the_ddl_panel_at_its_first_row() {
     let mut state = read_shop_orders();
-    state.focus_on(Panel::Ddl);
+    state.focus_on(Panel::Structure);
     press(&mut state, Key::End);
     assert!(state.ddl.cursor.index() > 0);
 
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     press(&mut state, Key::Char('k'));
 
     assert_eq!(state.ddl.cursor.index(), 0);
@@ -101,7 +101,7 @@ fn describing_another_node_opens_the_ddl_panel_at_its_first_row() {
 #[test]
 fn a_measurement_pulls_the_viewport_onto_the_selected_row() {
     let mut state = read_shop_orders();
-    state.focus_on(Panel::Ddl);
+    state.focus_on(Panel::Structure);
 
     update(
         &mut state,
@@ -252,7 +252,7 @@ fn g_and_shift_g_reach_the_ends_of_the_tree() {
 #[test]
 fn g_and_shift_g_reach_the_ends_of_the_ddl_rows() {
     let mut state = read_shop_orders();
-    state.focus_on(Panel::Ddl);
+    state.focus_on(Panel::Structure);
     let rows = crate::view::ddl_rows(&state);
 
     press(&mut state, Key::Char('G'));
@@ -353,7 +353,7 @@ fn page_down_moves_the_grid_by_one_panel_height() {
 #[test]
 fn motion_in_the_ddl_panel_moves_its_cursor_not_its_focus() {
     let mut state = browsing(&["a", "b", "c"]);
-    state.focus_on(Panel::Ddl);
+    state.focus_on(Panel::Structure);
     sized(&mut state, [0, 6, 0, 0], 20);
     let tree_row = state.tables.cursor().index();
     let rows = crate::view::ddl_rows(&state);
@@ -376,7 +376,7 @@ fn motion_in_the_ddl_panel_moves_its_cursor_not_its_focus() {
 #[test]
 fn ddl_motion_still_moves_the_cursor_before_the_first_measurement() {
     let mut state = browsing(&["a", "b", "c"]);
-    state.focus_on(Panel::Ddl);
+    state.focus_on(Panel::Structure);
     let rows = crate::view::ddl_rows(&state);
     assert!(
         rows > 1,
@@ -427,11 +427,11 @@ fn moving_the_tree_selection_returns_the_ddl_panel_to_the_top() {
     let mut state = browsing_tables(&[("shop", &["orders", "users"])]);
     press(&mut state, Key::Char('l'));
     press(&mut state, Key::Char('l'));
-    state.focus_on(Panel::Ddl);
+    state.focus_on(Panel::Structure);
     press(&mut state, Key::End);
     assert!(state.ddl.cursor.index() > 0);
 
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     press(&mut state, Key::Char('j'));
 
     assert_eq!(
@@ -445,13 +445,13 @@ fn moving_the_tree_selection_returns_the_ddl_panel_to_the_top() {
 fn a_new_subject_clears_the_ddl_range() {
     let mut state = browsing_tables(&[("shop", &["orders", "users"])]);
     press(&mut state, Key::Char('l'));
-    state.focus_on(Panel::Ddl);
+    state.focus_on(Panel::Structure);
     press(&mut state, Key::Char('v'));
     press(&mut state, Key::Char('j'));
     press(&mut state, Key::Char('v'));
     assert!(state.ddl.selection.is_active());
 
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     press(&mut state, Key::Char('j'));
 
     assert!(
@@ -463,11 +463,11 @@ fn a_new_subject_clears_the_ddl_range() {
 #[test]
 fn unfolding_a_keyspace_leaves_the_ddl_panel_where_it_is() {
     let mut state = browsing_tables(&[("shop", &["orders", "users"])]);
-    state.focus_on(Panel::Ddl);
+    state.focus_on(Panel::Structure);
     press(&mut state, Key::End);
     let end = state.ddl.cursor.index();
     assert!(end > 0);
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
 
     press(&mut state, Key::Char('l'));
 
@@ -486,13 +486,13 @@ fn unfolding_a_keyspace_leaves_the_ddl_panel_where_it_is() {
 #[test]
 fn leaving_ddl_for_tables_clears_its_range_before_unfolding_ever_runs() {
     let mut state = browsing_tables(&[("shop", &["orders", "users"])]);
-    state.focus_on(Panel::Ddl);
+    state.focus_on(Panel::Structure);
     press(&mut state, Key::Char('v'));
     press(&mut state, Key::Char('j'));
     press(&mut state, Key::Char('v'));
     assert!(state.ddl.selection.is_active());
 
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
 
     assert!(!state.ddl.selection.is_active());
 }
@@ -500,7 +500,7 @@ fn leaving_ddl_for_tables_clears_its_range_before_unfolding_ever_runs() {
 #[test]
 fn a_measurement_pulls_a_stale_scroll_offset_back_inside_the_panel() {
     let mut state = browsing(&["a", "b", "c"]);
-    state.focus_on(Panel::Ddl);
+    state.focus_on(Panel::Structure);
     sized(&mut state, [0, 6, 0, 0], 40);
     state.ddl.scroll.to_end(40, 6);
     assert_eq!(state.ddl.scroll.offset(), 34);
@@ -524,7 +524,7 @@ fn the_ddl_cursor_clamps_when_the_selected_table_shrinks() {
     let conn = current_conn(&state);
     press(&mut state, Key::Char('l'));
     press(&mut state, Key::Char('l'));
-    state.focus_on(Panel::Ddl);
+    state.focus_on(Panel::Structure);
     press(&mut state, Key::End);
     assert!(
         state.ddl.cursor.index() > 0,

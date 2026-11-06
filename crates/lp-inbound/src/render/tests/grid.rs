@@ -151,7 +151,7 @@ fn a_page_is_drawn_as_a_header_over_its_rows() {
 
     assert_eq!(
         row(&buffer, 0),
-        "╭── [1]-Tables ╮╭ [3]-Table contents — shop.orders (2 rows)╮"
+        "╭─ [1]-Objects ╮╭ [3]-Table contents — shop.orders (2 rows)╮"
     );
     assert_eq!(
         row(&buffer, 1),
@@ -600,13 +600,13 @@ fn a_cell_mode_yanks_afterglow_reads_on_the_cursors_own_cell() {
 fn a_yank_in_the_tree_lights_the_tree_alone() {
     let mut state = showing(sized_page(2, 4));
     state.flash = Some(Flash::lit(
-        Panel::Tables,
+        Panel::Objects,
         Ranges::of(Range::new(0, 0)),
         Ranges::default(),
     ));
 
     let buffer = draw_state(60, 12, &state);
-    let tree = block_area(&buffer, "Tables");
+    let tree = block_area(&buffer, "Objects");
     let grid = block_area(&buffer, "Table contents");
     let inverted = |x: u16, y: u16| {
         buffer

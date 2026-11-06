@@ -5,8 +5,8 @@ fn the_frame_reports_what_each_panel_can_show() {
     // At 40x20 Tables is 8 rows and Ddl 11, so 6 and 9 inside.
     let geometry = geometry_of(40, 20, &describing(orders()));
 
-    assert_eq!(geometry.height(Panel::Tables), 6);
-    assert_eq!(geometry.height(Panel::Ddl), 9);
+    assert_eq!(geometry.height(Panel::Objects), 6);
+    assert_eq!(geometry.height(Panel::Structure), 9);
     assert_eq!(
         geometry.ddl_lines(),
         crate::details::lay_out(
@@ -53,6 +53,6 @@ fn the_frame_reports_how_wide_the_contents_panel_is() {
 fn a_collapsed_panel_reports_no_room_at_all() {
     let geometry = geometry_of(40, 5, &describing(orders()));
 
-    assert_eq!(geometry.height(Panel::Ddl), 0);
+    assert_eq!(geometry.height(Panel::Structure), 0);
     assert_eq!(geometry.height(Panel::Queries), 0);
 }

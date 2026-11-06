@@ -124,8 +124,8 @@ const GLOBAL: &[Command] = &[
     Command::new(&[Stroke::key(Key::Escape)], "back out one step", Run::Here),
     Command::new(&[Stroke::key(Key::Tab)], "next panel", Run::Here),
     Command::new(&[Stroke::key(Key::BackTab)], "previous panel", Run::Here),
-    Command::new(&[Stroke::key(Key::Char('1'))], "focus Tables", Run::Here),
-    Command::new(&[Stroke::key(Key::Char('2'))], "focus Table DDL", Run::Here),
+    Command::new(&[Stroke::key(Key::Char('1'))], "focus Objects", Run::Here),
+    Command::new(&[Stroke::key(Key::Char('2'))], "focus Structure", Run::Here),
     Command::new(
         &[Stroke::key(Key::Char('3'))],
         "focus Table contents",
@@ -188,7 +188,7 @@ const TABLES: &[Command] = &[
     Command::new(
         &[Stroke::key(Key::Enter)],
         "fold/unfold, or read",
-        Run::In(Panel::Tables),
+        Run::In(Panel::Objects),
     ),
     DROP_TABLE,
     TABLE_HEALTH,
@@ -197,7 +197,7 @@ const TABLES: &[Command] = &[
 const TABLE_HEALTH: Command = Command::new(
     &[Stroke::key(Key::Char('H'))],
     "table health",
-    Run::In(Panel::Tables),
+    Run::In(Panel::Objects),
 );
 
 const HEALTH: &[Command] = &[
@@ -213,7 +213,7 @@ const HEALTH: &[Command] = &[
 const DROP_TABLE: Command = Command::mutating(
     &[Stroke::key(Key::Char('d'))],
     "drop this",
-    Run::In(Panel::Tables),
+    Run::In(Panel::Objects),
 );
 const DELETE_ROWS: Command = Command::mutating(
     &[Stroke::key(Key::Char('d'))],
@@ -418,7 +418,7 @@ pub const CATALOGUE: &[Group] = &[
         commands: MOTION,
     },
     Group {
-        heading: "Tables",
+        heading: "Objects",
         commands: TABLES,
     },
     Group {
@@ -936,7 +936,7 @@ mod tests {
             twos,
             [CommandRow::Command {
                 keys: "2".to_owned(),
-                action: "focus Table DDL",
+                action: "focus Structure",
                 liveness: Liveness::Live,
                 refused: None,
             }]
@@ -1239,10 +1239,10 @@ mod tests {
             "each panel resolves a motion in its own vocabulary"
         );
         assert!(
-            group("Tables")
+            group("Objects")
                 .commands
                 .iter()
-                .all(|command| command.run == Run::In(Panel::Tables))
+                .all(|command| command.run == Run::In(Panel::Objects))
         );
         assert!(
             group("Table contents")
@@ -1273,7 +1273,7 @@ mod tests {
                 .unwrap_or_else(|| panic!("no {heading} group"))
         };
 
-        assert!(group("Tables").commands.contains(&DROP_TABLE));
+        assert!(group("Objects").commands.contains(&DROP_TABLE));
         for opener in [DELETE_ROWS, EDIT_VALUE, COMMIT_EDITS, EXPORT_ROWS] {
             assert!(group("Table contents").commands.contains(&opener));
         }

@@ -102,7 +102,7 @@ mod tests {
     fn map() -> FrameMap {
         FrameMap::new([
             PanelHit {
-                panel: Panel::Tables,
+                panel: Panel::Objects,
                 area: Rect::new(0, 0, 16, 7),
                 inner: Rect::new(1, 1, 14, 5),
                 tabs: Vec::new(),
@@ -138,7 +138,7 @@ mod tests {
         assert_eq!(
             to_pointer(left(3, 2), &map()),
             Some(Pointer::Click(Click::Row {
-                panel: Panel::Tables,
+                panel: Panel::Objects,
                 row: 1,
                 column: None
             }))
@@ -149,7 +149,7 @@ mod tests {
     fn a_left_press_on_chrome_becomes_a_click_on_the_panel() {
         assert_eq!(
             to_pointer(left(0, 0), &map()),
-            Some(Pointer::Click(Click::Panel(Panel::Tables)))
+            Some(Pointer::Click(Click::Panel(Panel::Objects)))
         );
     }
 
@@ -191,14 +191,14 @@ mod tests {
         assert_eq!(
             to_pointer(at(MouseEventKind::ScrollDown, 3, 2), &map()),
             Some(Pointer::Wheel {
-                panel: Panel::Tables,
+                panel: Panel::Objects,
                 direction: Wheel::Down
             })
         );
         assert_eq!(
             to_pointer(at(MouseEventKind::ScrollUp, 0, 0), &map()),
             Some(Pointer::Wheel {
-                panel: Panel::Tables,
+                panel: Panel::Objects,
                 direction: Wheel::Up
             }),
             "a notch over the border scrolls the panel it borders"

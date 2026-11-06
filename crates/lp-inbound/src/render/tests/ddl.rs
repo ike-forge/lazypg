@@ -65,7 +65,7 @@ fn indexed() -> Table {
 
 fn indexing(table: Table) -> State {
     let mut state = describing(table);
-    state.ddl.show(DdlTab::Indexes);
+    state.ddl.show(StructureTab::Indexes);
     state
 }
 
@@ -117,7 +117,7 @@ fn a_title_is_pushed_off_its_corner_by_border_and_not_by_blanks() {
     let lead: String = BORDER_LINE.to_string().repeat(TITLE_INSET);
 
     assert!(
-        border.starts_with(&format!("╭{lead} [1]-Tables ")),
+        border.starts_with(&format!("╭{lead} [1]-Objects ")),
         "the gap reads as the frame running on, got {border:?}"
     );
 }
@@ -128,7 +128,7 @@ fn a_sidebar_wide_enough_names_the_connection_on_the_border() {
     let border = row(&buffer, 0);
 
     assert!(
-        border.starts_with("╭── [1]-Tables (local, read-only) "),
+        border.starts_with("╭─ [1]-Objects (local, read-only) "),
         "got {border:?}"
     );
 }
@@ -168,7 +168,7 @@ fn a_sidebar_too_narrow_for_the_badge_keeps_the_panels_name_alone() {
     let buffer = draw_state(80, 12, &browsing(&["shop"], 0));
     let border = row(&buffer, 0);
 
-    assert!(border.starts_with("╭── [1]-Tables ──"), "got {border:?}");
+    assert!(border.starts_with("╭── [1]-Objects ──"), "got {border:?}");
     assert!(!border.contains("read-only"), "got {border:?}");
 }
 
@@ -178,13 +178,13 @@ fn a_border_holding_both_puts_the_badge_at_the_name_and_the_marker_at_the_corner
     state.apply_search(Searched::Tables, Search::new("or"));
 
     // 160 columns leaves a 40-column sidebar; badge, marker, padding and
-    // corners need 38.
+    // corners need 39.
     let buffer = draw_state(160, 12, &state);
     let border = row(&buffer, 0);
     let (tables, _) = border.split_once('╮').expect("the sidebar's corner");
 
     assert!(
-        tables.starts_with("╭── [1]-Tables (local, read-only) "),
+        tables.starts_with("╭─ [1]-Objects (local, read-only) "),
         "got {tables:?}"
     );
     assert!(tables.ends_with(" /or "), "got {tables:?}");
@@ -201,7 +201,7 @@ fn a_border_that_cannot_hold_both_keeps_the_marker_and_drops_the_badge() {
     let (tables, _) = border.split_once('\u{256e}').expect("the sidebar's corner");
 
     assert!(
-        tables.starts_with("\u{256d}\u{2500}\u{2500} [1]-Tables "),
+        tables.starts_with("\u{256d}\u{2500}\u{2500} [1]-Objects "),
         "got {tables:?}"
     );
     assert!(!tables.contains("read-only"), "got {tables:?}");
@@ -210,15 +210,18 @@ fn a_border_that_cannot_hold_both_keeps_the_marker_and_drops_the_badge() {
 
 #[test]
 fn a_border_with_one_column_to_spare_gives_it_to_the_title_and_not_the_marker() {
-    // A 20-column sidebar with `/or` leaves one spare column, which goes to the
+    // A 21-column sidebar with `/or` leaves one spare column, which goes to the
     // title.
     let mut state = browsing(&["shop"], 0);
     state.apply_search(Searched::Tables, Search::new("or"));
 
-    let buffer = draw_state(80, 12, &state);
+    let buffer = draw_state(84, 12, &state);
     let border = row(&buffer, 0);
 
-    assert!(border.starts_with("╭─ [1]-Tables  /or ╮"), "got {border:?}");
+    assert!(
+        border.starts_with("╭─ [1]-Objects  /or ╮"),
+        "got {border:?}"
+    );
 }
 
 #[test]
@@ -229,7 +232,7 @@ fn the_narrowest_sidebar_gives_its_border_to_the_title_alone() {
     let buffer = draw_state(40, 12, &state);
     let border = row(&buffer, 0);
 
-    assert!(border.starts_with("╭── [1]-Tables ╮"), "got {border:?}");
+    assert!(border.starts_with("╭─ [1]-Objects ╮"), "got {border:?}");
     assert!(!border.contains("/or"), "got {border:?}");
 }
 
@@ -323,7 +326,7 @@ fn highlighted_rows(buffer: &Buffer) -> Vec<u16> {
 #[test]
 fn every_line_of_a_selected_property_is_highlighted() {
     let mut state = describing(orders());
-    state.focus_on(Panel::Ddl);
+    state.focus_on(Panel::Structure);
     // The foreign key's target wraps: one row on two lines. Five rows in.
     state.ddl.cursor.go_to(5, lp_domain::view::ddl_rows(&state));
 
@@ -340,7 +343,7 @@ fn every_line_of_a_selected_property_is_highlighted() {
 #[test]
 fn a_one_line_property_has_exactly_its_own_line_reversed() {
     let mut state = describing(orders());
-    state.focus_on(Panel::Ddl);
+    state.focus_on(Panel::Structure);
     state.ddl.cursor.go_to(7, lp_domain::view::ddl_rows(&state));
 
     let buffer = draw_state(104, 41, &state);
@@ -355,7 +358,7 @@ fn a_one_line_property_has_exactly_its_own_line_reversed() {
 #[test]
 fn the_ddl_body_reserves_a_column_for_the_selection_bar() {
     let mut state = describing(orders());
-    state.focus_on(Panel::Ddl);
+    state.focus_on(Panel::Structure);
     // The foreign key wraps: one cursor stop on two lines.
     state.ddl.cursor.go_to(5, lp_domain::view::ddl_rows(&state));
 
@@ -384,7 +387,7 @@ fn the_ddl_body_reserves_a_column_for_the_selection_bar() {
 #[test]
 fn a_section_heading_is_never_drawn_as_the_selection() {
     let mut state = describing(orders());
-    state.focus_on(Panel::Ddl);
+    state.focus_on(Panel::Structure);
     state.ddl.cursor.to_start();
 
     let buffer = draw_state(104, 41, &state);
@@ -406,7 +409,7 @@ fn a_section_heading_is_never_drawn_as_the_selection() {
 #[test]
 fn a_ranged_ddl_row_carries_the_bar_and_the_band() {
     let mut state = describing(orders());
-    state.focus_on(Panel::Ddl);
+    state.focus_on(Panel::Structure);
     state.ddl.cursor.to_start();
     // Row 1 is the table identity, wrapped to two lines; row 2 is outside the
     // range.
@@ -434,7 +437,7 @@ fn a_ranged_ddl_row_carries_the_bar_and_the_band() {
 fn a_selected_block_scrolled_fully_out_of_view_is_not_highlighted() {
     // Checks `details.rs`'s claim that `Paragraph` needs no visibility guard.
     let mut state = describing(orders());
-    state.focus_on(Panel::Ddl);
+    state.focus_on(Panel::Structure);
     let details = ddl_details(&state);
     state.ddl.cursor.go_to(0, details.row_count());
 
@@ -464,7 +467,7 @@ fn a_selected_block_scrolled_fully_out_of_view_is_not_highlighted() {
 #[test]
 fn a_selected_block_scrolled_partly_out_of_view_keeps_its_visible_lines_highlighted() {
     let mut state = describing(orders());
-    state.focus_on(Panel::Ddl);
+    state.focus_on(Panel::Structure);
     let details = ddl_details(&state);
     let last = details.row_count() - 1;
     state.ddl.cursor.go_to(last, details.row_count());

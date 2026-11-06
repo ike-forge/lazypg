@@ -193,7 +193,7 @@ pub(super) fn click_at(state: &mut State, click: Click) -> Vec<Effect> {
     }
 
     match panel {
-        Panel::Tables => {
+        Panel::Objects => {
             state.move_tree_cursor(row);
             activate(state)
         }
@@ -203,7 +203,7 @@ pub(super) fn click_at(state: &mut State, click: Click) -> Vec<Effect> {
         }
         // The viewport follows on `Msg::Measured`: only the renderer knows how
         // the row wrapped.
-        Panel::Ddl => {
+        Panel::Structure => {
             state.ddl.cursor.go_to(row, len);
             Vec::new()
         }

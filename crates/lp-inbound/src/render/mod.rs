@@ -96,7 +96,7 @@ pub fn render(frame: &mut Frame, view: &ViewModel, theme: Theme) -> Rendered {
         match &body {
             Some(drawn) => {
                 heights[index] = drawn.extent.visible;
-                if panel.panel == Panel::Ddl {
+                if panel.panel == Panel::Structure {
                     ddl_lines = drawn.extent.total;
                     ddl_selection = drawn.selection;
                 }

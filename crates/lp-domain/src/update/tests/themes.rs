@@ -401,7 +401,7 @@ fn a_click_that_dismisses_the_picker_saves_nothing() {
     press(&mut state, Key::Char('j'));
     let effects = update(
         &mut state,
-        Msg::Pointer(Pointer::Click(Click::Panel(Panel::Tables))),
+        Msg::Pointer(Pointer::Click(Click::Panel(Panel::Objects))),
     );
 
     assert!(effects.is_empty(), "a click restores, the same as Esc");
@@ -710,7 +710,7 @@ fn a_click_dismisses_the_picker_and_restores_the_theme() {
     press(&mut state, Key::Char('k'));
     assert_ne!(state.theme, ThemeChoice::Ported(Ported::CatppuccinMocha));
 
-    point(&mut state, Pointer::Click(Click::Panel(Panel::Tables)));
+    point(&mut state, Pointer::Click(Click::Panel(Panel::Objects)));
 
     assert!(state.overlay.is_none());
     assert_eq!(state.theme, ThemeChoice::Ported(Ported::CatppuccinMocha));

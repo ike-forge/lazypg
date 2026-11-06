@@ -178,7 +178,7 @@ fn an_open_palette_swallows_the_keys_it_does_not_use() {
     let cases = [
         (Key::Char('t'), Panel::Contents),
         (Key::Tab, Panel::Contents),
-        (Key::Char(' '), Panel::Tables),
+        (Key::Char(' '), Panel::Objects),
     ];
 
     for (key, focus) in cases {
@@ -219,7 +219,7 @@ fn seat_on(state: &mut State, action: &str) {
 #[test]
 fn enter_closes_the_palette_and_focuses_the_panel_the_row_belongs_to() {
     let mut state = measured(&["shop"]);
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
 
     press(&mut state, Key::Char('?'));
     seat_on(&mut state, "cycle selection mode");
@@ -256,7 +256,7 @@ fn enter_on_the_run_row_runs_the_buffer() {
     state.queries.start_editing();
     type_into(&mut state, "select * from shop.a");
     // Leave Queries so `?` opens the palette through the real key path.
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
 
     press(&mut state, Key::Char('?'));
     seat_on(&mut state, "run the statement");
@@ -278,7 +278,7 @@ fn enter_on_the_run_row_runs_the_buffer() {
 #[test]
 fn a_row_whose_action_cannot_act_still_moves_focus() {
     let mut state = measured(&["shop"]);
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
 
     press(&mut state, Key::Char('?'));
     seat_on(&mut state, "run the statement");
@@ -297,7 +297,7 @@ fn enter_on_an_inert_row_closes_the_palette_and_stops() {
             }
 
             let mut state = measured(&["shop"]);
-            state.focus_on(Panel::Tables);
+            state.focus_on(Panel::Objects);
             let before = crate::view::view_model(&state);
 
             press(&mut state, Key::Char('?'));

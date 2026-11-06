@@ -166,7 +166,7 @@ fn a_typed_confirmation_takes_text_rather_than_quitting_or_moving() {
 
     assert!(!state.should_quit, "`q` is a character here");
     assert_eq!(state.tables.cursor().index(), before);
-    assert_eq!(state.focus(), Panel::Tables);
+    assert_eq!(state.focus(), Panel::Objects);
     assert_eq!(
         dropping(&state).and_then(DropPrompt::typed).map(Line::text),
         Some("qjGy1")
@@ -270,7 +270,7 @@ fn d_is_inert_over_a_multi_row_selection() {
 
 #[test]
 fn d_does_nothing_outside_the_tree() {
-    for panel in [Panel::Ddl, Panel::Contents] {
+    for panel in [Panel::Structure, Panel::Contents] {
         let mut state = on_table();
         state.focus_on(panel);
 

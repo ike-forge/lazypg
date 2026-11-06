@@ -1,5 +1,5 @@
 use crate::contents::TableRef;
-use crate::ddl::DdlTab;
+use crate::ddl::StructureTab;
 use crate::panel::Panel;
 use crate::queries::QueriesTab;
 use crate::state::State;
@@ -32,7 +32,7 @@ pub(super) fn focus_by_number(state: &mut State, key: char) {
 /// tab.
 pub(super) fn walk_tab(state: &mut State, step: Step) {
     match state.focus() {
-        Panel::Ddl => {}
+        Panel::Structure => {}
         Panel::Queries => {
             let shown = state.queries.tab();
             state.show_queries_tab(match step {
@@ -41,7 +41,7 @@ pub(super) fn walk_tab(state: &mut State, step: Step) {
             });
             return;
         }
-        Panel::Tables | Panel::Contents => return,
+        Panel::Objects | Panel::Contents => return,
     }
 
     let shown = state.ddl.tab();
@@ -60,7 +60,7 @@ pub(super) fn walk_tab(state: &mut State, step: Step) {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Landing {
     Tables,
-    Ddl(DdlTab),
+    Ddl(StructureTab),
     Contents,
     Queries(QueriesTab),
 }
@@ -77,8 +77,8 @@ impl Landing {
 
     pub(super) fn current(state: &State) -> Self {
         match state.focus() {
-            Panel::Tables => Self::Tables,
-            Panel::Ddl => Self::Ddl(state.ddl.tab()),
+            Panel::Objects => Self::Tables,
+            Panel::Structure => Self::Ddl(state.ddl.tab()),
             Panel::Contents => Self::Contents,
             Panel::Queries => Self::Queries(state.queries.tab()),
         }
@@ -88,9 +88,9 @@ impl Landing {
     /// to `Cql` when focus leaves.
     pub(super) fn arrive(self, state: &mut State) {
         match self {
-            Self::Tables => state.focus_on(Panel::Tables),
+            Self::Tables => state.focus_on(Panel::Objects),
             Self::Ddl(tab) => {
-                state.focus_on(Panel::Ddl);
+                state.focus_on(Panel::Structure);
                 state.ddl.show(tab);
             }
             Self::Contents => state.focus_on(Panel::Contents),
@@ -120,7 +120,7 @@ pub(super) fn show_tab(state: &mut State, panel: Panel, tab: usize) {
     match panel {
         // The map describes the previous frame: a strip that lost a tab drops
         // the press.
-        Panel::Ddl => {
+        Panel::Structure => {
             if let Some(tab) = crate::view::ddl_tabs(state).get(tab).copied() {
                 state.ddl.show(tab);
             }
@@ -130,7 +130,7 @@ pub(super) fn show_tab(state: &mut State, panel: Panel, tab: usize) {
                 state.show_queries_tab(tab);
             }
         }
-        Panel::Tables | Panel::Contents => {}
+        Panel::Objects | Panel::Contents => {}
     }
 }
 
@@ -142,9 +142,9 @@ pub(super) enum Transition {
 
 pub(super) fn go_right(state: &mut State) -> Vec<Effect> {
     match state.focus() {
-        Panel::Tables => return step_in(state),
+        Panel::Objects => return step_in(state),
         Panel::Contents => step_column(state, Side::Right),
-        Panel::Ddl | Panel::Queries => {}
+        Panel::Structure | Panel::Queries => {}
     }
 
     Vec::new()
@@ -182,14 +182,14 @@ pub(super) fn step_in(state: &mut State) -> Vec<Effect> {
 
 pub(super) fn go_left(state: &mut State) {
     match state.focus() {
-        Panel::Tables => transition(state, Transition::Close),
+        Panel::Objects => transition(state, Transition::Close),
         Panel::Contents => step_column(state, Side::Left),
-        Panel::Ddl | Panel::Queries => {}
+        Panel::Structure | Panel::Queries => {}
     }
 }
 
 pub(super) fn transition(state: &mut State, transition: Transition) {
-    if state.focus() != Panel::Tables {
+    if state.focus() != Panel::Objects {
         return;
     }
 

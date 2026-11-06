@@ -16,8 +16,8 @@ use super::{Effect, collapse_selection, spanned};
 pub(super) fn yank(state: &mut State) -> Vec<Effect> {
     let line = match state.focus() {
         Panel::Contents => contents(state),
-        Panel::Tables => tree_nodes(state),
-        Panel::Ddl => detail_rows(state),
+        Panel::Objects => tree_nodes(state),
+        Panel::Structure => detail_rows(state),
         Panel::Queries => log_entries(state),
     };
 
@@ -47,11 +47,11 @@ pub(super) fn copied(payload: Option<String>) -> Vec<Effect> {
 pub(super) fn lit(state: &State) -> Flash {
     let (rows, columns) = match state.focus() {
         Panel::Contents => grid_extent(state),
-        Panel::Tables => (
+        Panel::Objects => (
             spanned(&state.tables.selection, state.tables.cursor().index()),
             Ranges::default(),
         ),
-        Panel::Ddl => (
+        Panel::Structure => (
             spanned(&state.ddl.selection, state.ddl.cursor.index()),
             Ranges::default(),
         ),

@@ -23,7 +23,7 @@ use crate::commands::{self, CommandRow};
 use crate::config::{Config, ConnectionConfig, Diagnostic};
 use crate::contents::SelectionMode;
 use crate::cql::{CandidateKind, Completion};
-use crate::ddl::DdlTab;
+use crate::ddl::StructureTab;
 use crate::drop::Answer;
 use crate::export::{Confirm, Format, Scope, Stop};
 use crate::overlay::{Message, Overlay};
@@ -581,7 +581,7 @@ pub fn view_model(state: &State) -> ViewModel {
             },
             footer: match panel {
                 Panel::Contents => contents::footer(state),
-                Panel::Tables | Panel::Ddl | Panel::Queries => None,
+                Panel::Objects | Panel::Structure | Panel::Queries => None,
             },
         }),
         focus: state.focus(),
@@ -618,7 +618,7 @@ pub fn ddl_next_match(state: &State, from: usize, direction: Direction) -> Optio
 
 /// Public so walking the strip never lands on a tab it does not draw.
 #[must_use]
-pub fn ddl_tabs(state: &State) -> &'static [DdlTab] {
+pub fn ddl_tabs(state: &State) -> &'static [StructureTab] {
     details::tabs_for(state)
 }
 
@@ -626,8 +626,8 @@ fn title(state: &State, panel: Panel) -> PanelTitle {
     let number = panel.number();
 
     match panel {
-        Panel::Tables => tables::title(state, number),
-        Panel::Ddl => {
+        Panel::Objects => tables::title(state, number),
+        Panel::Structure => {
             let tab = details::shown_tab(state);
             let specs: Vec<TabSpec> = details::tabs_for(state)
                 .iter()
@@ -662,8 +662,8 @@ fn title(state: &State, panel: Panel) -> PanelTitle {
 
 fn body(state: &State, panel: Panel) -> PanelBody {
     match panel {
-        Panel::Tables => tables::body(state),
-        Panel::Ddl => details::body(state),
+        Panel::Objects => tables::body(state),
+        Panel::Structure => details::body(state),
         Panel::Contents => contents::body(state),
         Panel::Queries => match state.queries.tab() {
             QueriesTab::Cql => PanelBody::Editor {
@@ -759,7 +759,7 @@ mod tests {
             view.panels.map(|panel| panel.title.text()),
             [
                 // Nothing selected, so no Columns tab.
-                "[1]-Tables",
+                "[1]-Objects",
                 "[2]-DDL",
                 "[3]-Table contents",
                 "[4]-Queries - [5]-Logs"

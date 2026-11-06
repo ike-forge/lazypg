@@ -96,8 +96,8 @@ impl Searched {
     #[must_use]
     pub const fn of(panel: Panel) -> Option<Self> {
         match panel {
-            Panel::Tables => Some(Self::Tables),
-            Panel::Ddl => Some(Self::Ddl),
+            Panel::Objects => Some(Self::Tables),
+            Panel::Structure => Some(Self::Ddl),
             Panel::Contents => Some(Self::Contents),
             Panel::Queries => Some(Self::Queries),
         }
@@ -106,8 +106,8 @@ impl Searched {
     #[must_use]
     pub const fn panel(self) -> Panel {
         match self {
-            Self::Tables => Panel::Tables,
-            Self::Ddl => Panel::Ddl,
+            Self::Tables => Panel::Objects,
+            Self::Ddl => Panel::Structure,
             Self::Contents => Panel::Contents,
             Self::Queries => Panel::Queries,
         }
@@ -367,8 +367,8 @@ mod tests {
 
     #[test]
     fn every_panel_can_hold_a_search() {
-        assert_eq!(Searched::of(Panel::Tables), Some(Searched::Tables));
-        assert_eq!(Searched::of(Panel::Ddl), Some(Searched::Ddl));
+        assert_eq!(Searched::of(Panel::Objects), Some(Searched::Tables));
+        assert_eq!(Searched::of(Panel::Structure), Some(Searched::Ddl));
         assert_eq!(Searched::of(Panel::Contents), Some(Searched::Contents));
         assert_eq!(Searched::of(Panel::Queries), Some(Searched::Queries));
     }

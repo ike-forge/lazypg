@@ -45,8 +45,8 @@ impl PanelRects {
     #[must_use]
     pub const fn get(&self, panel: Panel) -> Rect {
         match panel {
-            Panel::Tables => self.tables,
-            Panel::Ddl => self.ddl,
+            Panel::Objects => self.tables,
+            Panel::Structure => self.ddl,
             Panel::Contents => self.contents,
             Panel::Queries => self.queries,
         }
@@ -176,8 +176,8 @@ mod tests {
     fn the_draft_proportions_hold_when_there_is_room() {
         let r = rects(100, 100);
 
-        assert_eq!(r.get(Panel::Tables), Rect::new(0, 0, 25, 40));
-        assert_eq!(r.get(Panel::Ddl), Rect::new(0, 40, 25, 59));
+        assert_eq!(r.get(Panel::Objects), Rect::new(0, 0, 25, 40));
+        assert_eq!(r.get(Panel::Structure), Rect::new(0, 40, 25, 59));
         assert_eq!(r.get(Panel::Contents), Rect::new(25, 0, 75, 97));
         assert_eq!(r.get(Panel::Queries), Rect::new(25, 97, 75, 2));
     }
@@ -186,7 +186,7 @@ mod tests {
     fn the_layout_is_offset_by_the_area_origin() {
         let r = panels(Rect::new(7, 3, 100, 100));
 
-        assert_eq!(r.get(Panel::Tables), Rect::new(7, 3, 25, 40));
+        assert_eq!(r.get(Panel::Objects), Rect::new(7, 3, 25, 40));
         assert_eq!(r.get(Panel::Queries), Rect::new(32, 100, 75, 2));
     }
 
@@ -290,7 +290,7 @@ mod tests {
         // 25% of 40 is 10.
         let r = rects(40, 24);
 
-        assert_eq!(r.get(Panel::Tables).width, 16);
+        assert_eq!(r.get(Panel::Objects).width, 16);
         assert_eq!(r.get(Panel::Contents).width, 24);
     }
 

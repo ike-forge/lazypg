@@ -35,7 +35,7 @@ fn ctrl_f_lays_the_buffer_out() {
 #[test]
 fn ctrl_f_does_nothing_outside_queries() {
     let mut state = editing("select * from shop.orders");
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
 
     press_binding(&mut state, ctrl('f'));
 
@@ -118,7 +118,7 @@ fn escape_takes_the_popup_down_before_it_leaves_the_editor() {
     press(&mut state, Key::Escape);
     assert_eq!(
         state.focus(),
-        Panel::Tables,
+        Panel::Objects,
         "and escape is still the way out"
     );
 }

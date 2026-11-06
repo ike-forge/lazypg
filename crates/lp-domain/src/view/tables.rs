@@ -57,7 +57,7 @@ impl RowKind {
 /// the same everywhere. Too narrow for the badge, it drops whole: half a
 /// posture can read as another.
 pub(super) fn title(state: &State, number: char) -> PanelTitle {
-    const BASE: &str = "Tables";
+    const BASE: &str = "Objects";
     let short = vec![Segment::plain(BASE)];
 
     let ConnectionState::Connected(connection) = &state.connection else {
@@ -90,7 +90,7 @@ pub(super) fn body(state: &State) -> PanelBody {
             SchemaState::Loaded(schema) => tree(
                 &state.tables,
                 schema,
-                super::flash_over(state, Panel::Tables),
+                super::flash_over(state, Panel::Objects),
             ),
         },
     }
@@ -246,7 +246,7 @@ mod tests {
     fn the_border_names_the_connection_and_its_posture() {
         let title = tables_title(&open("local", Posture::ReadOnly));
 
-        assert_eq!(title.text(), "[1]-Tables (local, read-only)");
+        assert_eq!(title.text(), "[1]-Objects (local, read-only)");
     }
 
     #[test]
@@ -256,7 +256,7 @@ mod tests {
 
             assert_eq!(
                 title.text(),
-                format!("[1]-Tables (prod, {})", posture.label()),
+                format!("[1]-Objects (prod, {})", posture.label()),
                 "a border that renamed a posture would be teaching a key that does not parse"
             );
         }
@@ -280,7 +280,7 @@ mod tests {
     fn a_narrow_border_falls_back_to_the_panels_name_alone() {
         let title = tables_title(&open("local", Posture::ReadOnly));
 
-        assert_eq!(title.tabs()[0].short(), "Tables");
+        assert_eq!(title.tabs()[0].short(), "Objects");
     }
 
     #[test]
@@ -296,7 +296,7 @@ mod tests {
         ] {
             // Including `Connecting`: the posture is the cluster's answer and
             // has not arrived.
-            assert_eq!(tables_title(&state).text(), "[1]-Tables");
+            assert_eq!(tables_title(&state).text(), "[1]-Objects");
         }
     }
 

@@ -32,7 +32,7 @@ fn focus_wins_over_a_flavours_own_panel_border() {
     let mut terminal =
         Terminal::new(TestBackend::new(40, 12)).expect("TestBackend always initialises");
     let mut state = State::default();
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
 
     terminal
         .draw(|frame| {
@@ -102,11 +102,11 @@ fn the_default_theme_paints_the_field_too() {
 
 #[test]
 fn the_four_panels_are_drawn_where_the_draft_puts_them() {
-    // At 40x12 the sidebar is on its floor, Tables 5 rows to Ddl's 6, Queries
-    // closed.
+    // At 40x12 the sidebar is on its floor, Objects 5 rows to Structure's 6,
+    // Queries closed.
     let buffer = draw(40, 12);
 
-    assert_eq!(row(&buffer, 0), "╭── [1]-Tables ╮╭── [3]-Table contents ╮");
+    assert_eq!(row(&buffer, 0), "╭─ [1]-Objects ╮╭── [3]-Table contents ╮");
     assert_eq!(row(&buffer, 1), "│Not connected ││Press Enter on a table│");
     assert_eq!(row(&buffer, 4), "╰──────────────╯│                      │");
     // No Columns tab: nothing is selected.
@@ -159,14 +159,14 @@ fn the_loader_rests_until_something_is_outstanding() {
     let working = draw_state(80, 24, &state);
 
     assert!(
-        bottom_border(&resting, Panel::Tables)
+        bottom_border(&resting, Panel::Objects)
             .chars()
             .all(|glyph| "╰─╯".contains(glyph)),
         "an idle panel's border is border and nothing else"
     );
     assert_ne!(
-        bottom_border(&resting, Panel::Tables),
-        bottom_border(&working, Panel::Tables),
+        bottom_border(&resting, Panel::Objects),
+        bottom_border(&working, Panel::Objects),
         "a connection attempt is the tree filling, and shows on its border"
     );
     assert_eq!(
@@ -193,7 +193,7 @@ fn the_loader_marks_the_panel_the_wait_is_for() {
 
         assert_eq!(
             quiet,
-            panel != Panel::Tables,
+            panel != Panel::Objects,
             "{panel:?} drew {border:?} while the schema was on its way"
         );
     }

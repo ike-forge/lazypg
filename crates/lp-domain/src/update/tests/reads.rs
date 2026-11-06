@@ -185,7 +185,7 @@ fn reading_a_second_table_cancels_the_first() {
     let mut state = read_shop_orders();
     press(&mut state, Key::Enter);
     let first = state.contents.outstanding().expect("the panel is waiting");
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     press(&mut state, Key::Char('j'));
 
     let effects = press(&mut state, Key::Enter);
@@ -206,7 +206,7 @@ fn reading_a_second_table_cancels_the_first() {
 #[test]
 fn reading_a_table_lands_focus_in_contents() {
     let mut state = tabled(&[("shop", &["orders"])]);
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     press(&mut state, Key::Char('l'));
     press(&mut state, Key::Char('j'));
 
@@ -218,10 +218,10 @@ fn reading_a_table_lands_focus_in_contents() {
 #[test]
 fn a_click_on_a_table_lands_focus_in_contents_too() {
     let mut state = tabled(&[("shop", &["orders"])]);
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     press(&mut state, Key::Char('l'));
 
-    click_row(&mut state, Panel::Tables, 1);
+    click_row(&mut state, Panel::Objects, 1);
 
     assert_eq!(state.focus(), Panel::Contents);
 }
@@ -229,7 +229,7 @@ fn a_click_on_a_table_lands_focus_in_contents_too() {
 #[test]
 fn focus_moves_before_the_page_arrives() {
     let mut state = tabled(&[("shop", &["orders"])]);
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     press(&mut state, Key::Char('l'));
     press(&mut state, Key::Char('j'));
 
@@ -248,7 +248,7 @@ fn a_refused_read_still_lands_focus_in_contents() {
     // cannot select a table.
     let mut state = tabled(&[("shop", &["orders"])]);
     state.connection = ConnectionState::Disconnected;
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
 
     read(&mut state, TableRef::new("shop", "orders"));
 
@@ -258,13 +258,13 @@ fn a_refused_read_still_lands_focus_in_contents() {
 #[test]
 fn unfolding_a_keyspace_leaves_focus_in_tables() {
     let mut state = tabled(&[("shop", &["orders"])]);
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
 
     press(&mut state, Key::Enter);
 
     assert_eq!(
         state.focus(),
-        Panel::Tables,
+        Panel::Objects,
         "a fold is not a read and moves nothing"
     );
 }
@@ -272,7 +272,7 @@ fn unfolding_a_keyspace_leaves_focus_in_tables() {
 #[test]
 fn reading_a_table_leaves_the_tree_selection_where_it_was() {
     let mut state = tabled(&[("shop", &["orders"])]);
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     press(&mut state, Key::Char('l'));
     press(&mut state, Key::Char('j'));
     let selected = state.tables.cursor().index();
@@ -320,7 +320,7 @@ fn a_page_for_a_cancelled_query_never_reaches_the_panel() {
     let mut state = read_shop_orders();
     press(&mut state, Key::Enter);
     let first = state.contents.outstanding().expect("the panel is waiting");
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     press(&mut state, Key::Char('j'));
     press(&mut state, Key::Enter);
 

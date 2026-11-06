@@ -677,7 +677,7 @@ fn a_click_dismissing_the_overwrite_confirmation_cancels_the_pending_entry() {
         },
     );
 
-    point(&mut state, Pointer::Click(Click::Panel(Panel::Tables)));
+    point(&mut state, Pointer::Click(Click::Panel(Panel::Objects)));
 
     assert!(
         state.overlay.is_none(),

@@ -304,8 +304,8 @@ fn sifting(state: &State) -> bool {
 /// Under a live range `esc` clears it, so the bar names it.
 fn selected(state: &State) -> bool {
     match state.focus() {
-        Panel::Tables => state.tables.selection.is_active(),
-        Panel::Ddl => state.ddl.selection.is_active(),
+        Panel::Objects => state.tables.selection.is_active(),
+        Panel::Structure => state.ddl.selection.is_active(),
         Panel::Contents => state.contents.rows.is_active() || state.contents.columns.is_active(),
         // The Cql tab is an editor with no selection.
         Panel::Queries => {

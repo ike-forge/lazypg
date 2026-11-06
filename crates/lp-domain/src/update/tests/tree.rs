@@ -57,7 +57,7 @@ fn enter_is_inert_while_more_than_one_row_is_selected() {
         effects.is_empty(),
         "a range names more than one thing to open"
     );
-    assert_eq!(state.focus(), Panel::Tables, "and focus stays put");
+    assert_eq!(state.focus(), Panel::Objects, "and focus stays put");
 }
 
 #[test]
@@ -88,7 +88,7 @@ fn a_click_clears_the_range_it_lands_beside() {
     update(
         &mut state,
         Msg::Pointer(Pointer::Click(Click::Row {
-            panel: Panel::Tables,
+            panel: Panel::Objects,
             row: 2,
             column: None,
         })),
@@ -238,7 +238,7 @@ fn j_walks_into_an_unfolded_keyspaces_tables() {
 #[test]
 fn a_tree_transition_belongs_to_the_focused_panel_only() {
     let mut state = browsing_tables(&[("shop", &["orders"])]);
-    state.focus_on(Panel::Ddl);
+    state.focus_on(Panel::Structure);
 
     press(&mut state, Key::Char('l'));
 
@@ -307,7 +307,7 @@ fn no_tables_entry_point_writes_the_fold_state_under_a_search() {
                 press(&mut state, key);
             }
             Action::Click => {
-                click_row(&mut state, Panel::Tables, 0);
+                click_row(&mut state, Panel::Objects, 0);
             }
         }
 

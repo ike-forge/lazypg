@@ -64,7 +64,7 @@ fn the_selection_cannot_run_off_a_list_it_has_not_loaded() {
 #[test]
 fn motion_belongs_to_the_focused_panel_only() {
     let mut state = browsing(&["a", "b", "c"]);
-    state.focus_on(Panel::Ddl);
+    state.focus_on(Panel::Structure);
 
     press(&mut state, Key::Char('j'));
 
@@ -117,7 +117,7 @@ fn tab_from_queries_logs_lands_on_tables_and_reverts_to_cql() {
 
     press(&mut state, Key::Tab);
 
-    assert_eq!(state.focus(), Panel::Tables);
+    assert_eq!(state.focus(), Panel::Objects);
     assert_eq!(
         state.queries.tab(),
         QueriesTab::Cql,
@@ -147,30 +147,30 @@ fn shift_tab_from_tables_lands_on_queries_logs() {
 #[test]
 fn tab_steps_ddls_two_tabs_as_separate_stops() {
     let mut state = browsing_a_table();
-    state.focus_on(Panel::Ddl);
-    assert_eq!(state.ddl.tab(), DdlTab::Ddl);
+    state.focus_on(Panel::Structure);
+    assert_eq!(state.ddl.tab(), StructureTab::Ddl);
 
     press(&mut state, Key::Tab);
 
     assert_eq!(
         state.focus(),
-        Panel::Ddl,
+        Panel::Structure,
         "the cycle has not left the panel yet"
     );
-    assert_eq!(state.ddl.tab(), DdlTab::Columns);
+    assert_eq!(state.ddl.tab(), StructureTab::Columns);
 }
 
 #[test]
 fn a_full_forward_cycle_returns_to_where_it_started() {
     let mut state = browsing_a_table();
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     let stops = Landing::all(&state).len();
 
     for _ in 0..stops {
         press(&mut state, Key::Tab);
     }
 
-    assert_eq!(state.focus(), Panel::Tables);
+    assert_eq!(state.focus(), Panel::Objects);
     assert_eq!(
         state.queries.tab(),
         QueriesTab::Cql,
@@ -268,7 +268,7 @@ fn tab_walks_every_stop_in_order_and_wraps() {
     let mut state = browsing(&["a"]);
 
     press(&mut state, Key::Tab);
-    assert_eq!(state.focus(), Panel::Ddl);
+    assert_eq!(state.focus(), Panel::Structure);
 
     press(&mut state, Key::Tab);
     assert_eq!(state.focus(), Panel::Contents);
@@ -282,7 +282,7 @@ fn tab_walks_every_stop_in_order_and_wraps() {
     assert_eq!(state.queries.tab(), QueriesTab::Logs);
 
     press(&mut state, Key::Tab);
-    assert_eq!(state.focus(), Panel::Tables, "the cycle wraps");
+    assert_eq!(state.focus(), Panel::Objects, "the cycle wraps");
 }
 
 #[test]
@@ -342,31 +342,31 @@ fn a_repeated_number_changes_neither_focus_nor_tab() {
     {
         // Over a table, so the DDL strip draws two tabs.
         let mut state = browsing_a_table();
-        state.focus_on(Panel::Tables);
+        state.focus_on(Panel::Objects);
 
         press(&mut state, Key::Char(panel.number()));
         press(&mut state, Key::Char(panel.number()));
 
         assert_eq!(state.focus(), panel, "the second press does not move focus");
-        assert_eq!(state.ddl.tab(), DdlTab::Ddl, "nor walk a tab");
+        assert_eq!(state.ddl.tab(), StructureTab::Ddl, "nor walk a tab");
     }
 }
 
 #[test]
 fn brackets_walk_the_focused_panels_tabs_both_ways() {
     let mut state = browsing_a_table();
-    state.focus_on(Panel::Ddl);
+    state.focus_on(Panel::Structure);
 
     press(&mut state, Key::Char(']'));
-    assert_eq!(state.ddl.tab(), DdlTab::Columns);
+    assert_eq!(state.ddl.tab(), StructureTab::Columns);
 
     press(&mut state, Key::Char('['));
-    assert_eq!(state.ddl.tab(), DdlTab::Ddl);
+    assert_eq!(state.ddl.tab(), StructureTab::Ddl);
 }
 
 #[test]
 fn brackets_do_nothing_from_a_panel_with_no_tabs() {
-    for panel in [Panel::Tables, Panel::Contents] {
+    for panel in [Panel::Objects, Panel::Contents] {
         let mut state = browsing_a_table();
         state.focus_on(panel);
 
@@ -375,7 +375,7 @@ fn brackets_do_nothing_from_a_panel_with_no_tabs() {
         assert_eq!(state.focus(), panel, "a bracket moves no focus");
         assert_eq!(
             state.ddl.tab(),
-            DdlTab::Ddl,
+            StructureTab::Ddl,
             "and reaches no panel it is not in"
         );
     }
@@ -389,10 +389,10 @@ fn walking_on_a_keyspace_stays_on_the_only_tab_there_is() {
     press(&mut state, Key::Char('2'));
     press(&mut state, Key::Char(']'));
 
-    assert_eq!(state.focus(), Panel::Ddl);
+    assert_eq!(state.focus(), Panel::Structure);
     assert_eq!(
         state.ddl.tab(),
-        DdlTab::Ddl,
+        StructureTab::Ddl,
         "a keyspace has no columns, so there is no tab to walk to"
     );
 }
@@ -421,7 +421,11 @@ fn a_bracket_is_text_in_a_panel_that_takes_text() {
 
     assert_eq!(state.focus(), Panel::Queries, "focus is the mode");
     assert_eq!(state.queries.text(), "]");
-    assert_eq!(state.ddl.tab(), DdlTab::Ddl, "and no tab changed under it");
+    assert_eq!(
+        state.ddl.tab(),
+        StructureTab::Ddl,
+        "and no tab changed under it"
+    );
 }
 
 #[test]
@@ -504,7 +508,7 @@ fn a_closed_buffer_leaves_the_global_keys_their_meaning() {
 
     press(&mut state, Key::Char('1'));
 
-    assert_eq!(state.focus(), Panel::Tables);
+    assert_eq!(state.focus(), Panel::Objects);
     assert_eq!(state.queries.text(), "");
 }
 
@@ -519,7 +523,7 @@ fn leaving_the_panel_closes_the_buffer() {
     assert!(!state.takes_text(), "arriving back does not reopen it");
 
     press(&mut state, Key::Enter);
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     state.focus_on(Panel::Queries);
 
     assert!(!state.takes_text());
@@ -564,7 +568,7 @@ fn a_number_moves_focus_and_does_nothing_else() {
 fn the_letters_the_numbers_replaced_stay_unbound() {
     for freed in ['a', 'b', 'c', 'd', 'u'] {
         // Focus starts elsewhere, so an unmoved focus is evidence.
-        let elsewhere = Panel::Ddl;
+        let elsewhere = Panel::Structure;
         let mut state = State::default();
         state.focus_on(elsewhere);
 

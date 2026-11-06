@@ -335,7 +335,7 @@ fn the_wheel_moves_the_inspector_and_a_click_closes_it() {
     update(
         &mut state,
         Msg::Pointer(Pointer::Wheel {
-            panel: Panel::Tables,
+            panel: Panel::Objects,
             direction: Wheel::Down,
         }),
     );
@@ -343,7 +343,7 @@ fn the_wheel_moves_the_inspector_and_a_click_closes_it() {
 
     update(
         &mut state,
-        Msg::Pointer(Pointer::Click(Click::Panel(Panel::Tables))),
+        Msg::Pointer(Pointer::Click(Click::Panel(Panel::Objects))),
     );
     assert_eq!(state.overlay, None);
     assert_eq!(state.focus(), Panel::Contents, "the click spent itself");

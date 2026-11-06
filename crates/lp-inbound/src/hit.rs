@@ -473,7 +473,7 @@ mod tests {
     fn map(tables: PanelHit) -> FrameMap {
         FrameMap::new([
             tables,
-            plain(Panel::Ddl, Rect::new(0, 7, 16, 4)),
+            plain(Panel::Structure, Rect::new(0, 7, 16, 4)),
             plain(Panel::Contents, Rect::new(16, 0, 24, 8)),
             plain(Panel::Queries, Rect::new(16, 8, 24, 3)),
         ])
@@ -481,12 +481,12 @@ mod tests {
 
     #[test]
     fn a_press_inside_the_rows_resolves_to_the_row_under_it() {
-        let map = map(listed(Panel::Tables, Rect::new(0, 0, 16, 7), 0, 0, 3));
+        let map = map(listed(Panel::Objects, Rect::new(0, 0, 16, 7), 0, 0, 3));
 
         assert_eq!(
             map.hit(2, 1),
             Some(Click::Row {
-                panel: Panel::Tables,
+                panel: Panel::Objects,
                 row: 0,
                 column: None
             })
@@ -494,7 +494,7 @@ mod tests {
         assert_eq!(
             map.hit(2, 3),
             Some(Click::Row {
-                panel: Panel::Tables,
+                panel: Panel::Objects,
                 row: 2,
                 column: None
             })
@@ -503,12 +503,12 @@ mod tests {
 
     #[test]
     fn a_scrolled_panel_resolves_against_the_row_at_its_top() {
-        let map = map(listed(Panel::Tables, Rect::new(0, 0, 16, 7), 0, 15, 40));
+        let map = map(listed(Panel::Objects, Rect::new(0, 0, 16, 7), 0, 15, 40));
 
         assert_eq!(
             map.hit(2, 1),
             Some(Click::Row {
-                panel: Panel::Tables,
+                panel: Panel::Objects,
                 row: 15,
                 column: None
             }),
@@ -518,13 +518,13 @@ mod tests {
 
     #[test]
     fn a_header_row_over_no_column_is_chrome_rather_than_the_first_row() {
-        let map = map(listed(Panel::Tables, Rect::new(0, 0, 16, 7), 1, 0, 3));
+        let map = map(listed(Panel::Objects, Rect::new(0, 0, 16, 7), 1, 0, 3));
 
-        assert_eq!(map.hit(2, 1), Some(Click::Panel(Panel::Tables)));
+        assert_eq!(map.hit(2, 1), Some(Click::Panel(Panel::Objects)));
         assert_eq!(
             map.hit(2, 2),
             Some(Click::Row {
-                panel: Panel::Tables,
+                panel: Panel::Objects,
                 row: 0,
                 column: None
             })
@@ -533,50 +533,50 @@ mod tests {
 
     #[test]
     fn a_press_past_the_last_row_is_chrome() {
-        let map = map(listed(Panel::Tables, Rect::new(0, 0, 16, 7), 0, 0, 2));
+        let map = map(listed(Panel::Objects, Rect::new(0, 0, 16, 7), 0, 0, 2));
 
         assert_eq!(
             map.hit(2, 3),
-            Some(Click::Panel(Panel::Tables)),
+            Some(Click::Panel(Panel::Objects)),
             "the blank space below a short list is not row 2"
         );
     }
 
     #[test]
     fn a_press_on_the_border_is_chrome() {
-        let map = map(listed(Panel::Tables, Rect::new(0, 0, 16, 7), 0, 0, 5));
+        let map = map(listed(Panel::Objects, Rect::new(0, 0, 16, 7), 0, 0, 5));
 
-        assert_eq!(map.hit(0, 0), Some(Click::Panel(Panel::Tables)), "corner");
+        assert_eq!(map.hit(0, 0), Some(Click::Panel(Panel::Objects)), "corner");
         assert_eq!(
             map.hit(3, 0),
-            Some(Click::Panel(Panel::Tables)),
+            Some(Click::Panel(Panel::Objects)),
             "top border away from any tab"
         );
         assert_eq!(
             map.hit(15, 2),
-            Some(Click::Panel(Panel::Tables)),
+            Some(Click::Panel(Panel::Objects)),
             "the right border sits beside a row, not on one"
         );
-        assert_eq!(map.hit(2, 6), Some(Click::Panel(Panel::Tables)), "bottom");
+        assert_eq!(map.hit(2, 6), Some(Click::Panel(Panel::Objects)), "bottom");
     }
 
     #[test]
     fn a_press_on_a_body_with_no_rows_is_chrome() {
-        let map = map(plain(Panel::Tables, Rect::new(0, 0, 16, 7)));
+        let map = map(plain(Panel::Objects, Rect::new(0, 0, 16, 7)));
 
-        assert_eq!(map.hit(2, 2), Some(Click::Panel(Panel::Tables)));
+        assert_eq!(map.hit(2, 2), Some(Click::Panel(Panel::Objects)));
     }
 
     #[test]
     fn a_press_outside_every_panel_hits_nothing() {
-        let map = map(listed(Panel::Tables, Rect::new(0, 0, 16, 7), 0, 0, 5));
+        let map = map(listed(Panel::Objects, Rect::new(0, 0, 16, 7), 0, 0, 5));
 
         assert_eq!(map.hit(2, 11), None, "the hint bar is not a panel");
     }
 
     #[test]
     fn a_press_on_a_tab_names_its_place_in_the_strip() {
-        let mut ddl = plain(Panel::Ddl, Rect::new(0, 7, 16, 4));
+        let mut ddl = plain(Panel::Structure, Rect::new(0, 7, 16, 4));
         ddl.tabs = vec![
             Band {
                 start: 2,
@@ -590,7 +590,7 @@ mod tests {
             },
         ];
         let map = FrameMap::new([
-            plain(Panel::Tables, Rect::new(0, 0, 16, 7)),
+            plain(Panel::Objects, Rect::new(0, 0, 16, 7)),
             ddl,
             plain(Panel::Contents, Rect::new(16, 0, 24, 8)),
             plain(Panel::Queries, Rect::new(16, 8, 24, 3)),
@@ -599,25 +599,25 @@ mod tests {
         assert_eq!(
             map.hit(3, 7),
             Some(Click::Tab {
-                panel: Panel::Ddl,
+                panel: Panel::Structure,
                 tab: 0
             })
         );
         assert_eq!(
             map.hit(9, 7),
             Some(Click::Tab {
-                panel: Panel::Ddl,
+                panel: Panel::Structure,
                 tab: 1
             })
         );
         assert_eq!(
             map.hit(6, 7),
-            Some(Click::Panel(Panel::Ddl)),
+            Some(Click::Panel(Panel::Structure)),
             "the separator between two tabs is neither of them"
         );
         assert_eq!(
             map.hit(3, 8),
-            Some(Click::Panel(Panel::Ddl)),
+            Some(Click::Panel(Panel::Structure)),
             "a strip lives on the top border and nowhere else"
         );
     }
@@ -626,13 +626,13 @@ mod tests {
     fn a_press_on_a_wrapped_body_names_the_row_the_line_came_from() {
         // Row 0 wrapped to two lines, then a blank, then row 1 on one.
         let rows = [Some(0), Some(0), None, Some(1)];
-        let map = map(wrapped(Panel::Tables, Rect::new(0, 0, 16, 7), 0, &rows));
+        let map = map(wrapped(Panel::Objects, Rect::new(0, 0, 16, 7), 0, &rows));
 
         for (line, row) in [(0, 0), (1, 0), (3, 1)] {
             assert_eq!(
                 map.hit(2, 1 + line),
                 Some(Click::Row {
-                    panel: Panel::Tables,
+                    panel: Panel::Objects,
                     row,
                     column: None
                 }),
@@ -642,7 +642,7 @@ mod tests {
 
         assert_eq!(
             map.hit(2, 3),
-            Some(Click::Panel(Panel::Tables)),
+            Some(Click::Panel(Panel::Objects)),
             "a blank between two groups belongs to no row"
         );
     }
@@ -650,12 +650,12 @@ mod tests {
     #[test]
     fn a_scrolled_wrapped_body_resolves_against_the_line_at_its_top() {
         let rows = [Some(0), Some(0), Some(1), Some(2), Some(2)];
-        let map = map(wrapped(Panel::Tables, Rect::new(0, 0, 16, 7), 2, &rows));
+        let map = map(wrapped(Panel::Objects, Rect::new(0, 0, 16, 7), 2, &rows));
 
         assert_eq!(
             map.hit(2, 1),
             Some(Click::Row {
-                panel: Panel::Tables,
+                panel: Panel::Objects,
                 row: 1,
                 column: None
             }),
@@ -663,7 +663,7 @@ mod tests {
         );
         assert_eq!(
             map.hit(2, 5),
-            Some(Click::Panel(Panel::Tables)),
+            Some(Click::Panel(Panel::Objects)),
             "past the last line is blank space, not a row"
         );
     }
@@ -671,8 +671,8 @@ mod tests {
     /// Bar and gutter at x=17, spacing at x=18, then two four-wide columns.
     fn grid_map() -> FrameMap {
         FrameMap::new([
-            plain(Panel::Tables, Rect::new(0, 0, 16, 7)),
-            plain(Panel::Ddl, Rect::new(0, 7, 16, 4)),
+            plain(Panel::Objects, Rect::new(0, 0, 16, 7)),
+            plain(Panel::Structure, Rect::new(0, 7, 16, 4)),
             gridded(Panel::Contents, Rect::new(16, 0, 24, 8), 2, 19, &[4, 4]),
             plain(Panel::Queries, Rect::new(16, 8, 24, 3)),
         ])
@@ -727,8 +727,8 @@ mod tests {
             .collect();
 
         FrameMap::new([
-            plain(Panel::Tables, Rect::new(0, 0, 16, 7)),
-            plain(Panel::Ddl, Rect::new(0, 7, 16, 4)),
+            plain(Panel::Objects, Rect::new(0, 0, 16, 7)),
+            plain(Panel::Structure, Rect::new(0, 7, 16, 4)),
             hit,
             plain(Panel::Queries, Rect::new(16, 8, 24, 3)),
         ])

@@ -112,7 +112,7 @@ pub(super) fn activate(state: &mut State) -> Vec<Effect> {
         return Vec::new();
     }
 
-    if state.focus() != Panel::Tables {
+    if state.focus() != Panel::Objects {
         return Vec::new();
     }
 

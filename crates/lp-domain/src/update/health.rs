@@ -16,7 +16,7 @@ use super::{Effect, escape, logged, quit, sentence};
 
 /// Shared with the hint bar.
 pub(crate) fn health_target(state: &State) -> Option<TableRef> {
-    if state.focus() != Panel::Tables || state.tables.selects_many() {
+    if state.focus() != Panel::Objects || state.tables.selects_many() {
         return None;
     }
 
@@ -27,7 +27,7 @@ pub(crate) fn health_target(state: &State) -> Option<TableRef> {
 }
 
 pub(super) fn open_health(state: &mut State) -> Vec<Effect> {
-    if state.focus() != Panel::Tables {
+    if state.focus() != Panel::Objects {
         return Vec::new();
     }
     let Some(table) = health_target(state) else {

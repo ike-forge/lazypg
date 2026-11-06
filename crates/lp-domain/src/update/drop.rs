@@ -20,9 +20,9 @@ use super::{
 /// refuses. Session-level refusals are [`open_drop`]'s.
 pub(crate) fn drop_target(state: &State) -> Option<Target> {
     match state.focus() {
-        Panel::Tables => tree_target(state),
+        Panel::Objects => tree_target(state),
         Panel::Contents => rows_target(state),
-        Panel::Ddl | Panel::Queries => None,
+        Panel::Structure | Panel::Queries => None,
     }
 }
 
@@ -89,14 +89,14 @@ pub(super) fn open_drop(state: &mut State) {
 
     let Some(target) = drop_target(state) else {
         match state.focus() {
-            Panel::Tables if state.tables.selects_many() => {
+            Panel::Objects if state.tables.selects_many() => {
                 state.notify(Severity::Info, "drop takes one node, not a selection");
             }
             Panel::Contents => state.notify(
                 Severity::Info,
                 "these rows cannot be addressed by primary key",
             ),
-            Panel::Tables | Panel::Ddl | Panel::Queries => {}
+            Panel::Objects | Panel::Structure | Panel::Queries => {}
         }
         return;
     };

@@ -6,7 +6,7 @@ fn leaving_the_panel_puts_the_buffer_back() {
 
     press(&mut state, Key::Char('1'));
 
-    assert_eq!(state.focus(), Panel::Tables);
+    assert_eq!(state.focus(), Panel::Objects);
     assert_eq!(state.queries.tab(), QueriesTab::Cql);
 }
 

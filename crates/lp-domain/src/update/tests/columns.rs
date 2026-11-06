@@ -139,7 +139,7 @@ fn a_grid_with_no_page_swallows_horizontal_motion() {
 #[test]
 fn horizontal_motion_belongs_to_the_focused_panel_only() {
     let mut state = grid_of(4, 80);
-    state.focus_on(Panel::Ddl);
+    state.focus_on(Panel::Structure);
 
     press(&mut state, Key::Char('l'));
 

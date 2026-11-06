@@ -67,8 +67,8 @@ impl Geometry {
     #[must_use]
     pub const fn height(self, panel: Panel) -> usize {
         self.heights[match panel {
-            Panel::Tables => 0,
-            Panel::Ddl => 1,
+            Panel::Objects => 0,
+            Panel::Structure => 1,
             Panel::Contents => 2,
             Panel::Queries => 3,
         }]
@@ -280,8 +280,8 @@ mod tests {
     fn geometry_reports_each_panels_own_height() {
         let geometry = Geometry::new([8, 14, 20, 1], 37, 0);
 
-        assert_eq!(geometry.height(Panel::Tables), 8);
-        assert_eq!(geometry.height(Panel::Ddl), 14);
+        assert_eq!(geometry.height(Panel::Objects), 8);
+        assert_eq!(geometry.height(Panel::Structure), 14);
         assert_eq!(geometry.height(Panel::Contents), 20);
         assert_eq!(geometry.height(Panel::Queries), 1);
         assert_eq!(geometry.ddl_lines(), 37);

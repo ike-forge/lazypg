@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn the_editing_keys_do_nothing_outside_a_panel_that_takes_text() {
-    for panel in [Panel::Tables, Panel::Ddl, Panel::Contents] {
+    for panel in [Panel::Objects, Panel::Structure, Panel::Contents] {
         for key in [Key::Backspace, Key::Delete] {
             let mut state = populated(panel);
             let before = crate::view::view_model(&state);
@@ -162,11 +162,11 @@ fn sweep_fixtures() -> Vec<State> {
 
     let mut elsewhere = browsing_tables(&[("shop", &["orders"])]);
     elsewhere.geometry = geometry;
-    elsewhere.focus_on(Panel::Ddl);
+    elsewhere.focus_on(Panel::Structure);
     elsewhere
         .ddl
         .scroll
-        .down(geometry.ddl_lines(), geometry.height(Panel::Ddl));
+        .down(geometry.ddl_lines(), geometry.height(Panel::Structure));
 
     let mut moved = measured(&["a", "b", "c"]);
     press(&mut moved, Key::Char('j'));
@@ -228,7 +228,7 @@ fn sweep_fixtures() -> Vec<State> {
     // A table under the tree, so the DDL strip draws two tabs.
     let mut tabbed = browsing_a_table();
     tabbed.geometry = geometry;
-    tabbed.focus_on(Panel::Ddl);
+    tabbed.focus_on(Panel::Structure);
 
     let pageable = contents_showing_more(3);
 
@@ -360,7 +360,7 @@ fn the_ddl_bar_offers_its_tabs_only_where_it_draws_more_than_one() {
     };
 
     let mut table = browsing_a_table();
-    table.focus_on(Panel::Ddl);
+    table.focus_on(Panel::Structure);
     assert!(shows_tabs(&table), "a table draws DDL, Columns and Indexes");
 
     let mut keyspace = browsing_tables(&[("shop", &["orders"])]);

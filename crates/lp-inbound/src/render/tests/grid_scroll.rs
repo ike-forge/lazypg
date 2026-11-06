@@ -97,7 +97,7 @@ fn the_row_and_the_cell_are_marked_in_an_unfocused_panel_too() {
     // elsewhere to catch a future `if focused`.
     let mut state = showing(sized_page(4, 3));
     state.contents.mode = SelectionMode::Cell;
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
 
     let buffer = draw_state(40, 12, &state);
     let area = block_area(&buffer, "Table contents");

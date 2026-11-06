@@ -5,10 +5,10 @@ fn a_panel_wears_the_search_applied_to_it() {
     let mut state = browsing(&["shop"], 0);
     state.apply_search(Searched::Tables, Search::new("ord"));
 
-    let buffer = draw_state(80, 24, &state);
+    let buffer = draw_state(84, 24, &state);
 
     assert!(
-        row(&buffer, top_border(&buffer, "Tables").1).contains("/ord"),
+        row(&buffer, top_border(&buffer, "Objects").1).contains("/ord"),
         "the term sits on the panel's own top border"
     );
 }
@@ -42,27 +42,28 @@ fn the_marker_is_dropped_rather_than_truncated() {
     );
 
     let buffer = draw_state(40, 24, &state);
-    let border = row(&buffer, top_border(&buffer, "Tables").1);
+    let border = row(&buffer, top_border(&buffer, "Objects").1);
 
     assert!(
         !border.contains('/'),
         "a truncated term is a lie about what is applied, got {border:?}"
     );
-    assert!(border.contains("Tables"), "and the title survives");
+    assert!(border.contains("Objects"), "and the title survives");
 }
 
 #[test]
 fn the_marker_fits_flush_against_the_corner_it_is_tuned_for() {
-    // At 80 columns Tables is 20 wide, leaving exactly the 4 `TITLE_PAD`
+    // At 84 columns Objects is 21 wide, leaving exactly the 4 `TITLE_PAD`
     // columns; one narrower drops the marker.
     let mut state = browsing(&["shop"], 0);
     state.apply_search(Searched::Tables, Search::new("ord"));
 
-    let buffer = draw_state(80, 24, &state);
-    let border = row(&buffer, top_border(&buffer, "Tables").1);
+    let buffer = draw_state(84, 24, &state);
+    let border = row(&buffer, top_border(&buffer, "Objects").1);
 
     assert_eq!(
-        border, "╭ [1]-Tables  /ord ╮╭── [3]-Table contents ────────────────────────────────────╮",
+        border,
+        "╭ [1]-Objects  /ord ╮╭── [3]-Table contents ───────────────────────────────────────╮",
         "the widest term this width can hold, sitting flush with no gap and no overlap"
     );
 }
@@ -73,11 +74,11 @@ fn an_unfocused_panel_still_wears_its_marker() {
     state.focus_on(Panel::Contents);
     state.apply_search(Searched::Tables, Search::new("ord"));
 
-    let buffer = draw_state(80, 24, &state);
+    let buffer = draw_state(84, 24, &state);
 
     assert!(
-        row(&buffer, top_border(&buffer, "Tables").1).contains("/ord"),
-        "Tables is unfocused but its own border still carries the marker"
+        row(&buffer, top_border(&buffer, "Objects").1).contains("/ord"),
+        "Objects is unfocused but its own border still carries the marker"
     );
 }
 

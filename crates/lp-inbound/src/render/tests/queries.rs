@@ -182,7 +182,7 @@ fn offered_row(buffer: &Buffer) -> usize {
 #[test]
 fn an_unfocused_editor_draws_no_popup() {
     let mut state = completing("se");
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
 
     let (buffer, _) = drawn_with_cursor(80, 24, &state);
 
@@ -194,7 +194,7 @@ fn an_unfocused_editor_draws_no_popup() {
 
 #[test]
 fn an_unfocused_editor_sets_no_cursor() {
-    let (_, cursor) = drawn_with_cursor(80, 24, &with_query("SELECT", Panel::Tables));
+    let (_, cursor) = drawn_with_cursor(80, 24, &with_query("SELECT", Panel::Objects));
 
     assert_eq!(
         cursor, None,

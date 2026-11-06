@@ -5,31 +5,36 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Panel {
     #[default]
-    Tables,
-    Ddl,
+    Objects,
+    Structure,
     Contents,
     Queries,
 }
 
 impl Panel {
-    pub const ALL: [Self; 4] = [Self::Tables, Self::Ddl, Self::Contents, Self::Queries];
+    pub const ALL: [Self; 4] = [
+        Self::Objects,
+        Self::Structure,
+        Self::Contents,
+        Self::Queries,
+    ];
 
     #[must_use]
     pub const fn next(self) -> Self {
         match self {
-            Self::Tables => Self::Ddl,
-            Self::Ddl => Self::Contents,
+            Self::Objects => Self::Structure,
+            Self::Structure => Self::Contents,
             Self::Contents => Self::Queries,
-            Self::Queries => Self::Tables,
+            Self::Queries => Self::Objects,
         }
     }
 
     #[must_use]
     pub const fn previous(self) -> Self {
         match self {
-            Self::Tables => Self::Queries,
-            Self::Ddl => Self::Tables,
-            Self::Contents => Self::Ddl,
+            Self::Objects => Self::Queries,
+            Self::Structure => Self::Objects,
+            Self::Contents => Self::Structure,
             Self::Queries => Self::Contents,
         }
     }
@@ -39,8 +44,8 @@ impl Panel {
     #[must_use]
     pub const fn number(self) -> char {
         match self {
-            Self::Tables => '1',
-            Self::Ddl => '2',
+            Self::Objects => '1',
+            Self::Structure => '2',
             Self::Contents => '3',
             Self::Queries => '4',
         }
@@ -61,8 +66,8 @@ mod tests {
         for panel in Panel::ALL {
             // A new variant fails to compile here until added to `ALL`.
             let expected_position = match panel {
-                Panel::Tables => 0,
-                Panel::Ddl => 1,
+                Panel::Objects => 0,
+                Panel::Structure => 1,
                 Panel::Contents => 2,
                 Panel::Queries => 3,
             };
@@ -81,7 +86,7 @@ mod tests {
 
     #[test]
     fn the_default_panel_is_tables() {
-        assert_eq!(Panel::default(), Panel::Tables);
+        assert_eq!(Panel::default(), Panel::Objects);
     }
 
     #[test]

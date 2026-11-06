@@ -7,7 +7,7 @@ fn loaded() -> State {
 
 #[test]
 fn slash_opens_the_prompt_in_every_panel_that_can_hold_a_search() {
-    for panel in [Panel::Tables, Panel::Ddl, Panel::Contents] {
+    for panel in [Panel::Objects, Panel::Structure, Panel::Contents] {
         let mut state = browsing_tables(&[("shop", &["orders"])]);
         state.focus_on(panel);
 
@@ -136,7 +136,7 @@ fn backspacing_a_query_to_empty_clears_the_search_live() {
 #[test]
 fn typing_a_term_selects_the_first_match() {
     let mut state = loaded();
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     press(&mut state, Key::Char('/'));
 
     for character in "orders".chars() {
@@ -153,7 +153,7 @@ fn typing_a_term_selects_the_first_match() {
 #[test]
 fn extending_a_term_does_not_walk_the_cursor_forward() {
     let mut state = loaded();
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     press(&mut state, Key::Char('/'));
 
     press(&mut state, Key::Char('o'));
@@ -171,7 +171,7 @@ fn extending_a_term_does_not_walk_the_cursor_forward() {
 #[test]
 fn a_term_that_matches_nothing_leaves_the_cursor_on_the_empty_tree() {
     let mut state = loaded();
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     state.move_tree_cursor(1);
     press(&mut state, Key::Char('/'));
 
@@ -190,7 +190,7 @@ fn a_term_that_matches_nothing_leaves_the_cursor_on_the_empty_tree() {
 #[test]
 fn escape_puts_the_cursor_back_on_the_row_a_matchless_term_emptied_out() {
     let mut state = loaded();
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     state.move_tree_cursor(1);
     press(&mut state, Key::Char('/'));
     for character in "zzz".chars() {
@@ -211,7 +211,7 @@ fn a_term_extended_past_its_last_match_restores_the_cursor_to_origin() {
         ("ddd", &[]),
         ("orders_ks", &[]),
     ]);
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     state.move_tree_cursor(1);
     press(&mut state, Key::Char('/'));
 
@@ -247,7 +247,7 @@ fn backspace_to_empty_restores_the_cursor_to_origin() {
         ("ddd", &[]),
         ("orders_ks", &[]),
     ]);
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     state.move_tree_cursor(1);
     press(&mut state, Key::Char('/'));
 
@@ -271,7 +271,7 @@ fn backspace_to_empty_restores_the_cursor_to_origin() {
 #[test]
 fn escape_restores_the_search_and_the_cursor_together() {
     let mut state = loaded();
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     state.move_tree_cursor(1);
     press(&mut state, Key::Char('/'));
     for character in "orders".chars() {
@@ -287,7 +287,7 @@ fn escape_restores_the_search_and_the_cursor_together() {
 #[test]
 fn enter_keeps_where_the_cursor_landed() {
     let mut state = loaded();
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     press(&mut state, Key::Char('/'));
     for character in "orders".chars() {
         press(&mut state, Key::Char(character));
@@ -302,7 +302,7 @@ fn enter_keeps_where_the_cursor_landed() {
 #[test]
 fn n_walks_to_the_next_match_and_wraps() {
     let mut state = loaded();
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     // "billing" lacks an "o", leaving two matches.
     state.apply_search(Searched::Tables, Search::new("o"));
 
@@ -325,7 +325,7 @@ fn n_walks_to_the_next_match_and_wraps() {
 fn shift_n_walks_backwards() {
     // Three rows that all match, so `n` and `N` land differently.
     let mut state = browsing_tables(&[("box", &[]), ("shop", &["orders"])]);
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     state.apply_search(Searched::Tables, Search::new("o"));
     // Rows: "box" (0), "shop" (1, forced open), "orders" (2).
     state.move_tree_cursor(1);
@@ -349,7 +349,7 @@ fn shift_n_walks_backwards() {
 #[test]
 fn n_is_inert_where_no_search_is_applied() {
     let mut state = loaded();
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     let before = state.tables.cursor().index();
 
     press(&mut state, Key::Char('n'));
@@ -374,7 +374,7 @@ fn n_types_a_character_in_queries() {
 #[test]
 fn a_live_range_follows_an_n() {
     let mut state = browsing_tables(&[("box", &[]), ("shop", &["orders"])]);
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     state.apply_search(Searched::Tables, Search::new("o"));
     state.move_tree_cursor(1);
 
@@ -449,7 +449,7 @@ fn tab_is_inert_while_the_prompt_is_up() {
     press(&mut state, Key::Tab);
     press(&mut state, Key::BackTab);
 
-    assert_eq!(state.focus(), Panel::Tables);
+    assert_eq!(state.focus(), Panel::Objects);
     assert!(searching(&state).is_some(), "and the prompt survives");
 }
 
@@ -460,7 +460,7 @@ fn a_click_cancels_the_prompt() {
     press(&mut state, Key::Char('/'));
     press(&mut state, Key::Char('u'));
 
-    point(&mut state, Pointer::Click(Click::Panel(Panel::Tables)));
+    point(&mut state, Pointer::Click(Click::Panel(Panel::Objects)));
 
     assert!(state.overlay.is_none());
     assert_eq!(
@@ -506,14 +506,14 @@ fn an_unclaimed_ctrl_chord_is_not_text_in_the_prompt() {
 #[test]
 fn the_measurement_after_a_search_pulls_a_stale_ddl_offset_back_inside() {
     let mut state = read_shop_orders();
-    state.focus_on(Panel::Ddl);
+    state.focus_on(Panel::Structure);
     sized(&mut state, [8, 4, 8, 1], 40);
 
     for _ in 0..20 {
         point(
             &mut state,
             Pointer::Wheel {
-                panel: Panel::Ddl,
+                panel: Panel::Structure,
                 direction: Wheel::Down,
             },
         );
@@ -536,7 +536,7 @@ fn the_measurement_after_a_search_pulls_a_stale_ddl_offset_back_inside() {
 #[test]
 fn escape_clearing_a_ddl_search_re_follows_the_selection() {
     let mut state = read_shop_orders();
-    state.focus_on(Panel::Ddl);
+    state.focus_on(Panel::Structure);
     sized(&mut state, [8, 4, 8, 1], 40);
     press(&mut state, Key::Char('/'));
     press(&mut state, Key::Char('a'));

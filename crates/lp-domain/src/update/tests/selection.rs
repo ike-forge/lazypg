@@ -33,13 +33,13 @@ fn switching_panels_clears_the_selection_of_the_panel_left_behind() {
 
     for (name, route) in routes {
         let mut state = tables_state();
-        state.focus_on(Panel::Tables);
+        state.focus_on(Panel::Objects);
         state.tables.selection.start(0);
         state.tables.selection.stop(1);
 
         route(&mut state);
 
-        if state.focus() == Panel::Tables {
+        if state.focus() == Panel::Objects {
             continue;
         }
 
@@ -124,7 +124,7 @@ fn the_trails_search_does_not_survive_a_switch_to_the_cql_tab() {
 #[test]
 fn re_focusing_the_focused_panel_keeps_its_selection() {
     let mut state = tables_state();
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     state.tables.selection.start(0);
     state.tables.selection.stop(1);
 
@@ -146,7 +146,7 @@ fn leaving_contents_clears_both_of_its_axes() {
     state.contents.columns.start(0);
     state.contents.columns.stop(1);
 
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
 
     assert!(!state.contents.rows.is_active(), "the row axis survived");
     assert!(
@@ -158,7 +158,7 @@ fn leaving_contents_clears_both_of_its_axes() {
 #[test]
 fn a_click_clears_the_selection_of_the_panel_it_leaves() {
     let mut state = contents_state();
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     state.tables.selection.start(0);
     state.tables.selection.stop(1);
 
@@ -170,7 +170,7 @@ fn a_click_clears_the_selection_of_the_panel_it_leaves() {
 #[test]
 fn enter_on_a_table_leaves_no_selection_behind_in_tables() {
     let mut state = tables_state();
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     state.move_tree_cursor(1);
     state.tables.selection.start(1);
     state.tables.selection.stop(1);
@@ -189,7 +189,7 @@ fn esc_out_of_queries_clears_what_queries_left_behind() {
 
     let _ = press(&mut state, Key::Escape);
 
-    assert_eq!(state.focus(), Panel::Tables);
+    assert_eq!(state.focus(), Panel::Objects);
 }
 
 #[test]
@@ -260,7 +260,7 @@ fn escape_prefers_the_selection_to_the_search() {
 #[test]
 fn v_selects_in_the_focused_panel_only() {
     let mut state = browsing_tables(&[("shop", &["orders"])]);
-    state.focus_on(Panel::Ddl);
+    state.focus_on(Panel::Structure);
 
     press(&mut state, Key::Char('v'));
 
@@ -282,7 +282,7 @@ fn v_types_a_v_in_queries() {
 #[test]
 fn v_builds_two_groups_and_esc_takes_both() {
     let mut state = tables_state();
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
 
     let _ = press(&mut state, Key::Char('v'));
     let _ = press(&mut state, Key::Char('j'));
@@ -307,7 +307,7 @@ fn v_builds_two_groups_and_esc_takes_both() {
 #[test]
 fn v_on_a_selected_row_drops_that_group_only() {
     let mut state = tables_state();
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     state.tables.selection.start(0);
     state.tables.selection.stop(1);
     state.tables.selection.start(3);
@@ -368,7 +368,7 @@ fn escape_leaves_queries_when_nothing_else_claims_it() {
 
     press(&mut state, Key::Escape);
 
-    assert_eq!(state.focus(), Panel::Tables);
+    assert_eq!(state.focus(), Panel::Objects);
 }
 
 #[test]
@@ -387,7 +387,7 @@ fn m_cycles_the_contents_selection_mode() {
 
 #[test]
 fn m_does_nothing_outside_the_grid() {
-    for panel in [Panel::Tables, Panel::Ddl] {
+    for panel in [Panel::Objects, Panel::Structure] {
         let mut state = populated(panel);
         let before = crate::view::view_model(&state);
 

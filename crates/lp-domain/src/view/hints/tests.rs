@@ -51,7 +51,7 @@ fn a_key_with_no_printable_form_is_named_rather_than_drawn() {
 #[test]
 fn the_bar_carries_the_focused_panels_bindings_and_the_common_ones() {
     let mut state = State::default();
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
 
     let bar = bar(&state);
 
@@ -343,7 +343,7 @@ fn the_bar_names_what_diagnostics_responds_to() {
 
 #[test]
 fn the_bar_names_search_in_every_panel_that_can_hold_a_search() {
-    for panel in [Panel::Tables, Panel::Ddl, Panel::Contents] {
+    for panel in [Panel::Objects, Panel::Structure, Panel::Contents] {
         let mut state = fits();
         state.focus_on(panel);
 
@@ -365,7 +365,7 @@ fn the_bar_does_not_name_search_in_queries() {
 #[test]
 fn the_bar_names_esc_clear_only_where_a_search_is_applied() {
     let mut state = fits();
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     assert!(bar(&state).global.iter().all(|hint| hint.action != "clear"));
 
     state.apply_search(Searched::Tables, Search::new("o"));
@@ -382,7 +382,7 @@ fn the_bar_names_esc_clear_only_where_a_search_is_applied() {
 #[test]
 fn the_bar_names_n_only_where_a_search_is_applied() {
     let mut state = fits();
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     assert!(
         bar(&state)
             .global
@@ -410,7 +410,7 @@ fn next_match_hint(bar: &HintBar) -> &Hint {
 #[test]
 fn the_next_match_hint_is_inert_when_the_term_matches_nothing() {
     let mut state = crate::view::tests_support::tabled(&[("shop", &["orders"])]);
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     state.apply_search(Searched::Tables, Search::new("zzz"));
 
     assert_eq!(
@@ -423,7 +423,7 @@ fn the_next_match_hint_is_inert_when_the_term_matches_nothing() {
 #[test]
 fn the_next_match_hint_is_live_when_something_matches() {
     let mut state = crate::view::tests_support::tabled(&[("shop", &["orders"])]);
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     state.apply_search(Searched::Tables, Search::new("shop"));
 
     assert_eq!(next_match_hint(&bar(&state)).liveness, Liveness::Live);
@@ -534,7 +534,7 @@ fn an_open_buffer_names_esc_as_done_rather_than_leave() {
 
 #[test]
 fn no_other_bar_names_the_editor_binding() {
-    for focus in [Panel::Tables, Panel::Ddl, Panel::Contents] {
+    for focus in [Panel::Objects, Panel::Structure, Panel::Contents] {
         let mut state = fits();
         state.focus_on(focus);
 
@@ -631,7 +631,7 @@ fn the_run_hint_greys_against_a_buffer_the_posture_would_refuse() {
 #[test]
 fn the_bar_names_esc_while_a_range_stands() {
     let mut state = fits();
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     state.tables.selection.start(0);
 
     let bar = bar(&state);
@@ -645,7 +645,7 @@ fn the_bar_names_esc_while_a_range_stands() {
 #[test]
 fn the_bar_leaves_esc_off_a_panel_with_neither_a_range_nor_a_search() {
     let mut state = fits();
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
 
     assert!(!bar(&state).global.iter().any(|hint| hint.keys == "esc"));
 }
@@ -676,7 +676,7 @@ fn the_drop_hint_is_live_only_where_the_key_would_open_something() {
     let loaded = SchemaState::Loaded(schema_of(&[("shop", &["orders"])]));
 
     let mut state = connected(Posture::Writable, loaded.clone());
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     assert_eq!(
         hint(&state, "drop"),
         Liveness::Inert,
@@ -684,7 +684,7 @@ fn the_drop_hint_is_live_only_where_the_key_would_open_something() {
     );
 
     let mut state = connected(Posture::Writable, loading);
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     state.geometry = state.geometry.with_drop_fits(true);
     assert_eq!(
         hint(&state, "drop"),
@@ -693,7 +693,7 @@ fn the_drop_hint_is_live_only_where_the_key_would_open_something() {
     );
 
     let mut state = connected(Posture::Writable, loaded);
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     state.geometry = state.geometry.with_drop_fits(true);
     assert_eq!(hint(&state, "drop"), Liveness::Live);
 }
@@ -702,7 +702,7 @@ fn the_drop_hint_is_live_only_where_the_key_would_open_something() {
 fn the_health_hint_is_live_on_a_table_with_room_for_the_block() {
     let loaded = SchemaState::Loaded(schema_of(&[("shop", &["orders"])]));
     let mut state = connected(Posture::ReadOnly, loaded);
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     let schema = state.schema().expect("loaded").clone();
     state.tables.open(&schema);
     state.tables.open(&schema);
@@ -725,7 +725,7 @@ fn the_health_hint_is_live_on_a_table_with_room_for_the_block() {
 fn a_read_only_connection_leaves_d_off_the_bar() {
     let loaded = SchemaState::Loaded(schema_of(&[("shop", &["orders"])]));
 
-    for panel in [Panel::Tables, Panel::Contents] {
+    for panel in [Panel::Objects, Panel::Contents] {
         let mut state = connected(Posture::ReadOnly, loaded.clone());
         state.focus_on(panel);
         state.geometry = state.geometry.with_drop_fits(true);

@@ -322,7 +322,7 @@ fn a_bare_y_lights_the_row_it_took() {
     press(&mut state, Key::Char('y'));
 
     let flash = state.flash.expect("lit");
-    assert_eq!(flash.panel(), Panel::Tables);
+    assert_eq!(flash.panel(), Panel::Objects);
     assert_eq!(flash.rows(), &Ranges::of(Range::new(0, 0)));
 }
 
@@ -524,7 +524,7 @@ fn y_yanks_nothing_when_the_search_kept_no_row() {
 #[test]
 fn y_yanks_a_ddl_row() {
     let mut state = browsing_a_table();
-    state.focus_on(Panel::Ddl);
+    state.focus_on(Panel::Structure);
 
     assert_eq!(
         press(&mut state, Key::Char('y')),
@@ -639,7 +639,7 @@ fn y_yanks_every_node_of_a_tree_range() {
 #[test]
 fn y_over_two_groups_yanks_their_rows_in_drawn_order() {
     let mut state = tables_state();
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     state.tables.selection.start(2);
     state.tables.selection.stop(2);
     state.tables.selection.start(0);
@@ -660,7 +660,7 @@ fn y_over_two_groups_yanks_their_rows_in_drawn_order() {
 #[test]
 fn y_sends_the_cursor_home_to_the_last_v_and_spends_every_group() {
     let mut state = tables_state();
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     state.tables.selection.start(0);
     state.tables.selection.stop(1);
     state.tables.selection.start(3);
@@ -679,7 +679,7 @@ fn y_sends_the_cursor_home_to_the_last_v_and_spends_every_group() {
 #[test]
 fn y_over_a_selection_whose_anchor_was_dropped_moves_no_cursor() {
     let mut state = tables_state();
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
     state.tables.selection.toggle(0);
     state.tables.selection.toggle(1);
     state.tables.selection.toggle(3);

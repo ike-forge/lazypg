@@ -520,7 +520,7 @@ pub(super) fn ctrl_e(state: &mut State) -> Vec<Effect> {
             open_export(state);
             Vec::new()
         }
-        Panel::Tables | Panel::Ddl => Vec::new(),
+        Panel::Objects | Panel::Structure => Vec::new(),
     }
 }
 

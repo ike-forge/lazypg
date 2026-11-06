@@ -9,7 +9,7 @@ use crate::commit::CommitPrompt;
 use crate::config::{Config, ConnectionName, Diagnostic, Icons, Origin, Span as ConfigSpan};
 use crate::connection::{Connection, SchemaState};
 use crate::contents::{ContentsState, Filter, SelectionMode, Subject};
-use crate::ddl::DdlTab;
+use crate::ddl::StructureTab;
 use crate::drop::{DropPrompt, Target};
 use crate::export::Confirm;
 use crate::feedback::FLASH_TICKS;
@@ -365,7 +365,7 @@ fn populated(focus: Panel) -> State {
     state.move_tree_cursor(1);
     press(&mut state, Key::Char('l'));
 
-    if focus != Panel::Tables {
+    if focus != Panel::Objects {
         press(&mut state, Key::Char('l'));
         press(&mut state, Key::Enter);
         let query = state

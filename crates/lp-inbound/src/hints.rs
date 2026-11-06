@@ -183,7 +183,7 @@ mod tests {
     #[test]
     fn a_wide_frame_shows_every_hint() {
         assert_eq!(
-            drawn(Panel::Tables, 90),
+            drawn(Panel::Objects, 90),
             " ⏎ open | H health | / search | v select | y copy"
         );
     }
@@ -191,10 +191,10 @@ mod tests {
     #[test]
     fn hints_are_dropped_whole_and_lowest_value_first() {
         // No geometry here fits a palette, so `?` never joins the bar.
-        assert_eq!(drawn(Panel::Tables, 36), " ⏎ open | v select | y copy");
-        assert_eq!(drawn(Panel::Tables, 25), " ⏎ open | y copy");
-        assert_eq!(drawn(Panel::Tables, 15), " y copy");
-        assert_eq!(drawn(Panel::Tables, 6), "");
+        assert_eq!(drawn(Panel::Objects, 36), " ⏎ open | v select | y copy");
+        assert_eq!(drawn(Panel::Objects, 25), " ⏎ open | y copy");
+        assert_eq!(drawn(Panel::Objects, 15), " y copy");
+        assert_eq!(drawn(Panel::Objects, 6), "");
     }
 
     /// A real 100x24 frame's geometry, not an impossible size.
@@ -249,7 +249,7 @@ mod tests {
     #[test]
     fn the_widest_bar_still_fits_the_narrowest_legal_frame() {
         assert_eq!(
-            drawn(Panel::Tables, 40),
+            drawn(Panel::Objects, 40),
             " ⏎ open | / search | v select | y copy"
         );
     }
@@ -351,7 +351,7 @@ mod tests {
 
     #[test]
     fn every_pair_of_hints_is_joined_the_same_way() {
-        let bar = bar_of(Panel::Tables);
+        let bar = bar_of(Panel::Objects);
         let line = line(&bar, 200, Theme::default());
         let text: String = line
             .spans
@@ -372,7 +372,7 @@ mod tests {
 
     #[test]
     fn the_key_and_its_action_are_drawn_differently() {
-        let line = line(&bar_of(Panel::Tables), 80, Theme::default());
+        let line = line(&bar_of(Panel::Objects), 80, Theme::default());
         let keys = line
             .spans
             .iter()

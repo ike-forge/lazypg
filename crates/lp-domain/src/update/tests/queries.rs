@@ -18,7 +18,7 @@ fn ctrl_e_hands_the_queries_buffer_to_an_editor() {
 
 #[test]
 fn ctrl_e_is_inert_outside_queries() {
-    for focus in [Panel::Tables, Panel::Ddl] {
+    for focus in [Panel::Objects, Panel::Structure] {
         let mut state = State::default();
         state.focus_on(focus);
         let before = crate::view::view_model(&state);
@@ -190,7 +190,7 @@ fn escape_closes_the_buffer_and_a_second_leaves_for_tables() {
 
     press(&mut state, Key::Escape);
 
-    assert_eq!(state.focus(), Panel::Tables);
+    assert_eq!(state.focus(), Panel::Objects);
     assert_eq!(state.queries.text(), "SELECT", "leaving keeps the buffer");
 }
 
@@ -201,7 +201,7 @@ fn escape_leaves_every_panel_for_tables() {
 
         press(&mut state, Key::Escape);
 
-        assert_eq!(state.focus(), Panel::Tables, "esc from {panel:?}");
+        assert_eq!(state.focus(), Panel::Objects, "esc from {panel:?}");
     }
 }
 

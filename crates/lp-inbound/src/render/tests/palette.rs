@@ -135,7 +135,7 @@ fn the_palette_wears_the_focus_the_panels_gave_up() {
 fn the_panel_the_palette_covers_reads_as_an_unfocused_one() {
     let buffer = with_palette(100, 40);
     let theme = Theme::default();
-    let (x, y) = top_border(&buffer, "Tables");
+    let (x, y) = top_border(&buffer, "Objects");
     // Past the corner, two dashes and the pad.
     let title = buffer.cell((x + 4, y)).expect("the title is drawn");
 

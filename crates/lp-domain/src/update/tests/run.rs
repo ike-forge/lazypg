@@ -215,7 +215,7 @@ fn stepping_the_band_changes_what_ctrl_r_runs() {
 
 #[test]
 fn ctrl_r_outside_queries_runs_nothing() {
-    for panel in [Panel::Tables, Panel::Ddl, Panel::Contents] {
+    for panel in [Panel::Objects, Panel::Structure, Panel::Contents] {
         let mut state = editing("SELECT * FROM shop.orders");
         state.focus_on(panel);
 
@@ -271,7 +271,7 @@ fn reading_a_table_cancels_a_pending_query() {
         .contents
         .outstanding()
         .expect("the query is in flight");
-    state.focus_on(Panel::Tables);
+    state.focus_on(Panel::Objects);
 
     let effects = press(&mut state, Key::Enter);
 

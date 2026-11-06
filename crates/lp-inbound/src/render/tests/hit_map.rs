@@ -13,7 +13,7 @@ fn the_map_resolves_every_drawn_schema_to_the_row_that_drew_it() {
         assert_eq!(
             map.hit(2, y),
             Some(Click::Row {
-                panel: Panel::Tables,
+                panel: Panel::Objects,
                 row: index,
                 column: None
             }),
@@ -39,7 +39,7 @@ fn the_map_resolves_a_scrolled_tree_to_the_rows_that_were_drawn() {
         assert_eq!(
             map.hit(2, y),
             Some(Click::Row {
-                panel: Panel::Tables,
+                panel: Panel::Objects,
                 row: index,
                 column: None
             }),
@@ -214,10 +214,10 @@ fn the_map_resolves_every_cell_to_the_column_that_drew_it() {
 fn a_press_on_the_chrome_of_a_panel_names_that_panel() {
     let (_buffer, map) = draw_mapped(40, 12, &browsing(&["shop"], 0));
 
-    assert_eq!(map.hit(0, 0), Some(Click::Panel(Panel::Tables)), "corner");
+    assert_eq!(map.hit(0, 0), Some(Click::Panel(Panel::Objects)), "corner");
     assert_eq!(
         map.hit(0, 8),
-        Some(Click::Panel(Panel::Ddl)),
+        Some(Click::Panel(Panel::Structure)),
         "the Ddl panel's left border"
     );
     assert_eq!(
@@ -241,7 +241,7 @@ fn the_map_resolves_every_drawn_tab_to_its_place_in_the_strip() {
         assert_eq!(
             map.hit(column_of(&buffer, DDL_BORDER, label), DDL_BORDER),
             Some(Click::Tab {
-                panel: Panel::Ddl,
+                panel: Panel::Structure,
                 tab
             }),
             "{label} is the {tab}th tab, whichever name it is drawn under"
@@ -254,9 +254,9 @@ fn a_single_tab_panel_resolves_its_title_to_its_one_tab() {
     let (buffer, map) = draw_mapped(40, 12, &browsing(&["shop"], 0));
 
     assert_eq!(
-        map.hit(column_of(&buffer, 0, "Tables"), 0),
+        map.hit(column_of(&buffer, 0, "Objects"), 0),
         Some(Click::Tab {
-            panel: Panel::Tables,
+            panel: Panel::Objects,
             tab: 0
         }),
         "a panel with one tab is its own tab"
@@ -289,11 +289,11 @@ fn the_map_resolves_every_line_of_a_wrapped_ddl_row_to_that_row() {
         let y = DDL_BORDER + 1 + u16::try_from(line).expect("six lines");
         let click = match row {
             Some(row) => Click::Row {
-                panel: Panel::Ddl,
+                panel: Panel::Structure,
                 row,
                 column: None,
             },
-            None => Click::Panel(Panel::Ddl),
+            None => Click::Panel(Panel::Structure),
         };
 
         assert_eq!(map.hit(3, y), Some(click), "line {line}");

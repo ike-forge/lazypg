@@ -78,7 +78,7 @@ fn shift_h_on_a_keyspace_does_nothing() {
 #[test]
 fn shift_h_outside_tables_does_nothing() {
     let mut state = on_table();
-    state.focus_on(Panel::Ddl);
+    state.focus_on(Panel::Structure);
 
     assert!(press(&mut state, Key::Char('H')).is_empty());
     assert!(state.overlay.is_none());

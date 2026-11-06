@@ -78,8 +78,8 @@ impl State {
         }
 
         match self.focus {
-            Panel::Tables => self.tables.selection.clear(),
-            Panel::Ddl => self.ddl.selection.clear(),
+            Panel::Objects => self.tables.selection.clear(),
+            Panel::Structure => self.ddl.selection.clear(),
             Panel::Contents => {
                 self.contents.rows.clear();
                 self.contents.columns.clear();
@@ -213,7 +213,7 @@ impl State {
     #[must_use]
     pub fn is_working_in(&self, panel: Panel) -> bool {
         match panel {
-            Panel::Tables => match &self.connection {
+            Panel::Objects => match &self.connection {
                 ConnectionState::Connecting { .. } => true,
                 ConnectionState::Connected(connection) => {
                     matches!(connection.schema, SchemaState::Loading)
@@ -227,7 +227,7 @@ impl State {
                 .log
                 .entries()
                 .any(|entry| matches!(entry.outcome(), Outcome::Pending { .. })),
-            Panel::Ddl => false,
+            Panel::Structure => false,
         }
     }
 

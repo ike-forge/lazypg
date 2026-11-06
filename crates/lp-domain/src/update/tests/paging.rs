@@ -72,7 +72,7 @@ fn paging_is_inert_without_more_elsewhere_and_while_a_page_is_in_flight() {
         );
 
         let mut elsewhere = contents_showing_more(3);
-        elsewhere.focus_on(Panel::Tables);
+        elsewhere.focus_on(Panel::Objects);
         assert!(
             press(&mut elsewhere, key).is_empty(),
             "{key:?} outside the grid"

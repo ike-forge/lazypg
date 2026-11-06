@@ -2,7 +2,7 @@ use crate::body::Marked;
 use lp_domain::commands::CommandsPanel;
 use lp_domain::connection::{Connection, ConnectionState, SchemaState};
 use lp_domain::contents::{SelectionMode, Subject, TableRef};
-use lp_domain::ddl::DdlTab;
+use lp_domain::ddl::StructureTab;
 use lp_domain::feedback::Flash;
 use lp_domain::geometry::Geometry;
 use lp_domain::grid::{BAR, COLUMN_SPACING};
@@ -361,7 +361,7 @@ fn ddl_rows(buffer: &Buffer) -> Vec<String> {
 
 fn listing(table: Table) -> State {
     let mut state = describing(table);
-    state.ddl.show(DdlTab::Columns);
+    state.ddl.show(StructureTab::Columns);
     state
 }
 

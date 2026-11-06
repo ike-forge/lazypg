@@ -69,16 +69,16 @@ fn each_panel_opens_its_title_with_the_key_that_focuses_it() {
     let buffer = draw(40, 12);
 
     for (panel, opening) in [
-        (Panel::Tables, "[1]-Tables"),
-        (Panel::Ddl, "[2]-DDL"),
+        (Panel::Objects, "[1]-Objects"),
+        (Panel::Structure, "[2]-DDL"),
         (Panel::Contents, "[3]-Table contents"),
         (Panel::Queries, "[4]-Queries"),
     ] {
         assert_eq!(
             top_border(&buffer, opening).1,
             match panel {
-                Panel::Tables | Panel::Contents => 0,
-                Panel::Ddl => 5,
+                Panel::Objects | Panel::Contents => 0,
+                Panel::Structure => 5,
                 Panel::Queries => 9,
             },
             "{panel:?} is not titled {opening:?} where the draft puts it"
