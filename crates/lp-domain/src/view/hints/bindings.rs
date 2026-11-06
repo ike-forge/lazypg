@@ -2,7 +2,7 @@ use super::{Binding, Stroke};
 use crate::contents::SelectionMode;
 use crate::model::Key;
 use crate::panel::Panel;
-use crate::queries::CqlMode;
+use crate::queries::SqlMode;
 use crate::state::State;
 
 pub(super) const ENTER: Stroke = Stroke::key(Key::Enter);
@@ -220,8 +220,8 @@ impl State {
         match self.focus() {
             Panel::Queries => match self.queries.mode() {
                 None => LOGS_HINTS,
-                Some(CqlMode::Browsing) => CQL_HINTS,
-                Some(CqlMode::Editing) => QUERIES_HINTS,
+                Some(SqlMode::Browsing) => CQL_HINTS,
+                Some(SqlMode::Editing) => QUERIES_HINTS,
             },
             Panel::Contents if self.contents.mode == SelectionMode::Column => CONTENTS_COLUMN_HINTS,
             Panel::Structure if crate::view::ddl_tabs(self).len() < 2 => DDL_ONE_TAB_HINTS,

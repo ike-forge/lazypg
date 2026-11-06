@@ -15,14 +15,14 @@ fn started(state: &mut State) -> Vec<Effect> {
     handle_key(state, KeyPress::new(Key::Char(' ')))
 }
 
-fn contents_showing_typed(cql: &str) -> State {
+fn contents_showing_typed(sql: &str) -> State {
     let mut state = connected(Posture::ReadOnly);
     state.geometry = Geometry::default().with_export_fits(true);
     state.focus_on(Panel::Contents);
     let query = QueryId::next();
     state.contents.requested(
         query,
-        Subject::Typed(cql.to_owned()),
+        Subject::Typed(sql.to_owned()),
         crate::model::Statement::typed("SELECT * FROM shop.orders"),
     );
     state.contents.page_ready(
@@ -321,8 +321,8 @@ fn a_second_ctrl_e_leaves_the_open_form_as_it_was() {
     assert_eq!(form_of(&state).stop(), crate::export::Stop::Path);
 }
 
-fn export_in_flight(cql: &str, destination: &str) -> State {
-    let mut state = contents_showing_typed(cql);
+fn export_in_flight(sql: &str, destination: &str) -> State {
+    let mut state = contents_showing_typed(sql);
     open_form(&mut state);
     if let Some(Overlay::Export(form)) = &mut state.overlay {
         *form.path_mut() = crate::export::Line::new(destination.to_owned());

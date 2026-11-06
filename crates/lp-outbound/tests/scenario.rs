@@ -527,7 +527,7 @@ async fn dropping_a_table_removes_it_from_the_tree() {
         cluster
             .executed()
             .iter()
-            .map(|stmt| stmt.cql.as_str())
+            .map(|stmt| stmt.sql.as_str())
             .collect::<Vec<_>>(),
         ["DROP TABLE \"shop\".\"orders\""],
         "the statement the confirmation named is the statement that ran"
@@ -599,7 +599,7 @@ async fn dropping_a_keyspace_takes_its_name_typed_back() {
         cluster
             .executed()
             .iter()
-            .map(|stmt| stmt.cql.as_str())
+            .map(|stmt| stmt.sql.as_str())
             .collect::<Vec<_>>(),
         ["DROP KEYSPACE \"billing\""]
     );
@@ -654,7 +654,7 @@ async fn deleting_the_selected_rows_re_reads_the_grid() {
     let ran: Vec<String> = cluster
         .executed()
         .iter()
-        .map(|stmt| stmt.cql.clone())
+        .map(|stmt| stmt.sql.clone())
         .collect();
     assert_eq!(
         ran.len(),

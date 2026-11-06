@@ -105,7 +105,7 @@ fn an_empty_buffer_draws_no_band() {
 
 fn completing(text: &str) -> State {
     let mut state = with_query(text, Panel::Queries);
-    let completion = lp_domain::cql::suggest(state.queries.buffer(), None, None);
+    let completion = lp_domain::sql::suggest(state.queries.buffer(), None, None);
     state.queries.offer(completion);
     state
 }

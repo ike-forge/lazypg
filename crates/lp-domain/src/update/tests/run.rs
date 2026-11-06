@@ -317,7 +317,7 @@ fn a_typed_write_is_refused_on_a_read_only_connection() {
 
 #[test]
 fn every_mutating_statement_typed_by_hand_is_refused_and_says_why() {
-    for cql in [
+    for sql in [
         "INSERT INTO shop.orders (id) VALUES (1)",
         "UPDATE shop.orders SET total = 1 WHERE id = 1",
         "DELETE FROM shop.orders WHERE id = 1",
@@ -332,32 +332,32 @@ fn every_mutating_statement_typed_by_hand_is_refused_and_says_why() {
         "-- innocent\nDROP KEYSPACE shop",
         "SELECT * FROM shop.orders; DROP TABLE shop.orders",
     ] {
-        let mut state = editing(cql);
+        let mut state = editing(sql);
 
         let effects = run_query(&mut state);
 
-        assert!(effects.is_empty(), "{cql} reached the cluster");
+        assert!(effects.is_empty(), "{sql} reached the cluster");
         assert!(
             matches!(&state.overlay, Some(Overlay::Message(message))
                 if message.title == "Read-only connection"),
-            "{cql} was refused without saying why"
+            "{sql} was refused without saying why"
         );
     }
 }
 
 #[test]
 fn a_read_typed_by_hand_raises_no_refusal() {
-    for cql in [
+    for sql in [
         "SELECT * FROM shop.orders",
         "-- a note\nSELECT * FROM shop.orders",
         "SELECT * FROM shop.orders WHERE note = '; DROP TABLE x'",
     ] {
-        let mut state = editing(cql);
+        let mut state = editing(sql);
 
         let effects = run_query(&mut state);
 
-        assert!(!effects.is_empty(), "{cql} should have run");
-        assert!(state.overlay.is_none(), "{cql} was refused");
+        assert!(!effects.is_empty(), "{sql} should have run");
+        assert!(state.overlay.is_none(), "{sql} was refused");
     }
 }
 

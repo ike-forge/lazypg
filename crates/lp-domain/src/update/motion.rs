@@ -7,7 +7,7 @@ use crate::geometry::Geometry;
 use crate::grid::{self, ColumnScroll};
 use crate::overlay::Overlay;
 use crate::panel::Panel;
-use crate::queries::{CqlMode, QueriesTab};
+use crate::queries::{QueriesTab, SqlMode};
 use crate::state::State;
 use crate::viewport::{Cursor, Scroll};
 use std::borrow::Cow;
@@ -36,7 +36,7 @@ pub(super) fn scroll(state: &mut State, motion: Motion) {
 
     // The band walks statements only while the buffer is closed; an open one
     // claims these keys first.
-    if panel == Panel::Queries && state.queries.mode() == Some(CqlMode::Browsing) {
+    if panel == Panel::Queries && state.queries.mode() == Some(SqlMode::Browsing) {
         step_statement(state, motion);
         return;
     }
@@ -76,7 +76,7 @@ pub(super) fn row_count(state: &State, panel: Panel) -> usize {
         Panel::Structure => crate::view::ddl_rows(state),
         Panel::Contents => state.contents.row_count(),
         Panel::Queries => match state.queries.tab() {
-            QueriesTab::Cql => 0,
+            QueriesTab::Sql => 0,
             QueriesTab::Logs => state.log.len(),
         },
     }
@@ -89,7 +89,7 @@ pub(super) fn panel_cursor(state: &mut State, panel: Panel) -> Option<&mut Curso
         Panel::Structure => Some(&mut state.ddl.cursor),
         Panel::Contents => Some(&mut state.contents.cursor),
         Panel::Queries => match state.queries.tab() {
-            QueriesTab::Cql => None,
+            QueriesTab::Sql => None,
             QueriesTab::Logs => Some(&mut state.log.cursor),
         },
     }
@@ -238,7 +238,7 @@ pub(super) fn panel_scroll(state: &mut State, panel: Panel) -> Option<&mut Scrol
         Panel::Contents => Some(&mut state.contents.scroll),
         Panel::Structure => Some(&mut state.ddl.scroll),
         Panel::Queries => match state.queries.tab() {
-            QueriesTab::Cql => None,
+            QueriesTab::Sql => None,
             QueriesTab::Logs => Some(&mut state.log.scroll),
         },
     }
@@ -249,7 +249,7 @@ pub(super) fn scroll_len(state: &State, panel: Panel) -> usize {
         Panel::Structure => state.geometry.ddl_lines(),
         Panel::Objects | Panel::Contents => row_count(state, panel),
         Panel::Queries => match state.queries.tab() {
-            QueriesTab::Cql => 0,
+            QueriesTab::Sql => 0,
             QueriesTab::Logs => state.geometry.log_lines(),
         },
     }
@@ -261,7 +261,7 @@ pub(super) fn cursor_index(state: &State, panel: Panel) -> usize {
         Panel::Structure => state.ddl.cursor.index(),
         Panel::Contents => state.contents.cursor.index(),
         Panel::Queries => match state.queries.tab() {
-            QueriesTab::Cql => 0,
+            QueriesTab::Sql => 0,
             QueriesTab::Logs => state.log.cursor.index(),
         },
     }

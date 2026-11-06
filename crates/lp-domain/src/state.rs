@@ -87,7 +87,7 @@ impl State {
             // The panel's unfocused height follows its buffer, so Logs must not
             // stay drawn unfocused.
             Panel::Queries => {
-                self.show_queries_tab(QueriesTab::Cql);
+                self.show_queries_tab(QueriesTab::Sql);
                 self.queries.stop_editing();
             }
         }

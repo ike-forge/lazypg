@@ -5,7 +5,7 @@ use std::fmt::Write as _;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Statement {
-    pub cql: String,
+    pub sql: String,
     pub kind: StatementKind,
 }
 
@@ -44,13 +44,13 @@ impl Statement {
     #[must_use]
     pub fn select_all(schema: &str, table: &str, key: &[String]) -> Self {
         let ident = crate::create::ident;
-        let mut cql = format!("SELECT * FROM {}.{}", ident(schema), ident(table));
+        let mut sql = format!("SELECT * FROM {}.{}", ident(schema), ident(table));
         if !key.is_empty() {
             let columns: Vec<String> = key.iter().map(|column| ident(column)).collect();
-            cql = format!("{cql} ORDER BY {}", columns.join(", "));
+            sql = format!("{sql} ORDER BY {}", columns.join(", "));
         }
         Self {
-            cql,
+            sql,
             kind: StatementKind::Read,
         }
     }
@@ -60,7 +60,7 @@ impl Statement {
     #[must_use]
     pub fn drop_table(keyspace: &str, table: &str) -> Self {
         Self {
-            cql: format!("DROP TABLE {}.{}", quoted(keyspace), quoted(table)),
+            sql: format!("DROP TABLE {}.{}", quoted(keyspace), quoted(table)),
             kind: StatementKind::Destructive,
         }
     }
@@ -68,7 +68,7 @@ impl Statement {
     #[must_use]
     pub fn drop_keyspace(keyspace: &str) -> Self {
         Self {
-            cql: format!("DROP KEYSPACE {}", quoted(keyspace)),
+            sql: format!("DROP KEYSPACE {}", quoted(keyspace)),
             kind: StatementKind::Destructive,
         }
     }
@@ -79,7 +79,7 @@ impl Statement {
     #[must_use]
     pub fn delete_row(keyspace: &str, table: &str, key: &[(String, String)]) -> Self {
         Self {
-            cql: format!(
+            sql: format!(
                 "DELETE FROM {}.{} WHERE {}",
                 quoted(keyspace),
                 quoted(table),
@@ -97,20 +97,20 @@ impl Statement {
             return Self::delete_row(keyspace, table, only);
         }
 
-        let mut cql = "BEGIN BATCH\n".to_owned();
+        let mut sql = "BEGIN BATCH\n".to_owned();
         for key in keys {
             let _ = writeln!(
-                cql,
+                sql,
                 "  DELETE FROM {}.{} WHERE {};",
                 quoted(keyspace),
                 quoted(table),
                 restriction(key)
             );
         }
-        cql.push_str("APPLY BATCH");
+        sql.push_str("APPLY BATCH");
 
         Self {
-            cql,
+            sql,
             kind: StatementKind::Write,
         }
     }
@@ -124,7 +124,7 @@ impl Statement {
         key: &[(String, String)],
     ) -> Self {
         Self {
-            cql: format!(
+            sql: format!(
                 "UPDATE {}.{} SET {} WHERE {}",
                 quoted(keyspace),
                 quoted(table),
@@ -142,7 +142,7 @@ impl Statement {
         let literals: Vec<&str> = values.iter().map(|(_, literal)| literal.as_str()).collect();
 
         Self {
-            cql: format!(
+            sql: format!(
                 "INSERT INTO {}.{} ({}) VALUES ({})",
                 quoted(keyspace),
                 quoted(table),
@@ -161,10 +161,10 @@ impl Statement {
             return Self::update_row(keyspace, table, sets, key);
         }
 
-        let mut cql = "BEGIN BATCH\n".to_owned();
+        let mut sql = "BEGIN BATCH\n".to_owned();
         for (sets, key) in rows {
             let _ = writeln!(
-                cql,
+                sql,
                 "  UPDATE {}.{} SET {} WHERE {};",
                 quoted(keyspace),
                 quoted(table),
@@ -172,10 +172,10 @@ impl Statement {
                 restriction(key)
             );
         }
-        cql.push_str("APPLY BATCH");
+        sql.push_str("APPLY BATCH");
 
         Self {
-            cql,
+            sql,
             kind: StatementKind::Write,
         }
     }
@@ -183,10 +183,10 @@ impl Statement {
     /// Every statement in the buffer is classified and the most restricted
     /// wins, so a `SELECT` ahead of a `DROP` cannot launder it.
     #[must_use]
-    pub fn typed(cql: &str) -> Self {
+    pub fn typed(sql: &str) -> Self {
         Self {
-            cql: cql.to_owned(),
-            kind: kind_of(cql),
+            sql: sql.to_owned(),
+            kind: kind_of(sql),
         }
     }
 }
@@ -244,8 +244,8 @@ const fn severity(kind: StatementKind) -> u8 {
 }
 
 /// An empty buffer classifies as `Write`, like an unknown verb.
-fn kind_of(cql: &str) -> StatementKind {
-    crate::cql::opening_words(cql)
+fn kind_of(sql: &str) -> StatementKind {
+    crate::sql::opening_words(sql)
         .iter()
         .map(|verb| kind_of_verb(verb))
         .max_by_key(|kind| severity(*kind))
@@ -259,7 +259,7 @@ mod tests {
     #[test]
     fn selecting_a_table_quotes_only_what_postgres_would_fold_and_orders_by_its_key() {
         assert_eq!(
-            Statement::select_all("shop", "orders", &[]).cql,
+            Statement::select_all("shop", "orders", &[]).sql,
             "SELECT * FROM shop.orders"
         );
         assert_eq!(
@@ -268,7 +268,7 @@ mod tests {
                 "Mixed Case",
                 &["Id".to_owned(), "line".to_owned()]
             )
-            .cql,
+            .sql,
             "SELECT * FROM \"Edge Cases\".\"Mixed Case\" ORDER BY \"Id\", line"
         );
     }
@@ -277,7 +277,7 @@ mod tests {
     fn a_name_that_is_not_all_lower_case_survives_the_round_trip() {
         // Unquoted, Postgres would fold this to `myks`.
         assert_eq!(
-            Statement::select_all("MyKs", "Orders", &[]).cql,
+            Statement::select_all("MyKs", "Orders", &[]).sql,
             "SELECT * FROM \"MyKs\".\"Orders\""
         );
     }
@@ -311,11 +311,11 @@ mod tests {
 
     #[test]
     fn dropping_and_truncating_are_destructive() {
-        for cql in ["DROP TABLE shop.orders", "truncate shop.orders"] {
+        for sql in ["DROP TABLE shop.orders", "truncate shop.orders"] {
             assert_eq!(
-                Statement::typed(cql).kind,
+                Statement::typed(sql).kind,
                 StatementKind::Destructive,
-                "{cql} must not reach the cluster without confirmation"
+                "{sql} must not reach the cluster without confirmation"
             );
         }
     }
@@ -340,18 +340,18 @@ mod tests {
 
     #[test]
     fn a_leading_comment_does_not_hide_the_verb() {
-        for cql in [
+        for sql in [
             "-- what this does\nSELECT * FROM shop.orders",
             "// what this does\nSELECT * FROM shop.orders",
             "/* what this does */ SELECT * FROM shop.orders",
         ] {
-            assert_eq!(Statement::typed(cql).kind, StatementKind::Read, "{cql}");
+            assert_eq!(Statement::typed(sql).kind, StatementKind::Read, "{sql}");
         }
     }
 
     #[test]
     fn reading_the_schema_and_the_session_is_not_a_mutation() {
-        for cql in [
+        for sql in [
             "USE shop",
             "DESCRIBE TABLES",
             "desc keyspace shop",
@@ -359,27 +359,27 @@ mod tests {
             "LIST ALL PERMISSIONS",
         ] {
             assert!(
-                !Statement::typed(cql).mutates(),
-                "{cql} changes nothing and a read-only connection may run it"
+                !Statement::typed(sql).mutates(),
+                "{sql} changes nothing and a read-only connection may run it"
             );
         }
     }
 
     #[test]
     fn every_verb_that_writes_rows_is_a_write() {
-        for cql in [
+        for sql in [
             "INSERT INTO shop.orders (id) VALUES (1)",
             "UPDATE shop.orders SET total = 1 WHERE id = 1",
             "DELETE FROM shop.orders WHERE id = 1",
             "BEGIN BATCH INSERT INTO shop.orders (id) VALUES (1); APPLY BATCH",
         ] {
-            assert_eq!(Statement::typed(cql).kind, StatementKind::Write, "{cql}");
+            assert_eq!(Statement::typed(sql).kind, StatementKind::Write, "{sql}");
         }
     }
 
     #[test]
     fn every_verb_that_changes_schema_or_permissions_is_a_schema_change() {
-        for cql in [
+        for sql in [
             "CREATE TABLE shop.orders (id int PRIMARY KEY)",
             "CREATE KEYSPACE shop WITH replication = {}",
             "CREATE INDEX ON shop.orders (total)",
@@ -390,13 +390,13 @@ mod tests {
             "GRANT SELECT ON KEYSPACE shop TO reader",
             "REVOKE MODIFY ON KEYSPACE shop FROM reader",
         ] {
-            assert_eq!(Statement::typed(cql).kind, StatementKind::Catalog, "{cql}");
+            assert_eq!(Statement::typed(sql).kind, StatementKind::Catalog, "{sql}");
         }
     }
 
     #[test]
     fn every_verb_that_removes_something_is_destructive() {
-        for cql in [
+        for sql in [
             "DROP TABLE shop.orders",
             "DROP KEYSPACE shop",
             "DROP INDEX shop.orders_total",
@@ -407,9 +407,9 @@ mod tests {
             "TRUNCATE TABLE shop.orders",
         ] {
             assert_eq!(
-                Statement::typed(cql).kind,
+                Statement::typed(sql).kind,
                 StatementKind::Destructive,
-                "{cql} must not reach the cluster without confirmation"
+                "{sql} must not reach the cluster without confirmation"
             );
         }
     }
@@ -448,8 +448,8 @@ mod tests {
 
     #[test]
     fn the_cql_is_kept_verbatim() {
-        let cql = "SELECT *\nFROM shop.orders";
-        assert_eq!(Statement::typed(cql).cql, cql);
+        let sql = "SELECT *\nFROM shop.orders";
+        assert_eq!(Statement::typed(sql).sql, sql);
     }
 
     #[test]
@@ -464,7 +464,7 @@ mod tests {
         );
 
         assert_eq!(
-            stmt.cql,
+            stmt.sql,
             "INSERT INTO \"My\"\"Ks\".\"orders\" (\"id\", \"note\") VALUES (7, 'x')"
         );
         assert_eq!(stmt.kind, StatementKind::Write);
@@ -474,11 +474,11 @@ mod tests {
     #[test]
     fn dropping_quotes_the_names_and_is_destructive() {
         let table = Statement::drop_table("MyKs", "Orders");
-        assert_eq!(table.cql, "DROP TABLE \"MyKs\".\"Orders\"");
+        assert_eq!(table.sql, "DROP TABLE \"MyKs\".\"Orders\"");
         assert_eq!(table.kind, StatementKind::Destructive);
 
         let keyspace = Statement::drop_keyspace("MyKs");
-        assert_eq!(keyspace.cql, "DROP KEYSPACE \"MyKs\"");
+        assert_eq!(keyspace.sql, "DROP KEYSPACE \"MyKs\"");
         assert_eq!(keyspace.kind, StatementKind::Destructive);
     }
 
@@ -492,9 +492,9 @@ mod tests {
         ] {
             assert_eq!(
                 built.kind,
-                Statement::typed(&built.cql).kind,
+                Statement::typed(&built.sql).kind,
                 "{} classifies two ways",
-                built.cql
+                built.sql
             );
         }
     }
@@ -519,7 +519,7 @@ mod tests {
                 ],
                 &key()
             )
-            .cql,
+            .sql,
             "UPDATE \"shop\".\"orders\" SET \"note\" = 'o''hara', \"qty\" = 7 \
              WHERE \"id\" = 8f14e45f"
         );
@@ -528,8 +528,8 @@ mod tests {
     #[test]
     fn one_updated_row_is_a_statement_and_several_are_a_batch() {
         assert_eq!(
-            Statement::update_rows("shop", "orders", &[(sets(), key())]).cql,
-            Statement::update_row("shop", "orders", &sets(), &key()).cql
+            Statement::update_rows("shop", "orders", &[(sets(), key())]).sql,
+            Statement::update_row("shop", "orders", &sets(), &key()).sql
         );
 
         let two = vec![
@@ -540,7 +540,7 @@ mod tests {
             ),
         ];
         assert_eq!(
-            Statement::update_rows("shop", "orders", &two).cql,
+            Statement::update_rows("shop", "orders", &two).sql,
             "BEGIN BATCH\n  \
              UPDATE \"shop\".\"orders\" SET \"note\" = 'x' WHERE \"id\" = 8f14e45f;\n  \
              UPDATE \"shop\".\"orders\" SET \"qty\" = 7 WHERE \"id\" = c9f0f895;\n\
@@ -567,7 +567,7 @@ mod tests {
                     ("placed".to_owned(), "'2026-01-01'".to_owned()),
                 ]
             )
-            .cql,
+            .sql,
             "DELETE FROM \"shop\".\"orders\" WHERE \"id\" = 8f14e45f AND \"placed\" = '2026-01-01'"
         );
     }
@@ -583,14 +583,14 @@ mod tests {
     #[test]
     fn one_key_is_a_statement_and_several_are_a_batch() {
         assert_eq!(
-            Statement::delete_rows("shop", "orders", &[key()]).cql,
-            Statement::delete_row("shop", "orders", &key()).cql,
+            Statement::delete_rows("shop", "orders", &[key()]).sql,
+            Statement::delete_row("shop", "orders", &key()).sql,
             "a batch of one is a batch the user has to read past"
         );
 
         let two = vec![key(), vec![("id".to_owned(), "c9f0f895".to_owned())]];
         assert_eq!(
-            Statement::delete_rows("shop", "orders", &two).cql,
+            Statement::delete_rows("shop", "orders", &two).sql,
             "BEGIN BATCH\n  \
              DELETE FROM \"shop\".\"orders\" WHERE \"id\" = 8f14e45f;\n  \
              DELETE FROM \"shop\".\"orders\" WHERE \"id\" = c9f0f895;\n\

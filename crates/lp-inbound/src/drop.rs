@@ -63,14 +63,14 @@ fn width(view: &DropView, frame_width: u16) -> u16 {
 /// The last line is kept: a batch without `APPLY BATCH` is not a statement.
 /// Only `DELETE` lines are elided, so the count reads as rows.
 fn statement(view: &DropView) -> Vec<String> {
-    if view.cql.len() <= MAX_CQL_LINES {
-        return view.cql.clone();
+    if view.sql.len() <= MAX_CQL_LINES {
+        return view.sql.clone();
     }
 
     let head = MAX_CQL_LINES - 2;
-    let mut lines: Vec<String> = view.cql.iter().take(head).cloned().collect();
-    lines.push(format!("  … and {} more", view.cql.len() - head - 1));
-    lines.extend(view.cql.last().cloned());
+    let mut lines: Vec<String> = view.sql.iter().take(head).cloned().collect();
+    lines.push(format!("  … and {} more", view.sql.len() - head - 1));
+    lines.extend(view.sql.last().cloned());
 
     lines
 }
@@ -107,9 +107,9 @@ pub(crate) fn render(
         return None;
     }
 
-    let cql = statement(view);
+    let sql = statement(view);
     let height = CHROME_HEIGHT
-        + u16::try_from(cql.len()).unwrap_or(u16::MAX)
+        + u16::try_from(sql.len()).unwrap_or(u16::MAX)
         + if view.typed.is_some() { TYPED_EXTRA } else { 0 };
     let area = centred(frame.area(), width(view, frame.area().width), height)?;
 
@@ -126,7 +126,7 @@ pub(crate) fn render(
 
     let mut lines = vec![TextLine::default()];
     lines.extend(
-        cql.iter()
+        sql.iter()
             .map(|line| TextLine::from(Span::styled(line.clone(), theme.style(Token::Keyword)))),
     );
     lines.push(TextLine::default());

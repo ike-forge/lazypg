@@ -161,7 +161,7 @@ fn panel_bar(state: &State) -> HintBar {
         panel.push(rendered(&COMMIT_HINT));
     }
     if state.focus() == Panel::Queries
-        && state.queries.tab() == QueriesTab::Cql
+        && state.queries.tab() == QueriesTab::Sql
         && !state.history().is_empty()
         && state.geometry.history_rows() > 0
     {
@@ -318,12 +318,12 @@ fn live(state: &State, binding: &Binding) -> bool {
     match *binding {
         // Follows the statement as typed: the same key runs a `SELECT` and is
         // refused a `DELETE`.
-        RUN => state.queries.statement().is_some_and(|cql| {
-            state.posture().permits_mutation() || !Statement::typed(&cql).mutates()
+        RUN => state.queries.statement().is_some_and(|sql| {
+            state.posture().permits_mutation() || !Statement::typed(&sql).mutates()
         }),
         FORMAT => {
             let text = state.queries.text();
-            crate::cql::format(&text) != text
+            crate::sql::format(&text) != text
         }
         NEXT_PAGE | EVERY_PAGE => state.contents.can_fetch(),
         EXPORT_ROWS => state.contents.row_count() > 0 && state.geometry.export_fits(),

@@ -6,7 +6,6 @@ use crate::commit::Discard;
 use crate::config::{Config, ConnectionConfig, ConnectionName, Diagnostic, DriverConfig, PageSize};
 use crate::connection::ConnectionState;
 use crate::contents::TableRef;
-use crate::cql;
 use crate::export::{Destination, Exported, Format};
 use crate::feedback::{Flash, Toast};
 use crate::geometry::Geometry;
@@ -20,6 +19,7 @@ use crate::pointer::Pointer;
 use crate::ports::ExportError;
 use crate::posture::Posture;
 use crate::search::Search;
+use crate::sql;
 use crate::state::State;
 use crate::style::Severity;
 use crate::theme::ThemeChoice;
@@ -478,7 +478,7 @@ fn sentence(text: impl Into<String>) -> LogSubject {
 
 /// Token-based: whitespace collapses only between tokens, and comments drop.
 fn statement_subject(stmt: &Statement) -> LogSubject {
-    LogSubject::Statement(cql::issued(&stmt.cql))
+    LogSubject::Statement(sql::issued(&stmt.sql))
 }
 
 /// Unwinds the overlay first: replacing a live prompt or theme picker outright

@@ -93,7 +93,7 @@ fn current_conn(state: &State) -> ConnId {
 
 fn statement(kind: StatementKind) -> Statement {
     Statement {
-        cql: "SELECT * FROM ks.t".to_owned(),
+        sql: "SELECT * FROM ks.t".to_owned(),
         kind,
     }
 }
@@ -533,7 +533,7 @@ fn grid_over(
 
 fn deleted_cql(effects: &[Effect]) -> Option<String> {
     effects.iter().find_map(|effect| match effect {
-        Effect::Execute { stmt, .. } | Effect::ExecutePaged { stmt, .. } => Some(stmt.cql.clone()),
+        Effect::Execute { stmt, .. } | Effect::ExecutePaged { stmt, .. } => Some(stmt.sql.clone()),
         _ => None,
     })
 }

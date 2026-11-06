@@ -36,8 +36,8 @@ fn a_stated_column_width_is_the_grids_cap() {
     assert_eq!(state.contents.loaded().expect("a page").widths(), [40]);
 }
 
-fn statement_subject_from(cql: &str) -> LogSubject {
-    statement_subject(&Statement::typed(cql))
+fn statement_subject_from(sql: &str) -> LogSubject {
+    statement_subject(&Statement::typed(sql))
 }
 
 fn executed_query(effects: &[Effect]) -> QueryId {

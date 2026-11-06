@@ -76,7 +76,7 @@ impl CommitPrompt {
     /// since a misread scan could rewrite a literal.
     #[must_use]
     pub fn lines(&self) -> Vec<Vec<Segment>> {
-        crate::cql::highlight(&crate::cql::format(&self.statement.cql))
+        crate::sql::highlight(&crate::sql::format(&self.statement.sql))
     }
 
     #[must_use]

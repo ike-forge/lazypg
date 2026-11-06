@@ -6,7 +6,7 @@
 use std::collections::BTreeMap;
 
 use crate::config::{ConnectionName, HistoryLimit};
-use crate::cql::fold;
+use crate::sql::fold;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct History {

@@ -7,7 +7,7 @@ fn leaving_the_panel_puts_the_buffer_back() {
     press(&mut state, Key::Char('1'));
 
     assert_eq!(state.focus(), Panel::Objects);
-    assert_eq!(state.queries.tab(), QueriesTab::Cql);
+    assert_eq!(state.queries.tab(), QueriesTab::Sql);
 }
 
 #[test]
@@ -118,7 +118,7 @@ fn yanking_the_trail_lights_the_entries_it_took() {
 #[test]
 fn y_on_the_cql_tab_yanks_nothing() {
     let mut state = trail_of(&["SELECT one"]);
-    state.queries.show(QueriesTab::Cql);
+    state.queries.show(QueriesTab::Sql);
 
     assert!(press(&mut state, Key::Char('y')).is_empty());
     assert!(press(&mut state, Key::Char('Y')).is_empty());

@@ -449,7 +449,7 @@ fn fold(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cql::lex::pieces;
+    use crate::sql::lex::pieces;
 
     fn roles(text: &str) -> Vec<(String, Option<Role>)> {
         let scanned = pieces(text);

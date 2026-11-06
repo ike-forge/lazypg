@@ -1,9 +1,9 @@
 //! The Queries panel: the buffer and the completion popup, which must move
 //! together. [`Editor`] knows no schema.
 
-use crate::cql::{Completion, Span, statements};
 use crate::editor::{Editor, Position};
 use crate::model::Key;
+use crate::sql::{Completion, Span, statements};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Refresh {
@@ -24,33 +24,33 @@ pub struct Highlight {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum QueriesTab {
     #[default]
-    Cql,
+    Sql,
     Logs,
 }
 
 impl QueriesTab {
-    pub const ALL: [Self; 2] = [Self::Cql, Self::Logs];
+    pub const ALL: [Self; 2] = [Self::Sql, Self::Logs];
 
     #[must_use]
     pub const fn next(self) -> Self {
         match self {
-            Self::Cql => Self::Logs,
-            Self::Logs => Self::Cql,
+            Self::Sql => Self::Logs,
+            Self::Logs => Self::Sql,
         }
     }
 
     #[must_use]
     pub const fn previous(self) -> Self {
         match self {
-            Self::Cql => Self::Logs,
-            Self::Logs => Self::Cql,
+            Self::Sql => Self::Logs,
+            Self::Logs => Self::Sql,
         }
     }
 
     #[must_use]
     pub const fn label(self) -> &'static str {
         match self {
-            Self::Cql => "Queries",
+            Self::Sql => "Queries",
             Self::Logs => "Logs",
         }
     }
@@ -65,7 +65,7 @@ impl QueriesTab {
     #[must_use]
     pub const fn number(self) -> char {
         match self {
-            Self::Cql => '4',
+            Self::Sql => '4',
             Self::Logs => '5',
         }
     }
@@ -79,7 +79,7 @@ impl QueriesTab {
 /// `4` and a click arrive editing; `Tab` and `Esc` leave the tab browsing,
 /// where global keys keep their meaning.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum CqlMode {
+pub enum SqlMode {
     #[default]
     Browsing,
     Editing,
@@ -88,13 +88,13 @@ pub enum CqlMode {
 /// An editing Logs tab is unrepresentable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Shown {
-    Cql(CqlMode),
+    Sql(SqlMode),
     Logs,
 }
 
 impl Default for Shown {
     fn default() -> Self {
-        Self::Cql(CqlMode::default())
+        Self::Sql(SqlMode::default())
     }
 }
 
@@ -114,22 +114,22 @@ impl QueriesPanel {
     #[must_use]
     pub const fn tab(&self) -> QueriesTab {
         match self.shown {
-            Shown::Cql(_) => QueriesTab::Cql,
+            Shown::Sql(_) => QueriesTab::Sql,
             Shown::Logs => QueriesTab::Logs,
         }
     }
 
     #[must_use]
-    pub const fn mode(&self) -> Option<CqlMode> {
+    pub const fn mode(&self) -> Option<SqlMode> {
         match self.shown {
-            Shown::Cql(mode) => Some(mode),
+            Shown::Sql(mode) => Some(mode),
             Shown::Logs => None,
         }
     }
 
     #[must_use]
     pub const fn is_editing(&self) -> bool {
-        matches!(self.shown, Shown::Cql(CqlMode::Editing))
+        matches!(self.shown, Shown::Sql(SqlMode::Editing))
     }
 
     /// Re-showing the drawn tab keeps an open buffer open.
@@ -140,21 +140,21 @@ impl QueriesPanel {
 
         self.stop_editing();
         self.shown = match tab {
-            QueriesTab::Cql => Shown::Cql(CqlMode::Browsing),
+            QueriesTab::Sql => Shown::Sql(SqlMode::Browsing),
             QueriesTab::Logs => Shown::Logs,
         };
     }
 
     pub fn start_editing(&mut self) {
-        if let Shown::Cql(mode) = &mut self.shown {
-            *mode = CqlMode::Editing;
+        if let Shown::Sql(mode) = &mut self.shown {
+            *mode = SqlMode::Editing;
         }
     }
 
     /// The popup goes too: its caret is no longer drawn.
     pub fn stop_editing(&mut self) {
-        if let Shown::Cql(mode) = &mut self.shown {
-            *mode = CqlMode::Browsing;
+        if let Shown::Sql(mode) = &mut self.shown {
+            *mode = SqlMode::Browsing;
         }
         self.completion = None;
     }
@@ -251,7 +251,7 @@ impl QueriesPanel {
 
     /// `false` when nothing changed, so the press costs no frame.
     pub fn format(&mut self) -> bool {
-        let laid_out = crate::cql::format(&self.buffer.text());
+        let laid_out = crate::sql::format(&self.buffer.text());
         if laid_out == self.buffer.text() {
             return false;
         }
@@ -359,8 +359,8 @@ fn holding(spans: &[Span], offset: usize) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cql::suggest;
     use crate::model::Catalog;
+    use crate::sql::suggest;
     use crate::tree::tests_support::schema_of;
 
     fn schema() -> Catalog {
@@ -369,7 +369,7 @@ mod tests {
 
     #[test]
     fn a_panel_opens_on_the_buffer_rather_than_the_trail() {
-        assert_eq!(QueriesPanel::default().tab(), QueriesTab::Cql);
+        assert_eq!(QueriesPanel::default().tab(), QueriesTab::Sql);
     }
 
     #[test]
@@ -392,7 +392,7 @@ mod tests {
     fn a_panel_opens_browsing_and_claims_no_key_until_opened() {
         let mut panel = QueriesPanel::default();
 
-        assert_eq!(panel.mode(), Some(CqlMode::Browsing));
+        assert_eq!(panel.mode(), Some(SqlMode::Browsing));
         assert_eq!(panel.edit(Key::Char('4'), 1), None);
         assert_eq!(panel.text(), "");
 
@@ -419,9 +419,9 @@ mod tests {
         panel.start_editing();
 
         panel.show(QueriesTab::Logs);
-        panel.show(QueriesTab::Cql);
+        panel.show(QueriesTab::Sql);
 
-        assert_eq!(panel.mode(), Some(CqlMode::Browsing));
+        assert_eq!(panel.mode(), Some(SqlMode::Browsing));
     }
 
     #[test]
@@ -429,7 +429,7 @@ mod tests {
         let mut panel = QueriesPanel::default();
         panel.start_editing();
 
-        panel.show(QueriesTab::Cql);
+        panel.show(QueriesTab::Sql);
 
         assert!(panel.is_editing());
     }

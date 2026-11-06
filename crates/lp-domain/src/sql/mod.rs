@@ -21,8 +21,8 @@ use resolve::resolve;
 
 /// Statements are the same exactly when their folds are equal.
 #[must_use]
-pub fn fold(cql: &str) -> String {
-    lex::pieces(cql)
+pub fn fold(sql: &str) -> String {
+    lex::pieces(sql)
         .into_iter()
         .map(|piece| match piece.kind {
             Kind::Keyword => piece.text.to_lowercase(),
@@ -36,8 +36,8 @@ pub fn fold(cql: &str) -> String {
 /// while the buffer names several, and an `INSERT`'s table is not where rows
 /// came from.
 #[must_use]
-pub fn sole_table(cql: &str) -> Option<Name> {
-    let scanned = lex::pieces(cql);
+pub fn sole_table(sql: &str) -> Option<Name> {
+    let scanned = lex::pieces(sql);
     let analysis = resolve(&scanned);
 
     if analysis.statements() != 1 || analysis.statement_at(0) != Statement::Select {
@@ -339,8 +339,8 @@ mod tests {
         assert_eq!(sole_table(""), None);
     }
 
-    fn statements_in(cql: &str) -> usize {
-        resolve(&lex::pieces(cql)).statements()
+    fn statements_in(sql: &str) -> usize {
+        resolve(&lex::pieces(sql)).statements()
     }
 
     /// A bare identifier reaches neither `keyword()` nor `record()`.

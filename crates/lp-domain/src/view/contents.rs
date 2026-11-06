@@ -166,7 +166,7 @@ fn named(base: &str, subject: &Subject, count: Option<String>) -> Vec<Segment> {
 
     match subject {
         Subject::Table(table) => segments.extend(table.segments()),
-        Subject::Typed(cql) => segments.extend(crate::cql::issued(cql)),
+        Subject::Typed(sql) => segments.extend(crate::sql::issued(sql)),
     }
 
     if let Some(count) = count {
@@ -433,8 +433,8 @@ fn fitted(name: &str, width: usize) -> String {
 fn grid_table(state: &State, subject: &Subject) -> Option<TableRef> {
     match subject {
         Subject::Table(table) => Some(table.clone()),
-        Subject::Typed(cql) => {
-            let name = crate::cql::sole_table(cql)?;
+        Subject::Typed(sql) => {
+            let name = crate::sql::sole_table(sql)?;
 
             Some(TableRef {
                 keyspace: name.keyspace.clone().or_else(|| state.visible_keyspace())?,
@@ -499,7 +499,7 @@ mod tests {
 
     /// `shop` holds `orders` (`id` partition, `total` regular) and `customers`
     /// (`id` partition).
-    fn showing_typed(cql: &str, page: Page) -> State {
+    fn showing_typed(sql: &str, page: Page) -> State {
         let mut state = tabled(&[("shop", &["orders", "customers"])]);
         let mut schema = state.schema().cloned().expect("loaded");
         let orders = schema
@@ -523,7 +523,7 @@ mod tests {
         let query = QueryId::next();
         state.contents.requested(
             query,
-            Subject::Typed(cql.to_owned()),
+            Subject::Typed(sql.to_owned()),
             crate::model::Statement::typed("SELECT * FROM shop.orders"),
         );
         state.contents.page_ready(
@@ -535,12 +535,12 @@ mod tests {
         state
     }
 
-    fn showing_typed_in(keyspace: &str, cql: &str, page: Page) -> State {
+    fn showing_typed_in(keyspace: &str, sql: &str, page: Page) -> State {
         let mut state = tabled(&[(keyspace, &["orders"])]);
         let query = QueryId::next();
         state.contents.requested(
             query,
-            Subject::Typed(cql.to_owned()),
+            Subject::Typed(sql.to_owned()),
             crate::model::Statement::typed("SELECT * FROM shop.orders"),
         );
         state.contents.page_ready(
@@ -638,7 +638,7 @@ mod tests {
         );
 
         let mut expected = vec![Segment::plain("Table contents — ")];
-        expected.extend(crate::cql::issued("SELECT * FROM shop.orders"));
+        expected.extend(crate::sql::issued("SELECT * FROM shop.orders"));
         assert_eq!(title_segments(&state), expected);
         assert!(
             expected

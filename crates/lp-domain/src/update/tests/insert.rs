@@ -187,7 +187,7 @@ fn an_empty_string_is_written_as_one() {
     press(&mut state, Key::Enter);
 
     assert_eq!(
-        prompt(&state).map(|prompt| prompt.statement().cql.clone()),
+        prompt(&state).map(|prompt| prompt.statement().sql.clone()),
         Some(format!(
             "INSERT INTO \"shop\".\"orders\" (\"id\", \"created_at\", \"email\") \
              VALUES ({UUID}, '2026-01-01', '')"
@@ -247,7 +247,7 @@ fn enter_shows_the_insert_it_would_run_with_only_what_was_filled_in() {
     press(&mut state, Key::Enter);
 
     assert_eq!(
-        prompt(&state).map(|prompt| prompt.statement().cql.clone()),
+        prompt(&state).map(|prompt| prompt.statement().sql.clone()),
         Some(format!(
             "INSERT INTO \"shop\".\"orders\" (\"id\", \"created_at\", \"email\") \
              VALUES ({UUID}, '2026-01-01', 'o''hara')"
@@ -263,7 +263,7 @@ fn a_key_alone_is_a_row() {
     press(&mut state, Key::Enter);
 
     assert_eq!(
-        prompt(&state).map(|prompt| prompt.statement().cql.clone()),
+        prompt(&state).map(|prompt| prompt.statement().sql.clone()),
         Some(format!(
             "INSERT INTO \"shop\".\"orders\" (\"id\", \"created_at\") \
              VALUES ({UUID}, '2026-01-01')"
@@ -302,7 +302,7 @@ fn y_runs_the_insert() {
     let effects = press(&mut state, Key::Char('y'));
 
     assert!(
-        deleted_cql(&effects).is_some_and(|cql| cql.starts_with("INSERT INTO")),
+        deleted_cql(&effects).is_some_and(|sql| sql.starts_with("INSERT INTO")),
         "{effects:?}"
     );
     assert!(
@@ -361,7 +361,7 @@ fn a_completed_insert_re_reads_the_grid_rather_than_patching_it() {
         Some((Severity::Info, "inserted a row into shop.orders"))
     );
     assert!(
-        deleted_cql(&effects).is_some_and(|cql| cql.starts_with("SELECT")),
+        deleted_cql(&effects).is_some_and(|sql| sql.starts_with("SELECT")),
         "{effects:?}"
     );
 }
@@ -534,7 +534,7 @@ fn ctrl_s_over_the_form_asks_to_insert_rather_than_commit_a_row() {
     ctrl(&mut state, Key::Char('s'));
 
     assert!(
-        prompt(&state).is_some_and(|prompt| prompt.statement().cql.starts_with("INSERT INTO")),
+        prompt(&state).is_some_and(|prompt| prompt.statement().sql.starts_with("INSERT INTO")),
         "{:?}",
         state.overlay
     );

@@ -99,7 +99,7 @@ fn q_quits() {
 fn tab_from_queries_cql_lands_on_queries_logs() {
     let mut state = State::default();
     state.focus_on(Panel::Queries);
-    assert_eq!(state.queries.tab(), QueriesTab::Cql);
+    assert_eq!(state.queries.tab(), QueriesTab::Sql);
 
     press(&mut state, Key::Tab);
 
@@ -120,7 +120,7 @@ fn tab_from_queries_logs_lands_on_tables_and_reverts_to_cql() {
     assert_eq!(state.focus(), Panel::Objects);
     assert_eq!(
         state.queries.tab(),
-        QueriesTab::Cql,
+        QueriesTab::Sql,
         "leaving the panel still reverts its tab"
     );
 }
@@ -173,7 +173,7 @@ fn a_full_forward_cycle_returns_to_where_it_started() {
     assert_eq!(state.focus(), Panel::Objects);
     assert_eq!(
         state.queries.tab(),
-        QueriesTab::Cql,
+        QueriesTab::Sql,
         "the cycle passed through Queries and came out the other side"
     );
 }
@@ -275,7 +275,7 @@ fn tab_walks_every_stop_in_order_and_wraps() {
 
     press(&mut state, Key::Tab);
     assert_eq!(state.focus(), Panel::Queries);
-    assert_eq!(state.queries.tab(), QueriesTab::Cql);
+    assert_eq!(state.queries.tab(), QueriesTab::Sql);
 
     press(&mut state, Key::Tab);
     assert_eq!(state.focus(), Panel::Queries, "Queries' own second stop");
@@ -299,7 +299,7 @@ fn shift_tab_walks_the_same_stops_the_other_way() {
 
     press(&mut state, Key::BackTab);
     assert_eq!(state.focus(), Panel::Queries);
-    assert_eq!(state.queries.tab(), QueriesTab::Cql);
+    assert_eq!(state.queries.tab(), QueriesTab::Sql);
 
     press(&mut state, Key::BackTab);
     assert_eq!(state.focus(), Panel::Contents);
@@ -460,7 +460,7 @@ fn four_from_the_logs_tab_opens_the_buffer() {
 
     press(&mut state, Key::Char('4'));
 
-    assert_eq!(state.queries.tab(), QueriesTab::Cql);
+    assert_eq!(state.queries.tab(), QueriesTab::Sql);
     assert!(state.takes_text());
 }
 
@@ -473,7 +473,7 @@ fn brackets_walk_queries_tabs_while_the_buffer_is_closed() {
     assert_eq!(state.queries.tab(), QueriesTab::Logs);
 
     press(&mut state, Key::Char('['));
-    assert_eq!(state.queries.tab(), QueriesTab::Cql);
+    assert_eq!(state.queries.tab(), QueriesTab::Sql);
 }
 
 #[test]

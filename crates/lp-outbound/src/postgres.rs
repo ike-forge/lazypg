@@ -163,7 +163,7 @@ impl Cluster for Postgres {
 
     async fn execute(&self, conn: ConnId, stmt: &Statement) -> Result<Page, DbError> {
         let open = self.session(conn).await?;
-        run(&open, &stmt.cql).await
+        run(&open, &stmt.sql).await
     }
 
     /// `LIMIT/OFFSET` around the statement (architecture.md §6). One row past
@@ -178,7 +178,7 @@ impl Cluster for Postgres {
         let open = self.session(conn).await?;
 
         let Some(inner) = pageable(stmt) else {
-            return run(&open, &stmt.cql).await;
+            return run(&open, &stmt.sql).await;
         };
 
         let offset = cursor.map_or(0, offset_of);
@@ -269,7 +269,7 @@ fn pageable(stmt: &Statement) -> Option<&str> {
     if stmt.kind != StatementKind::Read {
         return None;
     }
-    let inner = stmt.cql.trim().trim_end_matches(';').trim_end();
+    let inner = stmt.sql.trim().trim_end_matches(';').trim_end();
     let first = inner
         .split(|c: char| c.is_whitespace() || c == '(')
         .next()?
@@ -451,9 +451,9 @@ mod tests {
 
     use super::*;
 
-    fn read(cql: &str) -> Statement {
+    fn read(sql: &str) -> Statement {
         Statement {
-            cql: cql.to_owned(),
+            sql: sql.to_owned(),
             kind: StatementKind::Read,
         }
     }
@@ -543,7 +543,7 @@ mod tests {
         assert_eq!(pageable(&read("SHOW search_path")), None);
         assert_eq!(
             pageable(&Statement {
-                cql: "SELECT 1".to_owned(),
+                sql: "SELECT 1".to_owned(),
                 kind: StatementKind::Write,
             }),
             None

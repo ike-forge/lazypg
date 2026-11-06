@@ -276,8 +276,8 @@ mod tests {
 
     #[test]
     fn a_table_drops_only_the_table_and_a_keyspace_the_whole_keyspace() {
-        assert_eq!(table().statement().cql, "DROP TABLE \"shop\".\"orders\"");
-        assert_eq!(keyspace().statement().cql, "DROP KEYSPACE \"shop\"");
+        assert_eq!(table().statement().sql, "DROP TABLE \"shop\".\"orders\"");
+        assert_eq!(keyspace().statement().sql, "DROP KEYSPACE \"shop\"");
     }
 
     #[test]

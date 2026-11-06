@@ -2,13 +2,13 @@
 
 use crate::connection::ConnectionState;
 use crate::contents::{Filter, SelectionMode};
-use crate::cql;
 use crate::line::Line;
 use crate::model::{Key, KeyPress};
 use crate::overlay::Overlay;
 use crate::panel::Panel;
 use crate::queries::Refresh;
 use crate::search::{Direction, Searched};
+use crate::sql;
 use crate::state::State;
 use crate::style::Severity;
 use crate::theme::BuiltIn;
@@ -271,7 +271,7 @@ pub(super) fn edit(state: &mut State, key: Key) -> bool {
 /// Unqualified table names complete against the keyspace Tables is showing.
 pub(super) fn complete(state: &mut State) {
     let keyspace = state.visible_keyspace();
-    let completion = cql::suggest(state.queries.buffer(), state.schema(), keyspace.as_deref());
+    let completion = sql::suggest(state.queries.buffer(), state.schema(), keyspace.as_deref());
     state.queries.offer(completion);
 }
 

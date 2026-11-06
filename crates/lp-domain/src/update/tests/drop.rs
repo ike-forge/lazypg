@@ -64,7 +64,7 @@ fn y_drops_the_table() {
     assert!(
         effects.iter().any(|effect| matches!(
             effect,
-            Effect::Execute { stmt, .. } if stmt.cql == "DROP TABLE \"shop\".\"orders\""
+            Effect::Execute { stmt, .. } if stmt.sql == "DROP TABLE \"shop\".\"orders\""
         )),
         "{effects:?}"
     );
@@ -120,7 +120,7 @@ fn enter_on_the_typed_name_drops_the_keyspace() {
     assert!(
         effects.iter().any(|effect| matches!(
             effect,
-            Effect::Execute { stmt, .. } if stmt.cql == "DROP KEYSPACE \"shop\""
+            Effect::Execute { stmt, .. } if stmt.sql == "DROP KEYSPACE \"shop\""
         )),
         "{effects:?}"
     );
@@ -148,7 +148,7 @@ fn n_is_text_on_a_typed_confirmation() {
     assert!(
         effects.iter().any(|effect| matches!(
             effect,
-            Effect::Execute { stmt, .. } if stmt.cql == "DROP KEYSPACE \"nation\""
+            Effect::Execute { stmt, .. } if stmt.sql == "DROP KEYSPACE \"nation\""
         )),
         "every `n` typed itself; {effects:?}"
     );
@@ -467,10 +467,10 @@ fn several_rows_delete_as_one_batch() {
     press(&mut state, Key::Char('d'));
     let effects = press(&mut state, Key::Char('y'));
 
-    let cql = deleted_cql(&effects).expect("a statement");
-    assert!(cql.starts_with("BEGIN BATCH\n"), "{cql}");
-    assert!(cql.ends_with("APPLY BATCH"), "{cql}");
-    assert_eq!(cql.matches("DELETE FROM").count(), 2, "{cql}");
+    let sql = deleted_cql(&effects).expect("a statement");
+    assert!(sql.starts_with("BEGIN BATCH\n"), "{sql}");
+    assert!(sql.ends_with("APPLY BATCH"), "{sql}");
+    assert_eq!(sql.matches("DELETE FROM").count(), 2, "{sql}");
 }
 
 #[test]

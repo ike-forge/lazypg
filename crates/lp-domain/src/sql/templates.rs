@@ -79,7 +79,7 @@ pub(crate) const TEMPLATES: &[Template] = &[
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cql::keywords::is_keyword;
+    use crate::sql::keywords::is_keyword;
 
     #[test]
     fn every_template_opens_with_a_keyword_a_prefix_can_reach() {

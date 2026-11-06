@@ -117,7 +117,7 @@ fn program(visual: Option<&str>, editor: Option<&str>) -> Vec<String> {
     chosen.split_whitespace().map(str::to_owned).collect()
 }
 
-/// `.sql`, not `.cql`: Neovim maps `.cql` to Clinical Quality Language.
+/// `.sql`, not `.sql`: Neovim maps `.sql` to Clinical Quality Language.
 fn temp_path() -> PathBuf {
     let opening = OPENINGS.fetch_add(1, Ordering::Relaxed);
 

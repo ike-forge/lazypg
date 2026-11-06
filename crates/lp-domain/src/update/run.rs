@@ -157,12 +157,12 @@ pub(super) fn run(state: &mut State) -> Vec<Effect> {
     }
 
     // One statement per request: the protocol carries no more.
-    let Some(cql) = state.queries.statement() else {
+    let Some(sql) = state.queries.statement() else {
         return Vec::new();
     };
-    let cql = cql.as_str();
+    let sql = sql.as_str();
 
-    let stmt = Statement::typed(cql);
+    let stmt = Statement::typed(sql);
 
     // Refused: a typed statement names its target in text nothing parses, so
     // there is nothing to confirm against (vision.md §4 principle 6). On a
@@ -195,11 +195,11 @@ pub(super) fn run(state: &mut State) -> Vec<Effect> {
 
     state.focus_on(Panel::Contents);
 
-    let mut effects = submit_into_contents(state, Subject::Typed(cql.to_owned()), stmt);
+    let mut effects = submit_into_contents(state, Subject::Typed(sql.to_owned()), stmt);
 
     // A refused statement sent nothing and is not worth recalling.
     if !effects.is_empty() {
-        effects.extend(record_history(state, cql));
+        effects.extend(record_history(state, sql));
     }
 
     effects
@@ -207,7 +207,7 @@ pub(super) fn run(state: &mut State) -> Vec<Effect> {
 
 /// Only the buffer: reading a table from the tree is not something the user
 /// typed.
-pub(super) fn record_history(state: &mut State, cql: &str) -> Option<Effect> {
+pub(super) fn record_history(state: &mut State, sql: &str) -> Option<Effect> {
     let ConnectionState::Connected(connection) = &state.connection else {
         return None;
     };
@@ -215,7 +215,7 @@ pub(super) fn record_history(state: &mut State, cql: &str) -> Option<Effect> {
 
     state
         .histories
-        .record(&name, cql, state.config.history.limit)
+        .record(&name, sql, state.config.history.limit)
         .then(|| Effect::SaveHistory {
             entries: state.histories.of(&name).to_vec(),
             connection: name,

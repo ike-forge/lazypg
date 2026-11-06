@@ -50,7 +50,7 @@ async fn connected(posture: Posture, driver: DriverConfig) -> Postgres {
 
 fn read(sql: &str) -> Statement {
     Statement {
-        cql: sql.to_owned(),
+        sql: sql.to_owned(),
         kind: StatementKind::Read,
     }
 }

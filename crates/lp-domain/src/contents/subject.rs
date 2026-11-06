@@ -50,7 +50,7 @@ impl Subject {
     pub fn label(&self) -> String {
         match self {
             Self::Table(table) => table.qualified(),
-            Self::Typed(cql) => cql.split_whitespace().collect::<Vec<_>>().join(" "),
+            Self::Typed(sql) => sql.split_whitespace().collect::<Vec<_>>().join(" "),
         }
     }
 

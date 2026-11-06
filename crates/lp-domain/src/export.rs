@@ -1137,11 +1137,11 @@ mod tests {
 
     #[test]
     fn a_long_query_title_is_cut_to_a_hundred_characters_with_an_ellipsis() {
-        let cql = format!(
+        let sql = format!(
             "SELECT * FROM shop.orders WHERE note = '{}'",
             "x".repeat(200)
         );
-        let form = ExportForm::opened(Subject::Typed(cql), Fetched::Some(200), Path::new(""));
+        let form = ExportForm::opened(Subject::Typed(sql), Fetched::Some(200), Path::new(""));
         let title = crate::style::text(&form.title());
 
         assert!(title.starts_with("Export query SELECT * FROM shop.orders"));
@@ -1155,8 +1155,8 @@ mod tests {
 
     #[test]
     fn a_query_title_cuts_on_a_character_boundary() {
-        let cql = format!("SELECT '{}'", "é".repeat(200));
-        let form = ExportForm::opened(Subject::Typed(cql), Fetched::Some(200), Path::new(""));
+        let sql = format!("SELECT '{}'", "é".repeat(200));
+        let form = ExportForm::opened(Subject::Typed(sql), Fetched::Some(200), Path::new(""));
 
         assert!(crate::style::text(&form.title()).ends_with('…'));
     }

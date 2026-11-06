@@ -106,7 +106,7 @@ fn the_trails_search_does_not_survive_a_switch_to_the_cql_tab() {
 
     assert_eq!(
         state.queries.tab(),
-        QueriesTab::Cql,
+        QueriesTab::Sql,
         "landed on the buffer without leaving the panel"
     );
     assert_eq!(

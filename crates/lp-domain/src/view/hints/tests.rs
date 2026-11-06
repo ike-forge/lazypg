@@ -594,7 +594,7 @@ fn the_run_hint_is_live_once_there_is_a_statement() {
 
 #[test]
 fn the_run_hint_greys_against_a_buffer_the_posture_would_refuse() {
-    for (posture, cql, expected) in [
+    for (posture, sql, expected) in [
         (
             Posture::ReadOnly,
             "SELECT * FROM shop.orders",
@@ -615,14 +615,14 @@ fn the_run_hint_greys_against_a_buffer_the_posture_would_refuse() {
         let mut state = connected(posture, SchemaState::Loading);
         state.focus_on(Panel::Queries);
         state.queries.start_editing();
-        for character in cql.chars() {
+        for character in sql.chars() {
             state.queries.edit(Key::Char(character), 1);
         }
 
         assert_eq!(
             run_hint(&bar(&state)).liveness,
             expected,
-            "{cql} under a {} connection",
+            "{sql} under a {} connection",
             posture.label()
         );
     }

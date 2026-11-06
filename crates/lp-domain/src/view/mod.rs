@@ -22,16 +22,16 @@ pub use crate::editor::Position;
 use crate::commands::{self, CommandRow};
 use crate::config::{Config, ConnectionConfig, Diagnostic};
 use crate::contents::SelectionMode;
-use crate::cql::{CandidateKind, Completion};
 use crate::ddl::StructureTab;
 use crate::drop::Answer;
 use crate::export::{Confirm, Format, Scope, Stop};
 use crate::overlay::{Message, Overlay};
 use crate::panel::Panel;
 use crate::posture::Posture;
-use crate::queries::{CqlMode, Highlight, QueriesTab};
+use crate::queries::{Highlight, QueriesTab, SqlMode};
 use crate::search::{Direction, Search, Sift};
 use crate::selection::Ranges;
+use crate::sql::{CandidateKind, Completion};
 use crate::state::State;
 use crate::style::{Severity, Token};
 use crate::theme::ThemeChoice;
@@ -201,7 +201,7 @@ pub struct DropView {
     pub title: Vec<Segment>,
     /// Pre-split into lines: the renderer draws what it is given rather than
     /// deciding where a statement breaks.
-    pub cql: Vec<String>,
+    pub sql: Vec<String>,
     /// `None` for a drop.
     pub rows: Option<usize>,
     /// `None` on the yes/no spelling.
@@ -416,7 +416,7 @@ fn overlay(state: &State) -> Option<OverlayView> {
         }),
         Overlay::Drop(prompt) => Some(OverlayView::Drop(Box::new(DropView {
             title: prompt.title(),
-            cql: prompt.statement().cql.lines().map(str::to_owned).collect(),
+            sql: prompt.statement().sql.lines().map(str::to_owned).collect(),
             rows: prompt.target().row_count(),
             typed: match prompt.answer() {
                 Answer::YesNo => None,
@@ -520,7 +520,7 @@ pub enum PanelBody {
         lines: Vec<Vec<Segment>>,
         cursor: Position,
         /// The caret is drawn while editing only.
-        mode: CqlMode,
+        mode: SqlMode,
         /// Drawn in both modes: it says what `ctrl-r` would run.
         band: Option<Highlight>,
         completion: Option<CompletionView>,
@@ -666,8 +666,8 @@ fn body(state: &State, panel: Panel) -> PanelBody {
         Panel::Structure => details::body(state),
         Panel::Contents => contents::body(state),
         Panel::Queries => match state.queries.tab() {
-            QueriesTab::Cql => PanelBody::Editor {
-                lines: crate::cql::highlight(&state.queries.text()),
+            QueriesTab::Sql => PanelBody::Editor {
+                lines: crate::sql::highlight(&state.queries.text()),
                 cursor: state.queries.cursor(),
                 mode: state.queries.mode().unwrap_or_default(),
                 band: state.queries.band(),
@@ -785,7 +785,7 @@ mod tests {
             PanelBody::Editor {
                 lines: vec![Vec::new()],
                 cursor: Position::default(),
-                mode: CqlMode::Browsing,
+                mode: SqlMode::Browsing,
                 band: None,
                 completion: None,
             },
@@ -855,7 +855,7 @@ mod tests {
         let mut state = tabled(&[("shop", &["orders"])]);
         state.queries.start_editing();
         state.queries.replace("SELECT i");
-        let completion = crate::cql::suggest(state.queries.buffer(), state.schema(), None);
+        let completion = crate::sql::suggest(state.queries.buffer(), state.schema(), None);
         state.queries.offer(completion);
 
         let PanelBody::Editor { completion, .. } = &body(&state, Panel::Queries) else {

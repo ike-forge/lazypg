@@ -7,7 +7,7 @@ use std::ops::Range;
 
 use lp_domain::contents::{Order, SelectionMode};
 use lp_domain::grid::{BAR, COLUMN_SPACING, MARKS, available, fitting};
-use lp_domain::queries::{CqlMode, Highlight};
+use lp_domain::queries::{Highlight, SqlMode};
 use lp_domain::search::Search;
 use lp_domain::selection::Ranges;
 use lp_domain::style::Token;
@@ -934,7 +934,7 @@ fn editor_body(
                 band: *band,
                 completion: completion.as_ref(),
             },
-            focused && *mode == CqlMode::Editing,
+            focused && *mode == SqlMode::Editing,
             theme,
         ),
         columns: None,
