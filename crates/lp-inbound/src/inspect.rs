@@ -526,7 +526,7 @@ mod tests {
             Subject::Table(TableRef::new("shop", "orders")),
             cell(Value::Text("ada".to_owned())),
         );
-        let mut field = lp_domain::edit::Field::opened(0, "spec", "int", "ada".to_owned());
+        let mut field = lp_domain::edit::Field::opened(0, "spec", "integer", "ada".to_owned());
         field.line_mut().insert('!');
         inspector.start_edit(field);
         state.overlay = Some(Overlay::Inspect(inspector));
@@ -546,7 +546,7 @@ mod tests {
             "the field and its caret: {drawn:#?}"
         );
         assert!(
-            drawn.iter().any(|row| row.contains("Not a int.")),
+            drawn.iter().any(|row| row.contains("Not a valid integer.")),
             "the reason it does not parse: {drawn:#?}"
         );
     }

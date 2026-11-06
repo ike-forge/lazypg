@@ -1,6 +1,7 @@
 //! Typing a value back, and the uncommitted set holding it until `ctrl-s`.
-//! Unlike [`crate::literal`], `float`, `double`, `varint` and `decimal` are
-//! accepted: the text is the user's own, not a re-spelling of the driver's.
+//! Postgres parses what is typed, through [`crate::literal`]'s cast; only what
+//! the grid must draw differently is read here, so a typo in an integer or a
+//! `bytea` is caught before it is sent.
 
 use std::collections::BTreeMap;
 
@@ -29,89 +30,120 @@ impl Edited {
     }
 }
 
-/// Asked before a field opens.
-#[must_use]
-pub fn editable(data_type: &str) -> bool {
-    matches!(
-        literal::normalised(data_type).as_str(),
-        "text"
-            | "varchar"
-            | "ascii"
-            | "inet"
-            | "date"
-            | "time"
-            | "timestamp"
-            | "uuid"
-            | "timeuuid"
-            | "tinyint"
-            | "smallint"
-            | "int"
-            | "bigint"
-            | "varint"
-            | "decimal"
-            | "float"
-            | "double"
-            | "boolean"
-            | "blob"
-    )
+/// What a declared type is, as `format_type` spells it, for what typing into
+/// it means.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Family {
+    Integer,
+    Float,
+    Numeric,
+    Boolean,
+    Bytes,
+    Uuid,
+    Json,
+    Array,
+    /// Text a blank field is the empty string of, not `NULL`.
+    Text,
+    Other,
 }
 
-/// Only the free-text types; an empty `date` is the cluster's to reject.
+fn family(data_type: &str) -> Family {
+    let declared = data_type.trim().to_ascii_lowercase();
+    if declared.ends_with("[]") {
+        return Family::Array;
+    }
+    // `character varying(16)`, `numeric(10,2)`: the modifier changes nothing
+    // here.
+    let base = declared.split('(').next().unwrap_or_default().trim();
+
+    match base {
+        "smallint" | "integer" | "bigint" | "int2" | "int4" | "int8" | "oid" => Family::Integer,
+        "real" | "double precision" | "float4" | "float8" => Family::Float,
+        "numeric" | "decimal" => Family::Numeric,
+        "boolean" | "bool" => Family::Boolean,
+        "bytea" => Family::Bytes,
+        "uuid" => Family::Uuid,
+        "json" | "jsonb" => Family::Json,
+        "text" | "character varying" | "varchar" | "character" | "char" | "bpchar" | "name"
+        | "citext" => Family::Text,
+        _ => Family::Other,
+    }
+}
+
+/// Every type takes typed text; Postgres is the judge of the rest.
+#[must_use]
+pub fn editable(_data_type: &str) -> bool {
+    true
+}
+
+/// A blank field is the empty string for text; for anything else it is
+/// `NULL`, which [`parse`] returns.
 #[must_use]
 pub fn takes_empty(data_type: &str) -> bool {
-    matches!(
-        literal::normalised(data_type).as_str(),
-        "text" | "varchar" | "ascii"
-    )
+    family(data_type) == Family::Text
 }
 
-/// [`editable`] has already been asked, so `None` always means "not a
-/// `<type>`".
+/// `None` where the text cannot be the type: the field says so before
+/// anything is sent.
 #[must_use]
 pub fn parse(data_type: &str, text: &str) -> Option<Edited> {
-    let (value, literal) = match literal::normalised(data_type).as_str() {
-        // Not validated beyond being text: the cluster owns those formats.
-        "text" | "varchar" | "ascii" | "inet" | "date" | "time" | "timestamp" => {
-            (Value::Text(text.to_owned()), literal::quoted(text))
+    let family = family(data_type);
+    let trimmed = text.trim();
+
+    if trimmed.is_empty() && family != Family::Text {
+        return Some(Edited {
+            value: Value::Null,
+            literal: "NULL".to_owned(),
+        });
+    }
+
+    let value = match family {
+        Family::Integer => Value::Int(trimmed.parse().ok()?),
+        Family::Float => Value::Float(float(trimmed)?),
+        Family::Numeric => {
+            trimmed.parse::<f64>().ok()?;
+            Value::Numeric(trimmed.to_owned())
         }
-        "uuid" | "timeuuid" => {
-            let uuid = text.trim().to_ascii_lowercase();
-            is_uuid(&uuid).then(|| (Value::Uuid(uuid.clone()), uuid))?
+        Family::Boolean => Value::Boolean(boolean(trimmed)?),
+        Family::Bytes => Value::Blob(hex(trimmed)?),
+        Family::Uuid => {
+            let uuid = trimmed.to_ascii_lowercase();
+            is_uuid(&uuid).then_some(Value::Uuid(uuid))?
         }
-        "tinyint" | "smallint" | "int" | "bigint" => {
-            let number: i64 = text.trim().parse().ok()?;
-            (Value::Int(number), number.to_string())
-        }
-        // Verbatim: an `f64` round trip would rewrite `1.50` and `1e3`, and
-        // lose wide `varint` and `decimal`.
-        "varint" | "decimal" | "float" | "double" => {
-            let number = text.trim();
-            let parsed: f64 = number.parse().ok()?;
-            if !parsed.is_finite() {
-                return None;
-            }
-            (Value::Float(parsed), number.to_owned())
-        }
-        "boolean" => {
-            let flag = match text.trim().to_ascii_lowercase().as_str() {
-                "true" => true,
-                "false" => false,
-                _ => return None,
-            };
-            (Value::Boolean(flag), flag.to_string())
-        }
-        "blob" => {
-            let bytes = hex(text.trim())?;
-            let literal = crate::cell::text(&Value::Blob(bytes.clone()));
-            (Value::Blob(bytes), literal)
-        }
-        _ => return None,
+        Family::Json => Value::Json(trimmed.to_owned()),
+        Family::Array => Value::Array(trimmed.to_owned()),
+        Family::Text => Value::Text(text.to_owned()),
+        Family::Other => Value::Text(trimmed.to_owned()),
+    };
+    let literal = match (&value, family) {
+        // As typed: an `f64` round trip would rewrite `1.50` and `1e3`.
+        (Value::Float(_), _) => literal::cast(trimmed, data_type),
+        (value, _) => literal::of(data_type, value),
     };
 
     Some(Edited { value, literal })
 }
 
-/// Lower-case 8-4-4-4-12, the form CQL reads bare.
+/// Postgres's own spellings, `NaN` and the infinities included.
+fn float(text: &str) -> Option<f64> {
+    match text.to_ascii_lowercase().as_str() {
+        "nan" => Some(f64::NAN),
+        "infinity" | "inf" => Some(f64::INFINITY),
+        "-infinity" | "-inf" => Some(f64::NEG_INFINITY),
+        other => other.parse().ok(),
+    }
+}
+
+/// Every spelling `boolin` takes.
+fn boolean(text: &str) -> Option<bool> {
+    match text.to_ascii_lowercase().as_str() {
+        "t" | "true" | "y" | "yes" | "on" | "1" => Some(true),
+        "f" | "false" | "n" | "no" | "off" | "0" => Some(false),
+        _ => None,
+    }
+}
+
+/// 8-4-4-4-12; Postgres takes other spellings, the grid prints this one.
 fn is_uuid(text: &str) -> bool {
     let groups: Vec<&str> = text.split('-').collect();
 
@@ -122,11 +154,11 @@ fn is_uuid(text: &str) -> bool {
             .all(|group| group.chars().all(|c| c.is_ascii_hexdigit()))
 }
 
-/// `0x` alone is the empty blob.
+/// The `\x` form the grid draws; `\x` alone is the empty value.
 fn hex(text: &str) -> Option<Vec<u8>> {
     let digits = text
-        .strip_prefix("0x")
-        .or_else(|| text.strip_prefix("0X"))?;
+        .strip_prefix("\\x")
+        .or_else(|| text.strip_prefix("\\X"))?;
 
     if digits.len() % 2 != 0 {
         return None;
@@ -297,7 +329,7 @@ impl Field {
     pub fn error(&self) -> Option<String> {
         self.parsed()
             .is_none()
-            .then(|| format!("Not a {}.", literal::normalised(&self.data_type)))
+            .then(|| format!("Not a valid {}.", self.data_type))
     }
 }
 
@@ -310,121 +342,125 @@ mod tests {
     }
 
     #[test]
-    fn text_is_quoted_and_an_embedded_quote_doubled() {
+    fn text_is_quoted_cast_and_kept_verbatim_spaces_and_all() {
         assert_eq!(
-            parsed("text", "o'hara"),
-            Some((Value::Text("o'hara".to_owned()), "'o''hara'".to_owned()))
-        );
-    }
-
-    #[test]
-    fn an_empty_text_is_a_value_rather_than_a_refusal() {
-        assert_eq!(
-            parsed("varchar", ""),
-            Some((Value::Text(String::new()), "''".to_owned()))
-        );
-    }
-
-    #[test]
-    fn the_types_that_arrive_as_text_are_quoted_and_not_second_guessed() {
-        // The cluster owns date formats.
-        assert_eq!(
-            parsed("date", "2026-01-01"),
+            parsed("character varying(16)", " o'hara "),
             Some((
-                Value::Text("2026-01-01".to_owned()),
-                "'2026-01-01'".to_owned()
+                Value::Text(" o'hara ".to_owned()),
+                "' o''hara '::character varying(16)".to_owned()
             ))
         );
+        assert_eq!(
+            parsed("text", ""),
+            Some((Value::Text(String::new()), "''::text".to_owned())),
+            "a blank text field is the empty string"
+        );
+    }
+
+    #[test]
+    fn a_blank_field_of_any_other_type_is_null() {
+        for data_type in [
+            "integer",
+            "uuid",
+            "timestamp with time zone",
+            "jsonb",
+            "integer[]",
+        ] {
+            assert_eq!(
+                parsed(data_type, "  "),
+                Some((Value::Null, "NULL".to_owned())),
+                "{data_type}"
+            );
+        }
     }
 
     #[test]
     fn an_integer_is_bare_and_a_non_integer_is_refused() {
         assert_eq!(
-            parsed("int", " -7 "),
-            Some((Value::Int(-7), "-7".to_owned()))
+            parsed("bigint", " 42 "),
+            Some((Value::Int(42), "42".to_owned()))
         );
-        assert_eq!(parsed("bigint", "7.5"), None);
-        assert_eq!(parsed("int", "seven"), None);
-        assert_eq!(parsed("int", ""), None);
+        assert_eq!(parsed("integer", "4.2"), None);
     }
 
     #[test]
-    fn a_number_this_program_did_not_render_is_spelled_verbatim() {
-        // Unlike `literal::of`: the text is the user's, so no `f64` round trip.
+    fn a_float_and_a_numeric_keep_the_digits_typed() {
         assert_eq!(
-            parsed("decimal", "1.50"),
-            Some((Value::Float(1.5), "1.50".to_owned()))
+            parsed("double precision", "1.50"),
+            Some((Value::Float(1.5), "'1.50'::double precision".to_owned()))
         );
+        assert!(matches!(
+            parsed("real", "NaN"),
+            Some((Value::Float(f), _)) if f.is_nan()
+        ));
         assert_eq!(
-            parsed("double", "1e3"),
-            Some((Value::Float(1000.0), "1e3".to_owned()))
-        );
-        assert_eq!(parsed("float", "nan"), None);
-        assert_eq!(parsed("varint", "inf"), None);
-    }
-
-    #[test]
-    fn a_uuid_is_accepted_only_in_the_shape_the_driver_renders() {
-        assert_eq!(
-            parsed("uuid", "8F14E45F-CEEA-467A-9575-9C6D7E0D9F3C"),
+            parsed("numeric(10,2)", "3.14159265358979"),
             Some((
-                Value::Uuid("8f14e45f-ceea-467a-9575-9c6d7e0d9f3c".to_owned()),
-                "8f14e45f-ceea-467a-9575-9c6d7e0d9f3c".to_owned()
+                Value::Numeric("3.14159265358979".to_owned()),
+                "'3.14159265358979'::numeric(10,2)".to_owned()
             ))
         );
-        assert_eq!(parsed("timeuuid", "8f14e45f"), None);
-        assert_eq!(parsed("uuid", "8f14e45f-ceea-467a-9575-9c6d7e0d9f3g"), None);
+        assert_eq!(parsed("numeric", "pi"), None);
     }
 
     #[test]
-    fn a_boolean_is_folded_and_nothing_else_is_one() {
-        assert_eq!(
-            parsed("boolean", "TRUE"),
-            Some((Value::Boolean(true), "true".to_owned()))
-        );
-        assert_eq!(parsed("boolean", "1"), None);
-    }
-
-    #[test]
-    fn a_blob_takes_the_form_the_grid_draws_it_in() {
-        assert_eq!(
-            parsed("blob", "0x000FFF"),
-            Some((Value::Blob(vec![0x00, 0x0f, 0xff]), "\\x000fff".to_owned()))
-        );
-        assert_eq!(
-            parsed("blob", "0x"),
-            Some((Value::Blob(Vec::new()), "\\x".to_owned()))
-        );
-        assert_eq!(parsed("blob", "000fff"), None, "the marker is not optional");
-        assert_eq!(parsed("blob", "0x0ff"), None, "half a byte is not a byte");
-    }
-
-    #[test]
-    fn a_declaration_keeps_its_meaning_through_case_and_a_frozen_wrapper() {
-        assert_eq!(parsed("  INT ", "7"), Some((Value::Int(7), "7".to_owned())));
-        assert!(editable("frozen<uuid>"));
-    }
-
-    #[test]
-    fn the_types_a_one_line_field_is_the_wrong_instrument_for_are_refused() {
-        for data_type in [
-            "list<text>",
-            "set<int>",
-            "map<text, int>",
-            "counter",
-            "tuple<int, text>",
-            "address",
+    fn a_boolean_takes_every_spelling_postgres_does() {
+        for (typed, flag) in [
+            ("t", true),
+            ("YES", true),
+            ("on", true),
+            ("0", false),
+            ("off", false),
         ] {
-            assert!(!editable(data_type), "{data_type}");
-            assert_eq!(parse(data_type, "x"), None, "{data_type}");
+            assert_eq!(
+                parsed("boolean", typed),
+                Some((Value::Boolean(flag), flag.to_string())),
+                "{typed}"
+            );
         }
+        assert_eq!(parsed("boolean", "maybe"), None);
     }
 
     #[test]
-    fn the_four_numbers_literal_of_refuses_are_editable_here() {
-        for data_type in ["float", "double", "varint", "decimal"] {
-            assert!(editable(data_type), "{data_type}");
-        }
+    fn a_uuid_and_bytea_are_checked_and_cast() {
+        assert_eq!(
+            parsed("uuid", "8F14E45F-CEEA-467E-A3B4-4C5E3B0F6A11"),
+            Some((
+                Value::Uuid("8f14e45f-ceea-467e-a3b4-4c5e3b0f6a11".to_owned()),
+                "'8f14e45f-ceea-467e-a3b4-4c5e3b0f6a11'::uuid".to_owned()
+            ))
+        );
+        assert_eq!(parsed("uuid", "8f14e45f"), None);
+        assert_eq!(
+            parsed("bytea", "\\x00FF"),
+            Some((Value::Blob(vec![0x00, 0xff]), "'\\x00ff'::bytea".to_owned()))
+        );
+        assert_eq!(parsed("bytea", "00ff"), None, "the marker is not optional");
+    }
+
+    #[test]
+    fn json_arrays_and_every_other_type_are_postgres_to_judge() {
+        assert_eq!(
+            parsed("jsonb", r#"{"a": 1}"#),
+            Some((
+                Value::Json(r#"{"a": 1}"#.to_owned()),
+                r#"'{"a": 1}'::jsonb"#.to_owned()
+            ))
+        );
+        assert_eq!(
+            parsed("integer[]", "{1,2}"),
+            Some((
+                Value::Array("{1,2}".to_owned()),
+                "'{1,2}'::integer[]".to_owned()
+            ))
+        );
+        assert_eq!(
+            parsed("zoo.mood", "happy"),
+            Some((
+                Value::Text("happy".to_owned()),
+                "'happy'::zoo.mood".to_owned()
+            ))
+        );
     }
 
     fn edit(text: &str) -> Edited {
@@ -460,12 +496,12 @@ mod tests {
 
     #[test]
     fn a_field_reports_why_it_does_not_parse_and_nothing_when_it_does() {
-        let mut field = Field::opened(0, "qty", "INT", "7".to_owned());
+        let mut field = Field::opened(0, "qty", "integer", "7".to_owned());
         assert_eq!(field.error(), None);
 
         field.line_mut().insert('x');
 
-        assert_eq!(field.error().as_deref(), Some("Not a int."));
+        assert_eq!(field.error().as_deref(), Some("Not a valid integer."));
         assert_eq!(field.parsed(), None);
     }
 }

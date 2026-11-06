@@ -516,7 +516,7 @@ mod tests {
         let drawn = text(&drawn(100, 26, deleting(1)));
 
         assert!(drawn.contains(
-            "DELETE FROM \"shop\".\"orders\" WHERE \"id\" = 8f14e45f-0000 AND \"placed\" = '2026-01-01'"
+            "DELETE FROM \"shop\".\"orders\" WHERE \"id\" = '8f14e45f-0000'::uuid AND \"placed\" = '2026-01-01'::date"
         ));
     }
 

@@ -148,7 +148,7 @@ fn a_text_field_typed_to_empty_is_an_empty_string() {
         form.typed()
             .map(|(_, edited)| edited.literal())
             .collect::<Vec<_>>(),
-        ["''"]
+        ["''::text"]
     );
 }
 
@@ -190,7 +190,7 @@ fn an_empty_string_is_written_as_one() {
         prompt(&state).map(|prompt| prompt.statement().sql.clone()),
         Some(format!(
             "INSERT INTO \"shop\".\"orders\" (\"id\", \"created_at\", \"email\") \
-             VALUES ({UUID}, '2026-01-01', '')"
+             VALUES ('{UUID}'::uuid, '2026-01-01'::timestamp, ''::text)"
         ))
     );
 }
@@ -250,7 +250,7 @@ fn enter_shows_the_insert_it_would_run_with_only_what_was_filled_in() {
         prompt(&state).map(|prompt| prompt.statement().sql.clone()),
         Some(format!(
             "INSERT INTO \"shop\".\"orders\" (\"id\", \"created_at\", \"email\") \
-             VALUES ({UUID}, '2026-01-01', 'o''hara')"
+             VALUES ('{UUID}'::uuid, '2026-01-01'::timestamp, 'o''hara'::text)"
         ))
     );
 }
@@ -266,7 +266,7 @@ fn a_key_alone_is_a_row() {
         prompt(&state).map(|prompt| prompt.statement().sql.clone()),
         Some(format!(
             "INSERT INTO \"shop\".\"orders\" (\"id\", \"created_at\") \
-             VALUES ({UUID}, '2026-01-01')"
+             VALUES ('{UUID}'::uuid, '2026-01-01'::timestamp)"
         ))
     );
 }

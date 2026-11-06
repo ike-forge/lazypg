@@ -15,7 +15,7 @@ impl RowKey {
         key.iter()
             .map(|(name, data_type)| {
                 let at = columns.iter().position(|column| column == name)?;
-                let literal = crate::literal::of(data_type, row.values.get(at)?)?;
+                let literal = crate::literal::key(data_type, row.values.get(at)?)?;
 
                 Some(((*name).to_owned(), literal))
             })
@@ -65,7 +65,7 @@ mod tests {
             Some(
                 [
                     ("id".to_owned(), "7".to_owned()),
-                    ("placed".to_owned(), "'2026-01-01'".to_owned()),
+                    ("placed".to_owned(), "'2026-01-01'::date".to_owned()),
                 ]
                 .as_slice()
             )

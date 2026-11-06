@@ -16,8 +16,8 @@ fn ctrl_s_shows_the_update_it_would_run() {
     let prompt = committing(&state).expect("the confirmation is up");
     assert_eq!(
         prompt.statement().sql,
-        "UPDATE \"shop\".\"orders\" SET \"email\" = 'ada@example.com!' \
-         WHERE \"id\" = 8f14e45f-0000 AND \"created_at\" = 1699999999000"
+        "UPDATE \"shop\".\"orders\" SET \"email\" = 'ada@example.com!'::text \
+         WHERE \"id\" = '8f14e45f-0000'::uuid AND \"created_at\" = '1699999999000'::timestamp"
     );
 }
 
@@ -266,8 +266,8 @@ fn d_over_a_sorted_grid_asks_about_the_row_the_cursor_is_actually_on() {
     let prompt = dropping(&state).expect("the confirmation is up");
     assert_eq!(
         prompt.statement().sql,
-        "DELETE FROM \"shop\".\"orders\" WHERE \"id\" = 8f14e45f-0002 \
-         AND \"created_at\" = 1699999999002",
+        "DELETE FROM \"shop\".\"orders\" WHERE \"id\" = '8f14e45f-0002'::uuid \
+         AND \"created_at\" = '1699999999002'::timestamp",
         "the cursor is on the first drawn row, which sorting made the last fetched one"
     );
 }
@@ -287,8 +287,8 @@ fn ctrl_s_in_the_inspector_commits_only_the_row_it_shows() {
     let prompt = committing(&state).expect("the confirmation is up");
     assert_eq!(
         prompt.statement().sql,
-        "UPDATE \"shop\".\"orders\" SET \"email\" = 'ada@example.com!' \
-         WHERE \"id\" = 8f14e45f-0001 AND \"created_at\" = 1699999999001"
+        "UPDATE \"shop\".\"orders\" SET \"email\" = 'ada@example.com!'::text \
+         WHERE \"id\" = '8f14e45f-0001'::uuid AND \"created_at\" = '1699999999001'::timestamp"
     );
 }
 

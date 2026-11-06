@@ -451,8 +451,8 @@ fn y_deletes_the_row_by_its_whole_primary_key() {
     assert_eq!(
         deleted_cql(&effects).as_deref(),
         Some(
-            "DELETE FROM \"shop\".\"orders\" WHERE \"id\" = 8f14e45f-0000 \
-             AND \"created_at\" = 1699999999000"
+            "DELETE FROM \"shop\".\"orders\" WHERE \"id\" = '8f14e45f-0000'::uuid \
+             AND \"created_at\" = '1699999999000'::timestamp"
         )
     );
     assert!(state.dropping.is_some(), "the delete is outstanding");

@@ -1,156 +1,96 @@
-//! Spelling a value the cluster returned back into a CQL literal that addresses
-//! it. A whitelist: `None` for anything uncertain, because a refusal costs a
-//! greyed key and a wrong guess deletes the wrong row.
+//! Spelling a value back into a Postgres literal. One form fits every type:
+//! the text Postgres printed, quoted and cast to the declared type
+//! (`'8f14…'::uuid`, `'\x0a'::bytea`, `'{1,2}'::integer[]`), so Postgres parses
+//! it back with its own input function. Integers and booleans are written bare.
 
 use crate::model::Value;
 
-/// The type matters: `varint`, `decimal`, `date`, `time`, `timestamp` and
-/// `inet` all arrive as [`Value::Text`], and quoting is right for four of
-/// them only.
+/// A value that addresses a row, for a primary key's `WHERE`. `None` where a
+/// re-spelling may not compare equal: a float printed and read back can
+/// differ, and no key holds `NULL`.
 #[must_use]
-pub fn of(data_type: &str, value: &Value) -> Option<String> {
-    match (normalised(data_type).as_str(), value) {
-        // Types whose string form CQL parses back to the same value.
-        (
-            "text" | "varchar" | "ascii" | "inet" | "date" | "time" | "timestamp",
-            Value::Text(text),
-        ) => Some(quoted(text)),
-        // A fake's timestamp; the real adapter renders one as text.
-        ("timestamp", Value::Timestamp(millis)) => Some(millis.to_string()),
-        ("uuid" | "timeuuid", Value::Uuid(uuid)) => Some(uuid.clone()),
-        ("tinyint" | "smallint" | "int" | "bigint", Value::Int(number)) => Some(number.to_string()),
-        ("boolean", Value::Boolean(flag)) => Some(flag.to_string()),
-        ("blob", Value::Blob(bytes)) => Some(hex(bytes)),
-        // Refused on purpose: `float`/`double` may not compare equal after
-        // re-spelling; `varint`/`decimal` would mean trusting a rendering as a
-        // bare number; no key holds `null`; collections and `counter` cannot be
-        // keys.
-        _ => None,
+pub fn key(data_type: &str, value: &Value) -> Option<String> {
+    match value {
+        Value::Null | Value::Float(_) => None,
+        other => Some(of(data_type, other)),
     }
 }
 
-/// Lower case, `frozen<…>` removed: `system_schema` reports the declared case.
-pub(crate) fn normalised(data_type: &str) -> String {
-    let trimmed = data_type.trim().to_ascii_lowercase();
-
-    trimmed
-        .strip_prefix("frozen<")
-        .and_then(|inner| inner.strip_suffix('>'))
-        .map_or(trimmed.clone(), |inner| inner.trim().to_owned())
+/// Any value, for a `SET` or a `VALUES` list.
+#[must_use]
+pub fn of(data_type: &str, value: &Value) -> String {
+    match value {
+        Value::Null => "NULL".to_owned(),
+        Value::Int(number) => number.to_string(),
+        Value::Boolean(flag) => flag.to_string(),
+        other => cast(&crate::cell::text(other), data_type),
+    }
 }
 
-/// A single quote is escaped by doubling.
-pub(crate) fn quoted(text: &str) -> String {
+/// `standard_conforming_strings` is on by default since 9.1, so a backslash
+/// is literal and only the quote needs doubling.
+#[must_use]
+pub fn cast(text: &str, data_type: &str) -> String {
+    format!("{}::{data_type}", quoted(text))
+}
+
+#[must_use]
+pub fn quoted(text: &str) -> String {
     format!("'{}'", text.replace('\'', "''"))
-}
-
-fn hex(bytes: &[u8]) -> String {
-    use std::fmt::Write as _;
-
-    bytes.iter().fold("0x".to_owned(), |mut out, byte| {
-        let _ = write!(out, "{byte:02x}");
-        out
-    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::BTreeMap;
 
     #[test]
-    fn text_is_quoted_and_an_embedded_quote_doubled() {
+    fn text_is_quoted_cast_and_an_embedded_quote_doubled() {
         assert_eq!(
-            of("text", &Value::Text("ada".to_owned())).as_deref(),
-            Some("'ada'")
-        );
-        assert_eq!(
-            of("text", &Value::Text("o'hara".to_owned())).as_deref(),
-            Some("'o''hara'"),
+            of("text", &Value::Text("o'hara".to_owned())),
+            "'o''hara'::text",
             "a name holding a quote must not end the literal"
         );
     }
 
     #[test]
-    fn a_uuid_is_bare_and_a_number_is_bare() {
+    fn every_other_type_is_its_text_cast_to_the_declared_type() {
         assert_eq!(
-            of("uuid", &Value::Uuid("8f14e45f".to_owned())).as_deref(),
-            Some("8f14e45f")
+            of("uuid", &Value::Uuid("8f14e45f-0000".to_owned())),
+            "'8f14e45f-0000'::uuid"
         );
-        assert_eq!(of("int", &Value::Int(-7)).as_deref(), Some("-7"));
         assert_eq!(
-            of("boolean", &Value::Boolean(true)).as_deref(),
-            Some("true")
+            of("bytea", &Value::Blob(vec![0xde, 0xad])),
+            "'\\xdead'::bytea"
         );
-    }
-
-    #[test]
-    fn a_blob_is_hex_with_a_leading_marker() {
         assert_eq!(
-            of("blob", &Value::Blob(vec![0x00, 0x0f, 0xff])).as_deref(),
-            Some("0x000fff")
+            of("integer[]", &Value::Array("{1,2}".to_owned())),
+            "'{1,2}'::integer[]"
         );
-    }
-
-    #[test]
-    fn the_types_that_arrive_as_text_are_quoted_or_refused_by_type_not_by_variant() {
-        let rendered = Value::Text("1970-01-01".to_owned());
-
-        assert_eq!(of("date", &rendered).as_deref(), Some("'1970-01-01'"));
         assert_eq!(
-            of("varint", &Value::Text("1099511627776".to_owned())),
-            None,
-            "a bare number this program did not produce is not one it will write"
+            of("numeric(10,2)", &Value::Numeric("1.50".to_owned())),
+            "'1.50'::numeric(10,2)",
+            "the digits as Postgres printed them"
         );
-        assert_eq!(of("decimal", &Value::Text("3.01".to_owned())), None);
-    }
-
-    #[test]
-    fn a_timestamp_spells_either_shape_it_can_arrive_in() {
         assert_eq!(
             of(
-                "timestamp",
-                &Value::Text("2023-11-14T22:13:20.000Z".to_owned())
-            )
-            .as_deref(),
-            Some("'2023-11-14T22:13:20.000Z'")
-        );
-        assert_eq!(
-            of("timestamp", &Value::Timestamp(1_699_999_999_000)).as_deref(),
-            Some("1699999999000")
+                "timestamp with time zone",
+                &Value::Text("2026-01-01 10:00:00+00".to_owned())
+            ),
+            "'2026-01-01 10:00:00+00'::timestamp with time zone"
         );
     }
 
     #[test]
-    fn a_declaration_keeps_its_meaning_through_case_and_a_frozen_wrapper() {
-        assert_eq!(
-            of("  TEXT ", &Value::Text("ada".to_owned())).as_deref(),
-            Some("'ada'")
-        );
-        assert_eq!(
-            of("frozen<uuid>", &Value::Uuid("8f14e45f".to_owned())).as_deref(),
-            Some("8f14e45f")
-        );
+    fn integers_and_booleans_are_bare_and_null_is_null() {
+        assert_eq!(of("bigint", &Value::Int(-7)), "-7");
+        assert_eq!(of("boolean", &Value::Boolean(true)), "true");
+        assert_eq!(of("text", &Value::Null), "NULL");
     }
 
     #[test]
-    fn a_type_and_a_variant_that_disagree_spell_nothing() {
-        // Catalog and page disagree: guessing is what this module refuses.
-        assert_eq!(of("int", &Value::Text("7".to_owned())), None);
-        assert_eq!(of("text", &Value::Int(7)), None);
-    }
-
-    #[test]
-    fn the_refusals_are_refusals() {
-        assert_eq!(of("text", &Value::Null), None);
-        assert_eq!(of("double", &Value::Float(0.5)), None);
-        assert_eq!(of("float", &Value::Float(0.5)), None);
-        assert_eq!(of("list<int>", &Value::List(vec![Value::Int(1)])), None);
-        assert_eq!(of("set<int>", &Value::Set(vec![Value::Int(1)])), None);
-        assert_eq!(
-            of("map<text,int>", &Value::Map(BTreeMap::new())),
-            None,
-            "no collection can be part of a primary key"
-        );
+    fn a_key_refuses_what_may_not_compare_equal_when_read_back() {
+        assert_eq!(key("double precision", &Value::Float(0.1)), None);
+        assert_eq!(key("integer", &Value::Null), None);
+        assert_eq!(key("integer", &Value::Int(3)).as_deref(), Some("3"));
     }
 }

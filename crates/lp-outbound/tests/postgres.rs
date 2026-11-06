@@ -435,3 +435,46 @@ async fn a_slow_query_times_out_and_is_cancelled() {
     assert_eq!(result, Err(DbError::Timeout));
     until_sleeping_is(&observer, 0).await;
 }
+
+#[tokio::test]
+async fn every_value_read_back_spells_a_literal_postgres_finds_and_accepts() {
+    let db = connected(Posture::Writable, DriverConfig::default()).await;
+    let catalog = db.describe(conn()).await.expect("describes");
+    let table = &catalog.schemas["zoo"].tables["everything"];
+    let page = query(&db, "SELECT * FROM zoo.everything WHERE id = 1").await;
+
+    for (at, column) in table.columns.iter().enumerate() {
+        let value = &page.rows[0].values[at];
+        let literal = lp_domain::literal::of(&column.data_type, value);
+        let name = lp_domain::create::ident(&column.name);
+
+        // json has no `=`; floats are compared by `literal::key`'s refusal.
+        if column.data_type != "json" && lp_domain::literal::key(&column.data_type, value).is_some()
+        {
+            let found = query(
+                &db,
+                &format!("SELECT count(*) FROM zoo.everything WHERE {name} = {literal}"),
+            )
+            .await;
+            assert_eq!(
+                found.rows[0].values[0],
+                Value::Int(1),
+                "{} {literal} finds its own row",
+                column.name
+            );
+        }
+
+        let written = db
+            .execute(
+                conn(),
+                &Statement {
+                    sql: format!(
+                        "BEGIN; UPDATE zoo.everything SET {name} = {literal} WHERE id = 1; ROLLBACK;"
+                    ),
+                    kind: StatementKind::Write,
+                },
+            )
+            .await;
+        assert!(written.is_ok(), "{} = {literal}: {written:?}", column.name);
+    }
+}
