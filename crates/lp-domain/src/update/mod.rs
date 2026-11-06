@@ -5,11 +5,9 @@ use crate::clock::Stamp;
 use crate::commit::Discard;
 use crate::config::{Config, ConnectionConfig, ConnectionName, Diagnostic, DriverConfig, PageSize};
 use crate::connection::ConnectionState;
-use crate::contents::TableRef;
 use crate::export::{Destination, Exported, Format};
 use crate::feedback::{Flash, Toast};
 use crate::geometry::Geometry;
-use crate::health::Health;
 use crate::log::{Entry, Outcome, Subject as LogSubject, Trace};
 use crate::model::{
     Catalog, ConnId, DbError, JobId, KeyPress, Page, PagingState, QueryId, Row, Statement,
@@ -32,7 +30,6 @@ mod connections;
 mod drop;
 mod edit;
 mod export;
-mod health;
 mod history;
 mod insert;
 mod inspect;
@@ -53,7 +50,6 @@ use connections::{
 };
 use edit::{field_key, start_edit};
 use export::{cancel_pending_export, export_progress, finish_export};
-use health::{health_entry, health_loaded};
 use insert::open_insert_commit;
 use keys::{Decision, edit_line, escape, handle_key, open_filter, overlay_key};
 use motion::{
@@ -75,7 +71,6 @@ use yank::copied;
 pub(crate) use connections::connection_names;
 pub(crate) use drop::drop_target;
 pub(crate) use edit::{editable_here, has_uncommitted};
-pub(crate) use health::health_target;
 pub(crate) use history::history_labels;
 pub(crate) use insert::insert_form;
 pub(crate) use inspect::inspection;
@@ -136,11 +131,6 @@ pub enum Msg {
     HistorySaveFailed {
         reason: String,
     },
-    HealthLoaded {
-        request: QueryId,
-        health: Result<Health, DbError>,
-        took: Duration,
-    },
     /// A running total, not a delta.
     ExportProgress {
         job: JobId,
@@ -177,11 +167,6 @@ pub enum Effect {
         cursor: Option<PagingState>,
     },
     Cancel(QueryId),
-    LoadHealth {
-        conn: ConnId,
-        request: QueryId,
-        table: TableRef,
-    },
     RecordHistory(Box<Statement>),
     /// The whole list: a save replaces, so a lost one is repaired by the next.
     SaveHistory {
@@ -378,12 +363,6 @@ fn apply(state: &mut State, msg: Msg) -> Vec<Effect> {
             state.notify(Severity::Warning, "history not saved, see the logs");
             Vec::new()
         }
-
-        Msg::HealthLoaded {
-            request,
-            health,
-            took,
-        } => health_loaded(state, request, health, took),
 
         Msg::ExportProgress { job, rows } => export_progress(state, job, rows),
 

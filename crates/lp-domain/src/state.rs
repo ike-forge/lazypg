@@ -219,7 +219,7 @@ impl State {
     /// a repaint.
     #[must_use]
     pub fn is_working(&self) -> bool {
-        self.is_reading_health() || Panel::ALL.iter().any(|&panel| self.is_working_in(panel))
+        Panel::ALL.iter().any(|&panel| self.is_working_in(panel))
     }
 
     /// The wait belongs to the panel its result fills: Queries' statements land
@@ -244,11 +244,6 @@ impl State {
                 .any(|entry| matches!(entry.outcome(), Outcome::Pending { .. })),
             Panel::Structure => false,
         }
-    }
-
-    #[must_use]
-    pub fn is_reading_health(&self) -> bool {
-        matches!(&self.overlay, Some(Overlay::Health(panel)) if panel.is_loading())
     }
 
     #[must_use]

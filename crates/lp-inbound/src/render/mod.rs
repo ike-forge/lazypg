@@ -145,7 +145,6 @@ pub fn render(frame: &mut Frame, view: &ViewModel, theme: Theme) -> Rendered {
             .with_theme_rows(room.theme_rows)
             .with_connection_rows(room.connection_rows)
             .with_history_rows(room.history_rows)
-            .with_health_rows(room.health_rows)
             .with_inspector(
                 room.inspector_rows,
                 wrapped.inspector_lines,
@@ -162,7 +161,6 @@ struct Room {
     theme_rows: usize,
     connection_rows: usize,
     history_rows: usize,
-    health_rows: usize,
     export_fits: bool,
     drop_fits: bool,
     inspector_rows: usize,
@@ -176,7 +174,6 @@ impl Room {
             theme_rows: crate::themes::visible_rows(area),
             connection_rows: crate::connections::visible_rows(area),
             history_rows: crate::history::visible_rows(area),
-            health_rows: crate::health::visible_rows(area),
             export_fits: crate::export::fits(area),
             drop_fits: crate::drop::fits(area),
             inspector_rows: crate::inspect::visible_rows(area),
@@ -275,7 +272,6 @@ fn render_overlay(frame: &mut Frame, view: &ViewModel, hint_bar: Rect, theme: Th
         Some(
             OverlayView::Drop(_)
             | OverlayView::Export(_)
-            | OverlayView::Health(_)
             | OverlayView::Inspect(_)
             | OverlayView::Commit(_)
             | OverlayView::Discard { .. },
@@ -296,10 +292,6 @@ fn render_measured(frame: &mut Frame, view: &ViewModel, theme: Theme) -> Wrapped
         },
         Some(OverlayView::Export(view)) => Wrapped {
             modal: crate::export::render(frame, view, pressed, theme),
-            ..Wrapped::default()
-        },
-        Some(OverlayView::Health(view)) => Wrapped {
-            modal: crate::health::render(frame, view, theme),
             ..Wrapped::default()
         },
         Some(OverlayView::Inspect(view)) => {
@@ -375,7 +367,6 @@ fn dims_the_panels(overlay: Option<&OverlayView>) -> bool {
             | OverlayView::Connections { .. }
             | OverlayView::History { .. }
             | OverlayView::Diagnostics { .. }
-            | OverlayView::Health(_)
             // A drop names its own subject.
             | OverlayView::Drop(_)
             // Copied out of the grid; the title says where from.

@@ -10,10 +10,9 @@ use bindings::{
     ABORT, CLEAR, CLEAR_FILTER, CLOSE, COMMIT, COMMIT_HINT, COMMIT_ROW, COMPLETE, CONNECTIONS,
     CONNECTIONS_GLOBAL, COPY, COPY_LINE, DELETE, DELETE_TYPED, DELETE_YES_NO, DIAGNOSTICS_GLOBAL,
     DISCARD, DONE, DROP, DROP_TYPED, DROP_YES_NO, EDIT, ENTER, EVERY_PAGE, EXPORT, EXPORT_COPY,
-    EXPORT_OVERWRITE, EXPORT_ROWS, FIELD, FILTER, FORMAT, HEALTH, HEALTH_GLOBAL, HEALTH_OF,
-    HISTORY, HISTORY_GLOBAL, HISTORY_HINT, INSERT, INSERT_ROW, INSPECT_GLOBAL, INSPECT_ROW, LEAVE,
-    MOVE, NEXT_MATCH, NEXT_OPTION, NEXT_PAGE, PALETTE_GLOBAL, RUN, SEARCH, SEARCH_GLOBAL, SELECT,
-    SORT, STOP, TOGGLE, UNSET,
+    EXPORT_OVERWRITE, EXPORT_ROWS, FIELD, FILTER, FORMAT, HISTORY, HISTORY_GLOBAL, HISTORY_HINT,
+    INSERT, INSERT_ROW, INSPECT_GLOBAL, INSPECT_ROW, LEAVE, MOVE, NEXT_MATCH, NEXT_OPTION,
+    NEXT_PAGE, PALETTE_GLOBAL, RUN, SEARCH, SEARCH_GLOBAL, SELECT, SORT, STOP, TOGGLE, UNSET,
 };
 pub(crate) use bindings::{GLOBAL, THEMES, THEMES_GLOBAL};
 
@@ -111,7 +110,6 @@ fn overlay_bar(state: &State) -> Option<HintBar> {
         Overlay::Themes { .. } => fixed(THEMES, THEMES_GLOBAL),
         Overlay::Connections { .. } => connections_bar(state),
         Overlay::History { .. } => fixed(HISTORY, HISTORY_GLOBAL),
-        Overlay::Health(_) => fixed(HEALTH, HEALTH_GLOBAL),
         Overlay::Diagnostics(_) => fixed(&[], DIAGNOSTICS_GLOBAL),
         Overlay::Inspect(inspector) => inspect_bar(state, inspector),
         Overlay::Commit(_) => fixed(&[], COMMIT),
@@ -340,9 +338,6 @@ fn live(state: &State, binding: &Binding) -> bool {
         }
         INSERT_ROW => {
             state.geometry.inspector_rows() > 0 && crate::update::insert_form(state).is_ok()
-        }
-        HEALTH_OF => {
-            state.geometry.health_rows() > 0 && crate::update::health_target(state).is_some()
         }
         _ => true,
     }

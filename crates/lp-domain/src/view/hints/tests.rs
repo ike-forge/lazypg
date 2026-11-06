@@ -699,29 +699,6 @@ fn the_drop_hint_is_live_only_where_the_key_would_open_something() {
 }
 
 #[test]
-fn the_health_hint_is_live_on_a_table_with_room_for_the_block() {
-    let loaded = SchemaState::Loaded(schema_of(&[("shop", &["orders"])]));
-    let mut state = connected(Posture::ReadOnly, loaded);
-    state.focus_on(Panel::Objects);
-    let schema = state.schema().expect("loaded").clone();
-    state.tables.open(&schema);
-    state.tables.open(&schema);
-    state.geometry = state.geometry.with_health_rows(0);
-
-    assert_eq!(hint(&state, "health"), Liveness::Inert, "no room");
-
-    state.geometry = state.geometry.with_health_rows(10);
-    assert_eq!(hint(&state, "health"), Liveness::Live);
-
-    state.tables.cursor_mut().up();
-    assert_eq!(
-        hint(&state, "health"),
-        Liveness::Inert,
-        "a keyspace has no health of its own"
-    );
-}
-
-#[test]
 fn a_read_only_connection_leaves_d_off_the_bar() {
     let loaded = SchemaState::Loaded(schema_of(&[("shop", &["orders"])]));
 

@@ -184,7 +184,7 @@ mod tests {
     fn a_wide_frame_shows_every_hint() {
         assert_eq!(
             drawn(Panel::Objects, 90),
-            " ⏎ open | H health | / search | v select | y copy"
+            " ⏎ open | / search | v select | y copy"
         );
     }
 
@@ -229,7 +229,7 @@ mod tests {
 
         assert_eq!(
             drawn(90),
-            " ⏎ open | H health | / search | v select | y copy | ? commands"
+            " ⏎ open | / search | v select | y copy | ? commands"
         );
         assert_eq!(
             drawn(51),

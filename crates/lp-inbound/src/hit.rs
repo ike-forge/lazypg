@@ -50,7 +50,6 @@ pub(crate) struct Modal {
     pub(crate) area: Rect,
     pub(crate) buttons: Vec<ButtonAt>,
     pub(crate) fields: Vec<FieldAt>,
-    pub(crate) list: Option<Listed>,
 }
 
 impl Modal {
@@ -59,16 +58,11 @@ impl Modal {
             area,
             buttons,
             fields: Vec::new(),
-            list: None,
         }
     }
 
     pub(crate) fn with_fields(self, fields: Vec<FieldAt>) -> Self {
         Self { fields, ..self }
-    }
-
-    pub(crate) fn with_list(self, list: Option<Listed>) -> Self {
-        Self { list, ..self }
     }
 }
 
@@ -124,24 +118,6 @@ impl TextAt {
         }
 
         self.text.chars().count()
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Listed {
-    pub(crate) area: Rect,
-    pub(crate) first: usize,
-    pub(crate) len: usize,
-}
-
-impl Listed {
-    fn row_at(&self, position: Position) -> Option<usize> {
-        if !self.area.contains(position) {
-            return None;
-        }
-        let row = self.first + usize::from(position.y - self.area.y);
-
-        (row < self.len).then_some(row)
     }
 }
 
@@ -214,12 +190,7 @@ impl FrameMap {
                 return Some(Pointer::Field(field.target.at(column - field.area.x)));
             }
 
-            return Some(
-                modal
-                    .list
-                    .and_then(|list| list.row_at(position))
-                    .map_or(Pointer::Modal, Pointer::Entry),
-            );
+            return Some(Pointer::Modal);
         }
 
         self.hit(column, row).map(Pointer::Click)

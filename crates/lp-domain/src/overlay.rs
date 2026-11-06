@@ -6,7 +6,6 @@ use crate::config::Diagnostic;
 use crate::contents::Filter;
 use crate::drop::DropPrompt;
 use crate::export::ExportForm;
-use crate::health::HealthPanel;
 use crate::inspect::Inspector;
 use crate::search::{Prompt, Sift};
 use crate::style::Severity;
@@ -58,7 +57,6 @@ pub enum Overlay {
     Export(ExportForm),
     /// The two spellings are a field on the prompt: one question either way.
     Drop(DropPrompt),
-    Health(HealthPanel),
     Inspect(Inspector),
     Commit(CommitPrompt),
     /// Not a `Message`: answering it ends the process.

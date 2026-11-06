@@ -12,8 +12,6 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use lp_domain::config::{ConnectionConfig, DriverConfig, PageSize, SslMode};
-use lp_domain::contents::TableRef;
-use lp_domain::health::Health;
 use lp_domain::model::{
     Catalog, ConnId, DbError, Page, PagingState, Row, Statement, StatementKind, Value,
 };
@@ -194,12 +192,6 @@ impl Cluster for Postgres {
             page.next = Some(PagingState((offset + size).to_be_bytes().to_vec()));
         }
         Ok(page)
-    }
-
-    async fn table_health(&self, _conn: ConnId, _table: &TableRef) -> Result<Health, DbError> {
-        Err(DbError::Other(
-            "table health is not available for Postgres yet".to_owned(),
-        ))
     }
 }
 

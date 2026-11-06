@@ -192,7 +192,6 @@ pub(super) fn fits(overlay: &Overlay, geometry: Geometry, config: &Config) -> bo
             config.connections.is_empty() || geometry.connection_rows() > 0
         }
         Overlay::History { .. } => geometry.history_rows() > 0,
-        Overlay::Health(_) => geometry.health_rows() > 0,
         Overlay::Inspect(_) => geometry.inspector_rows() > 0,
         Overlay::Commit(_) => geometry.commit_rows() > 0,
         Overlay::Export(_) => geometry.export_fits(),

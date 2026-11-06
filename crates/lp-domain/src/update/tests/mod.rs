@@ -8,7 +8,7 @@ use crate::commands::{CATALOGUE, CommandsPanel, Run};
 use crate::commit::CommitPrompt;
 use crate::config::{Config, ConnectionName, Diagnostic, Icons, Origin, Span as ConfigSpan};
 use crate::connection::{Connection, SchemaState};
-use crate::contents::{ContentsState, Filter, SelectionMode, Subject};
+use crate::contents::{ContentsState, Filter, SelectionMode, Subject, TableRef};
 use crate::ddl::StructureTab;
 use crate::drop::{DropPrompt, Target};
 use crate::export::Confirm;
@@ -41,7 +41,6 @@ mod edit;
 mod editor;
 mod export;
 mod filter;
-mod health;
 mod hints;
 mod history;
 mod insert;
@@ -156,7 +155,6 @@ fn palette(state: &State) -> Option<&CommandsPanel> {
         | Overlay::Themes { .. }
         | Overlay::Connections { .. }
         | Overlay::History { .. }
-        | Overlay::Health(_)
         | Overlay::Diagnostics(_)
         | Overlay::Export(_)
         | Overlay::Filter(_)

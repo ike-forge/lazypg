@@ -191,22 +191,6 @@ const TABLES: &[Command] = &[
         Run::In(Panel::Objects),
     ),
     DROP_TABLE,
-    TABLE_HEALTH,
-];
-
-const TABLE_HEALTH: Command = Command::new(
-    &[Stroke::key(Key::Char('H'))],
-    "table health",
-    Run::In(Panel::Objects),
-);
-
-const HEALTH: &[Command] = &[
-    TABLE_HEALTH,
-    Command::new(
-        &[Stroke::key(Key::Enter)],
-        "fold/unfold a metric",
-        Run::Inert,
-    ),
 ];
 
 // Listed under their panel as well as under their flow's group.
@@ -424,10 +408,6 @@ pub const CATALOGUE: &[Group] = &[
     Group {
         heading: "Table contents",
         commands: CONTENTS,
-    },
-    Group {
-        heading: "Health",
-        commands: HEALTH,
     },
     Group {
         heading: "Drop and delete",

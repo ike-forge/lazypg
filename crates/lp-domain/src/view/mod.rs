@@ -116,31 +116,11 @@ pub enum OverlayView {
     Export(Box<ExportView>),
     Drop(Box<DropView>),
     Inspect(Box<InspectView>),
-    Health(Box<HealthView>),
     Commit(Box<CommitView>),
     Discard {
         message: String,
     },
     Fatal(Message),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HealthView {
-    pub table: crate::contents::TableRef,
-    pub body: HealthBody,
-    /// `answered of known nodes`: every total in the block is over the first.
-    pub coverage: Option<String>,
-    pub activity: Activity,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum HealthBody {
-    Loading,
-    Failed(String),
-    Rows {
-        rows: Vec<crate::health::Row>,
-        selected: usize,
-    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -314,36 +294,6 @@ fn history_view(state: &State, cursor: Cursor, sift: Option<&Sift>) -> OverlayVi
     }
 }
 
-fn health_view(state: &State, panel: &crate::health::HealthPanel) -> HealthView {
-    use crate::health::Report;
-
-    HealthView {
-        table: panel.table().clone(),
-        body: match panel.report() {
-            Report::Loading => HealthBody::Loading,
-            Report::Failed(error) => HealthBody::Failed(error.to_string()),
-            Report::Loaded(_) => HealthBody::Rows {
-                rows: panel.rows(),
-                selected: panel.selected(),
-            },
-        },
-        coverage: match panel.report() {
-            Report::Loaded(health) => {
-                let (answered, known) = health.coverage();
-                Some(format!("{answered} of {known} nodes answered"))
-            }
-            Report::Loading | Report::Failed(_) => None,
-        },
-        activity: if panel.is_loading() {
-            Activity::Working {
-                frame: state.loader.frame(),
-            }
-        } else {
-            Activity::Resting
-        },
-    }
-}
-
 fn overlay(state: &State) -> Option<OverlayView> {
     match state.overlay.as_ref()? {
         Overlay::Message(message) => Some(OverlayView::Message(message.clone())),
@@ -376,7 +326,6 @@ fn overlay(state: &State) -> Option<OverlayView> {
             })
         }
         Overlay::History { cursor, sift } => Some(history_view(state, *cursor, sift.as_ref())),
-        Overlay::Health(panel) => Some(OverlayView::Health(Box::new(health_view(state, panel)))),
         Overlay::Connections { cursor, sift } => {
             let names = crate::update::connection_names(&state.config);
             let search = sift.as_ref().and_then(Sift::search);

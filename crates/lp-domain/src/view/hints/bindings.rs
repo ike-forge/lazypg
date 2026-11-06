@@ -88,11 +88,6 @@ pub(super) const HISTORY: &[Binding] = &[SEARCH];
 /// `⏎` appends and runs nothing, the difference from `ctrl-r` worth saying.
 pub(super) const HISTORY_GLOBAL: &[Binding] = &[Binding::new(&[ENTER], "append"), CLOSE, QUIT];
 
-/// `⏎` named: it folds here rather than choosing.
-pub(super) const HEALTH: &[Binding] = &[Binding::new(&[ENTER], "fold/unfold")];
-
-pub(super) const HEALTH_GLOBAL: &[Binding] = &[CLOSE, QUIT];
-
 /// Two sets: the spellings answer different keys. No `q`: `drop_key` claims it.
 pub(super) const DROP_YES_NO: &[Binding] = &[Binding::new(&[key('y')], "drop it"), NO];
 pub(super) const DELETE_YES_NO: &[Binding] = &[Binding::new(&[key('y')], "delete them"), NO];
@@ -130,7 +125,6 @@ pub(super) const NEXT_MATCH: Binding = Binding::new(&[key('n')], "next match");
 /// "open" is true of both a keyspace and a table row.
 const OPEN: Binding = Binding::new(&[ENTER], "open");
 pub(super) const DROP: Binding = Binding::new(&[key('d')], "drop");
-pub(super) const HEALTH_OF: Binding = Binding::new(&[key('H')], "health");
 
 /// Only where it opens.
 pub(super) const INSPECT_ROW: Binding = Binding::new(&[ENTER], "inspect");
@@ -155,7 +149,7 @@ pub(super) const FORMAT: Binding = Binding::new(&[ctrl('f')], "format");
 
 // Motion is in no panel's bar: users already reach for it, and the palette
 // lists it.
-const TABLES_HINTS: &[Binding] = &[OPEN, SEARCH, DROP, HEALTH_OF, SELECT];
+const TABLES_HINTS: &[Binding] = &[OPEN, SEARCH, DROP, SELECT];
 
 /// The tabs are taught here: a panel's number focuses it, never a tab.
 const TABS: Binding = Binding::new(&[key('['), key(']')], "tab");

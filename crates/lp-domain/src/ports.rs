@@ -10,8 +10,6 @@ use crate::config::{
     ClipboardMb, Config, ConnectionConfig, ConnectionName, Credential, Diagnostic, DriverConfig,
     HistoryLimit, PageSize,
 };
-use crate::contents::TableRef;
-use crate::health::Health;
 use crate::history::Histories;
 use crate::model::{Catalog, ConnId, DbError, Page, PagingState, Statement};
 use crate::posture::Posture;
@@ -40,10 +38,6 @@ pub trait Cluster: Send + Sync {
         page_size: PageSize,
         cursor: Option<&PagingState>,
     ) -> Result<Page, DbError>;
-
-    /// A failing node is a [`crate::health::NodeOutcome`]; `Err` means no node
-    /// was reached.
-    async fn table_health(&self, conn: ConnId, table: &TableRef) -> Result<Health, DbError>;
 }
 
 #[async_trait]

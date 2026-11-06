@@ -19,7 +19,6 @@ pub mod export;
 pub mod feedback;
 pub mod geometry;
 pub mod grid;
-pub mod health;
 pub mod history;
 pub mod inspect;
 pub mod introspection;

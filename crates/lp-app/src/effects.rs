@@ -5,7 +5,6 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use lp_domain::config::{ConnectionConfig, ConnectionName, DriverConfig};
-use lp_domain::contents::TableRef;
 use lp_domain::model::{ConnId, DbError, Page, QueryId};
 use lp_domain::ports::{Cluster, ConfigSink, Store, Writer};
 use lp_domain::{Effect, Msg};
@@ -129,12 +128,6 @@ pub(crate) fn run(
             ));
         }
 
-        Effect::LoadHealth {
-            conn,
-            request,
-            table,
-        } => load_health(tx, cluster, *conn, *request, table.clone()),
-
         Effect::Cancel(query) => running.abort(*query),
 
         Effect::RecordHistory(_) | Effect::OpenEditor { .. } | Effect::Quit => {}
@@ -181,30 +174,6 @@ fn load_schema(tx: &UnboundedSender<Incoming>, cluster: &Arc<dyn Cluster>, conn:
             Err(error) => Msg::SchemaFailed { conn, error, took },
         };
         let _sent = tx.send(msg.into());
-    });
-}
-
-fn load_health(
-    tx: &UnboundedSender<Incoming>,
-    cluster: &Arc<dyn Cluster>,
-    conn: ConnId,
-    request: QueryId,
-    table: TableRef,
-) {
-    let (tx, cluster) = (tx.clone(), Arc::clone(cluster));
-    tokio::spawn(async move {
-        let started = std::time::Instant::now();
-        let health = cluster.table_health(conn, &table).await;
-        let took = started.elapsed();
-        // A closed channel means the main loop has ended.
-        let _sent = tx.send(
-            Msg::HealthLoaded {
-                request,
-                health,
-                took,
-            }
-            .into(),
-        );
     });
 }
 

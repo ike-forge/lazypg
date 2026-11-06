@@ -7,8 +7,6 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use async_trait::async_trait;
 use lp_domain::config::PageSize;
-use lp_domain::contents::TableRef;
-use lp_domain::health::Health;
 use lp_domain::model::{Catalog, ConnId, DbError, Page, PagingState, Statement};
 use lp_domain::ports::{Cluster, ExportError, Sink, Writer};
 use lp_domain::posture::Posture;
@@ -33,7 +31,6 @@ pub struct FakeCluster {
     pages: Vec<Page>,
     /// Earlier pages are still delivered, so a mid-export abort is testable.
     failing_page: Option<(usize, DbError)>,
-    health: Health,
 }
 
 impl FakeCluster {
@@ -81,11 +78,6 @@ impl FakeCluster {
             failing_page: Some((index, error)),
             ..self
         }
-    }
-
-    #[must_use]
-    pub fn reporting(self, health: Health) -> Self {
-        Self { health, ..self }
     }
 
     /// A poisoned lock is recovered: the panic that poisoned it is the real
@@ -197,10 +189,6 @@ impl Cluster for FakeCluster {
         }
 
         Ok(self.pages.get(index).cloned().unwrap_or_default())
-    }
-
-    async fn table_health(&self, _conn: ConnId, _table: &TableRef) -> Result<Health, DbError> {
-        Ok(self.health.clone())
     }
 }
 

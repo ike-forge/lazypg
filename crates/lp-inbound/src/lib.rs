@@ -10,7 +10,6 @@ mod drop;
 mod export;
 mod filter;
 mod footer;
-mod health;
 mod highlight;
 mod hints;
 mod history;

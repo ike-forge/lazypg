@@ -17,7 +17,6 @@ use super::commit::{commit_extent, commit_inspected_row, commit_key, discard_key
 use super::connections::{connections_key, offer_connections, open_connections};
 use super::drop::{drop_key, open_drop};
 use super::export::{cancel_pending_export, export_chord, export_key, open_export};
-use super::health::{health_key, open_health};
 use super::history::{history_key, open_history};
 use super::insert::open_insert;
 use super::inspect::{edit_from_grid, inspect_key, open_inspector};
@@ -105,7 +104,6 @@ pub(super) fn overlay_key(state: &mut State, key: Key) -> Option<Vec<Effect>> {
         Some(Overlay::Themes { .. }) => themes_key(state, key),
         Some(Overlay::Connections { .. }) => connections_key(state, key),
         Some(Overlay::History { .. }) => history_key(state, key),
-        Some(Overlay::Health(_)) => health_key(state, key),
         Some(Overlay::Search(_)) => search_key(state, key),
         Some(Overlay::Export(_)) => export_key(state, key),
         Some(Overlay::Filter(_)) => {
@@ -162,7 +160,6 @@ pub(super) fn panel_key(state: &mut State, key: Key) -> Vec<Effect> {
         }
         Key::Char('d') => open_drop(state),
         Key::Char('i') => open_insert(state),
-        Key::Char('H') => return open_health(state),
         Key::Char('p') => return next_page(state),
         Key::Char('P') => return every_page(state),
         Key::Char('v') => toggle_visual(state),
@@ -190,11 +187,7 @@ pub(super) fn takes_text(state: &State) -> bool {
         ) => sift.is_some(),
         Some(Overlay::Inspect(inspector)) => inspector.field().is_some(),
         Some(
-            Overlay::Diagnostics(_)
-            | Overlay::Health(_)
-            | Overlay::Fatal(_)
-            | Overlay::Commit(_)
-            | Overlay::Discard(_),
+            Overlay::Diagnostics(_) | Overlay::Fatal(_) | Overlay::Commit(_) | Overlay::Discard(_),
         ) => false,
         Some(Overlay::Message(_)) | None => state.takes_text(),
     }
@@ -237,10 +230,6 @@ pub(super) fn goto(state: &mut State, edge: Edge) {
         Some(Overlay::History { cursor, .. }) => match edge {
             Edge::Start => cursor.to_start(),
             Edge::End => cursor.to_end(history),
-        },
-        Some(Overlay::Health(panel)) => match edge {
-            Edge::Start => panel.to_start(),
-            Edge::End => panel.to_end(),
         },
         Some(Overlay::Message(_)) | None => scroll(state, edge.motion()),
         Some(
@@ -392,7 +381,6 @@ pub(super) fn dismiss_overlay(state: &mut State) -> bool {
             Overlay::Message(_)
             | Overlay::Commands(_)
             | Overlay::History { .. }
-            | Overlay::Health(_)
             | Overlay::Diagnostics(_)
             | Overlay::Inspect(_)
             | Overlay::Export(_)
@@ -601,7 +589,6 @@ pub(super) fn page(state: &mut State, key: Key) -> Vec<Effect> {
         Some(Overlay::Themes { .. }) => themes_key(state, key),
         Some(Overlay::Connections { .. }) => connections_key(state, key),
         Some(Overlay::History { .. }) => history_key(state, key),
-        Some(Overlay::Health(_)) => health_key(state, key),
         Some(Overlay::Diagnostics(_)) => diagnostics_key(state, key),
         Some(Overlay::Inspect(_)) => inspect_key(state, key),
         Some(Overlay::Commit(_)) => commit_key(state, key),

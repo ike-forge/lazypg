@@ -7,8 +7,8 @@ use crate::pointer::{Click, Held, Mark, Pointer, Press, Wheel};
 use crate::state::State;
 
 use super::{
-    Effect, activate, axes, escape, health_entry, open_filter, overlay_key, panel_scroll,
-    row_count, scroll_len, show_tab,
+    Effect, activate, axes, escape, open_filter, overlay_key, panel_scroll, row_count, scroll_len,
+    show_tab,
 };
 
 /// Rows per notch, in the panel's own unit. Three is what terminals settled on.
@@ -59,10 +59,6 @@ pub(super) fn handle_pointer(state: &mut State, pointer: Pointer) -> Vec<Effect>
                 }
             }
             Pointer::Modal => state.held = None,
-            Pointer::Entry(row) => {
-                state.held = None;
-                return health_entry(state, row);
-            }
             // Lists and documents scroll; questions do not.
             Pointer::Wheel { direction, .. } => {
                 if scrolls(state.overlay.as_ref()) {
@@ -86,8 +82,7 @@ pub(super) fn handle_pointer(state: &mut State, pointer: Pointer) -> Vec<Effect>
         | Pointer::Drag(_)
         | Pointer::Release(_)
         | Pointer::Field(_)
-        | Pointer::Modal
-        | Pointer::Entry(_) => {
+        | Pointer::Modal => {
             state.held = None;
             Vec::new()
         }
@@ -108,7 +103,6 @@ fn scrolls(overlay: Option<&Overlay>) -> bool {
                 | Overlay::Themes { .. }
                 | Overlay::Connections { .. }
                 | Overlay::History { .. }
-                | Overlay::Health(_)
                 | Overlay::Commit(_)
         )
     )
