@@ -524,7 +524,10 @@ fn d_is_inert_over_a_grid_filled_by_a_typed_statement() {
         Page {
             columns: vec!["id".to_owned(), "created_at".to_owned()],
             rows: vec![Row {
-                values: vec![Value::Uuid("8f14e45f".to_owned()), Value::Timestamp(0)],
+                values: vec![
+                    Value::Uuid("8f14e45f".to_owned()),
+                    Value::Text("0".to_owned()),
+                ],
             }],
             next: None,
         },
@@ -556,7 +559,12 @@ fn a_delete_is_refused_on_a_read_only_connection() {
     let mut state = grid_over(
         2,
         &["id", "created_at"],
-        |_| vec![Value::Uuid("8f14e45f".to_owned()), Value::Timestamp(0)],
+        |_| {
+            vec![
+                Value::Uuid("8f14e45f".to_owned()),
+                Value::Text("0".to_owned()),
+            ]
+        },
         Posture::ReadOnly,
     );
 

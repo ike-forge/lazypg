@@ -393,10 +393,7 @@ mod tests {
             Inspected::Row {
                 number: 4,
                 columns: vec!["id".to_owned(), "tags".to_owned()],
-                values: vec![
-                    Value::Int(7),
-                    Value::List(vec![Value::Text("x".to_owned())]),
-                ],
+                values: vec![Value::Int(7), Value::Array("{x}".to_owned())],
             },
         );
 
@@ -405,9 +402,9 @@ mod tests {
             [
                 "  ╭shop.orders · row 4───────────────╮  ",
                 "  │ id    7                          │  ",
-                "  │ tags  [                          │  ",
+                "  │ tags  {                          │  ",
                 "  │         x                        │  ",
-                "  │       ]                          │  ",
+                "  │       }                          │  ",
                 "  │                                  │  ",
                 "  │                                  │  ",
             ]
@@ -423,19 +420,19 @@ mod tests {
             Inspected::Row {
                 number: 1,
                 columns: vec!["note".to_owned()],
-                values: vec![Value::List(vec![Value::Text(
-                    "one two three four five six".to_owned(),
-                )])],
+                values: vec![Value::Array(
+                    r#"{"one two three four five six"}"#.to_owned(),
+                )],
             },
         );
 
         assert_eq!(
             rows(&buffer)[3..8],
             [
-                "  │ note  [                │  ",
+                "  │ note  {                │  ",
                 "  │         one two three  │  ",
                 "  │         four five six  │  ",
-                "  │       ]                │  ",
+                "  │       }                │  ",
                 "  │                        │  ",
             ]
             .map(str::to_owned)
@@ -445,7 +442,10 @@ mod tests {
 
     #[test]
     fn a_value_longer_than_the_body_gets_a_scrollbar() {
-        let value = Value::List((0..40).map(Value::Int).collect());
+        let value = Value::Array(format!(
+            "{{{}}}",
+            (0..40).map(|n| n.to_string()).collect::<Vec<_>>().join(",")
+        ));
 
         let (buffer, lines) = drawn(40, 12, cell(value));
 
@@ -463,7 +463,7 @@ mod tests {
         state.overlay = Some(Overlay::Inspect(Inspector::opened(
             0,
             Subject::Table(TableRef::new("shop", "orders")),
-            cell(Value::List(vec![Value::Int(1), Value::Int(2)])),
+            cell(Value::Array("{1,2}".to_owned())),
         )));
         let mut terminal = Terminal::new(TestBackend::new(80, 24)).expect("a backend");
         let mut geometry = None;
@@ -489,9 +489,9 @@ mod tests {
             Inspected::Row {
                 number: 1,
                 columns: vec!["note".to_owned()],
-                values: vec![Value::List(vec![Value::Text(
-                    "one two three four five six".to_owned(),
-                )])],
+                values: vec![Value::Array(
+                    r#"{"one two three four five six"}"#.to_owned(),
+                )],
             },
             1,
         );

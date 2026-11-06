@@ -1,5 +1,4 @@
 use std::cmp::Ordering;
-use std::collections::BTreeMap;
 
 /// Only the shapes the grid renders or sorts differently; every other type
 /// arrives as [`Value::Text`] in Postgres's own rendering.
@@ -21,12 +20,6 @@ pub enum Value {
     Text(String),
     Blob(Vec<u8>),
     Uuid(String),
-    /// The variants below are `LazyCassandra`'s and nothing Postgres reads
-    /// produces them; they go with the CQL literals in `plan.md` Phase 2.
-    Timestamp(i64),
-    List(Vec<Value>),
-    Set(Vec<Value>),
-    Map(BTreeMap<String, Value>),
 }
 
 impl Value {

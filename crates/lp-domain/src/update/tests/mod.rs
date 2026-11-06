@@ -479,7 +479,7 @@ fn deletable(rows: usize) -> State {
         |index| {
             vec![
                 Value::Uuid(format!("8f14e45f-000{index}")),
-                Value::Timestamp(1_699_999_999_000 + i64::try_from(index).unwrap_or_default()),
+                Value::Text((1_699_999_999_000 + index).to_string()),
                 Value::Text("ada@example.com".to_owned()),
             ]
         },
@@ -636,9 +636,7 @@ fn editable_grid_at(rows: usize, posture: Posture) -> State {
                 .map(|index| Row {
                     values: vec![
                         Value::Uuid(format!("8f14e45f-000{index}")),
-                        Value::Timestamp(
-                            1_699_999_999_000 + i64::try_from(index).unwrap_or_default(),
-                        ),
+                        Value::Text((1_699_999_999_000 + index).to_string()),
                         Value::Text("ada@example.com".to_owned()),
                     ],
                 })

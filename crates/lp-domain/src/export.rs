@@ -145,13 +145,7 @@ fn json_value(value: &Value) -> String {
         Value::Array(text) => crate::array::parse(text)
             .map_or_else(|| json_string(text), |elements| json_array(&elements)),
         // No JSON type: travel as the text the grid draws.
-        Value::Text(_)
-        | Value::Blob(_)
-        | Value::Uuid(_)
-        | Value::Timestamp(_)
-        | Value::List(_)
-        | Value::Set(_)
-        | Value::Map(_) => json_string(&cell::text(value)),
+        Value::Text(_) | Value::Blob(_) | Value::Uuid(_) => json_string(&cell::text(value)),
     }
 }
 

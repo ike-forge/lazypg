@@ -444,21 +444,12 @@ pub fn lines(value: &Value) -> Vec<String> {
         Value::Text(text) | Value::Json(text) => json(text).unwrap_or_else(|| vec![text.clone()]),
         Value::Array(text) => crate::array::parse(text)
             .map_or_else(|| vec![text.clone()], |elements| array_lines(&elements)),
-        other => nested(other),
+        other => vec![cell::text(other)],
     };
 
     laid.into_iter()
         .map(|line| line.chars().filter(|c| !c.is_control()).collect())
         .collect()
-}
-
-fn nested(value: &Value) -> Vec<String> {
-    match value {
-        Value::List(values) => bracketed(values.iter().map(|value| (None, value)), '[', ']'),
-        Value::Set(values) => bracketed(values.iter().map(|value| (None, value)), '{', '}'),
-        Value::Map(entries) => bracketed(keyed(entries), '{', '}'),
-        other => vec![cell::text(other)],
-    }
 }
 
 /// Braced, as Postgres writes an array; nulls bare and text unquoted, as the
@@ -485,45 +476,6 @@ fn array_lines(elements: &[crate::array::Element]) -> Vec<String> {
         lines.extend(element.into_iter().map(|line| format!("  {line}")));
     }
     lines.push("}".to_owned());
-    lines
-}
-
-fn keyed(
-    entries: &BTreeMap<String, Value>,
-) -> impl ExactSizeIterator<Item = (Option<&str>, &Value)> {
-    entries
-        .iter()
-        .map(|(key, value)| (Some(key.as_str()), value))
-}
-
-fn bracketed<'a>(
-    entries: impl ExactSizeIterator<Item = (Option<&'a str>, &'a Value)>,
-    open: char,
-    close: char,
-) -> Vec<String> {
-    let count = entries.len();
-    if count == 0 {
-        return vec![format!("{open}{close}")];
-    }
-
-    let mut lines = vec![open.to_string()];
-
-    for (at, (key, value)) in entries.enumerate() {
-        let mut element = nested(value);
-
-        if let (Some(key), Some(first)) = (key, element.first_mut()) {
-            *first = format!("{key}: {first}");
-        }
-        if at + 1 < count
-            && let Some(last) = element.last_mut()
-        {
-            last.push(',');
-        }
-
-        lines.extend(element.into_iter().map(|line| format!("  {line}")));
-    }
-
-    lines.push(close.to_string());
     lines
 }
 
@@ -694,27 +646,6 @@ mod tests {
     }
 
     #[test]
-    fn a_collection_is_one_element_to_a_line() {
-        let value = Value::Map(BTreeMap::from([
-            (
-                "a".to_owned(),
-                Value::List(vec![Value::Int(1), Value::Int(2)]),
-            ),
-            ("b".to_owned(), Value::Set(Vec::new())),
-        ]));
-
-        assert_eq!(
-            lines(&value),
-            ["{", "  a: [", "    1,", "    2", "  ],", "  b: {}", "}"]
-        );
-    }
-
-    #[test]
-    fn an_empty_collection_stays_on_one_line() {
-        assert_eq!(lines(&Value::List(Vec::new())), ["[]"]);
-    }
-
-    #[test]
     fn a_blob_and_a_scalar_are_drawn_as_the_grid_draws_them() {
         assert_eq!(lines(&Value::Blob(vec![0xca, 0xfe])), ["\\xcafe"]);
         assert_eq!(lines(&Value::Int(7)), ["7"]);
@@ -749,33 +680,6 @@ mod tests {
             Some("2.0 KB")
         );
         assert_eq!(cell(Value::Null).size(), None);
-    }
-
-    #[test]
-    fn a_rows_lines_run_on_from_one_field_to_the_next() {
-        let mut row = Inspector::opened(
-            0,
-            Subject::Table(TableRef::new("shop", "orders")),
-            Inspected::Row {
-                number: 1,
-                columns: vec!["id".to_owned(), "tags".to_owned(), "note".to_owned()],
-                values: vec![
-                    Value::Int(7),
-                    Value::List(vec![text("a"), text("b")]),
-                    Value::Null,
-                ],
-            },
-        );
-
-        assert_eq!(row.line_count(), 6, "one, four bracketed, one");
-        assert_eq!(row.line().as_deref(), Some("7"));
-
-        row.down();
-        row.down();
-        assert_eq!(row.line().as_deref(), Some("a,"), "inside the second field");
-
-        row.to_end();
-        assert_eq!(row.line(), None, "the null field");
     }
 
     #[test]
@@ -857,5 +761,28 @@ mod tests {
                 "}"
             ]
         );
+    }
+
+    #[test]
+    fn a_rows_lines_run_on_from_one_field_to_the_next() {
+        let mut row = Inspector::opened(
+            0,
+            Subject::Table(TableRef::new("shop", "orders")),
+            Inspected::Row {
+                number: 1,
+                columns: vec!["id".to_owned(), "tags".to_owned(), "note".to_owned()],
+                values: vec![Value::Int(7), Value::Array("{a,b}".to_owned()), Value::Null],
+            },
+        );
+
+        assert_eq!(row.line_count(), 6, "one, four braced, one");
+        assert_eq!(row.line().as_deref(), Some("7"));
+
+        row.down();
+        row.down();
+        assert_eq!(row.line().as_deref(), Some("a,"), "inside the second field");
+
+        row.to_end();
+        assert_eq!(row.line(), None, "the null field");
     }
 }

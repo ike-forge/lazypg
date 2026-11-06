@@ -25,10 +25,6 @@ pub fn text(value: &Value) -> String {
         | Value::Array(value)
         | Value::Json(value) => value.clone(),
         Value::Blob(bytes) => hex(bytes),
-        Value::Timestamp(millis) => millis.to_string(),
-        Value::List(values) => sequence(values, '[', ']'),
-        Value::Set(values) => sequence(values, '{', '}'),
-        Value::Map(entries) => map(entries),
     }
 }
 
@@ -91,25 +87,9 @@ fn hex(bytes: &[u8]) -> String {
     out
 }
 
-fn sequence(values: &[Value], open: char, close: char) -> String {
-    let rendered: Vec<String> = values.iter().map(text).collect();
-
-    format!("{open}{}{close}", rendered.join(", "))
-}
-
-fn map(entries: &std::collections::BTreeMap<String, Value>) -> String {
-    let rendered: Vec<String> = entries
-        .iter()
-        .map(|(key, value)| format!("{key}: {}", text(value)))
-        .collect();
-
-    format!("{{{}}}", rendered.join(", "))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::BTreeMap;
 
     #[test]
     fn scalars_render_the_way_cqlsh_prints_them() {
@@ -119,7 +99,6 @@ mod tests {
         assert_eq!(text(&Value::Float(1.5)), "1.5");
         assert_eq!(text(&Value::Text("ada".to_owned())), "ada");
         assert_eq!(text(&Value::Uuid("8f14e45f".to_owned())), "8f14e45f");
-        assert_eq!(text(&Value::Timestamp(1_700_000_000_000)), "1700000000000");
     }
 
     #[test]
@@ -190,40 +169,5 @@ mod tests {
     fn a_numeric_keeps_every_digit_postgres_printed() {
         let digits = "3.14159265358979323846264338327950288";
         assert_eq!(text(&Value::Numeric(digits.to_owned())), digits);
-    }
-
-    #[test]
-    fn a_list_and_a_set_are_told_apart_by_their_brackets() {
-        let values = vec![Value::Int(1), Value::Int(2)];
-
-        assert_eq!(text(&Value::List(values.clone())), "[1, 2]");
-        assert_eq!(text(&Value::Set(values)), "{1, 2}");
-    }
-
-    #[test]
-    fn a_map_renders_its_entries_in_key_order() {
-        let entries = BTreeMap::from([
-            ("b".to_owned(), Value::Int(2)),
-            ("a".to_owned(), Value::Int(1)),
-        ]);
-
-        assert_eq!(text(&Value::Map(entries)), "{a: 1, b: 2}");
-    }
-
-    #[test]
-    fn a_collection_renders_its_elements_rather_than_their_shape() {
-        let nested = Value::List(vec![
-            Value::Set(vec![Value::Text("x".to_owned())]),
-            Value::Null,
-        ]);
-
-        assert_eq!(text(&nested), "[{x}, null]");
-    }
-
-    #[test]
-    fn an_empty_collection_is_still_recognisable_as_one() {
-        assert_eq!(text(&Value::List(Vec::new())), "[]");
-        assert_eq!(text(&Value::Set(Vec::new())), "{}");
-        assert_eq!(text(&Value::Map(BTreeMap::new())), "{}");
     }
 }

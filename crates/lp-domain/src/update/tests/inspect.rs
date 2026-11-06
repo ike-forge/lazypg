@@ -20,7 +20,10 @@ fn opened_long() -> State {
         Inspected::Cell {
             at: 0,
             column: "c1".to_owned(),
-            value: Value::List((0..38).map(Value::Int).collect()),
+            value: Value::Array(format!(
+                "{{{}}}",
+                (0..38).map(|n| n.to_string()).collect::<Vec<_>>().join(",")
+            )),
         },
     )));
     state

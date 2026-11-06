@@ -80,20 +80,13 @@ const VALUE_OVERHEAD: u64 = size_of::<Value>() as u64;
 
 fn value_bytes(value: &Value) -> u64 {
     let payload = match value {
-        Value::Null | Value::Boolean(_) | Value::Int(_) | Value::Float(_) | Value::Timestamp(_) => {
-            0
-        }
+        Value::Null | Value::Boolean(_) | Value::Int(_) | Value::Float(_) => 0,
         Value::Text(text)
         | Value::Uuid(text)
         | Value::Numeric(text)
         | Value::Array(text)
         | Value::Json(text) => text.len() as u64,
         Value::Blob(bytes) => bytes.len() as u64,
-        Value::List(values) | Value::Set(values) => values.iter().map(value_bytes).sum(),
-        Value::Map(entries) => entries
-            .iter()
-            .map(|(key, value)| key.len() as u64 + value_bytes(value))
-            .sum(),
     };
 
     VALUE_OVERHEAD + payload
@@ -622,24 +615,6 @@ mod tests {
                 QueryId::next
             ),
             Landed::Elsewhere
-        );
-    }
-
-    #[test]
-    fn a_rows_estimate_counts_its_text_and_blobs_recursively() {
-        let row = Row {
-            values: vec![
-                Value::Text("abcd".to_owned()),
-                Value::Blob(vec![0; 10]),
-                Value::List(vec![Value::Uuid("u".repeat(36))]),
-                Value::Map([("k".to_owned(), Value::Int(1))].into_iter().collect()),
-                Value::Null,
-            ],
-        };
-
-        assert_eq!(
-            Bytes::of_row(&row).get(),
-            ROW_OVERHEAD + 7 * VALUE_OVERHEAD + 4 + 10 + 36 + 1
         );
     }
 
