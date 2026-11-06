@@ -91,10 +91,7 @@ pub fn parse(data_type: &str, text: &str) -> Option<Edited> {
     let trimmed = text.trim();
 
     if trimmed.is_empty() && family != Family::Text {
-        return Some(Edited {
-            value: Value::Null,
-            literal: "NULL".to_owned(),
-        });
+        return Some(null());
     }
 
     let value = match family {
@@ -122,6 +119,15 @@ pub fn parse(data_type: &str, text: &str) -> Option<Edited> {
     };
 
     Some(Edited { value, literal })
+}
+
+/// Typed text cannot say `NULL` for text, where blank is `''`.
+#[must_use]
+pub fn null() -> Edited {
+    Edited {
+        value: Value::Null,
+        literal: "NULL".to_owned(),
+    }
 }
 
 /// Postgres's own spellings, `NaN` and the infinities included.

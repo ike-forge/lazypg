@@ -48,7 +48,7 @@ use commit::uncommitted;
 use connections::{
     connect, connect_failed, connected, default_connection_index, schema_failed, schema_loaded,
 };
-use edit::{field_key, start_edit};
+use edit::{field_key, set_null, start_edit};
 use export::{cancel_pending_export, export_progress, finish_export};
 use insert::open_insert_commit;
 use keys::{Decision, edit_line, escape, handle_key, open_filter, overlay_key};
@@ -70,7 +70,7 @@ use yank::copied;
 
 pub(crate) use connections::connection_names;
 pub(crate) use drop::drop_target;
-pub(crate) use edit::{editable_here, has_uncommitted};
+pub(crate) use edit::{editable_here, has_uncommitted, nullable_here};
 pub(crate) use history::history_labels;
 pub(crate) use insert::insert_form;
 pub(crate) use inspect::inspection;

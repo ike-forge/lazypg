@@ -8,7 +8,8 @@ use crate::panel::Panel;
 use crate::state::State;
 
 use super::{
-    Effect, copied, editable_here, escape, field_key, open_insert_commit, quit, start_edit,
+    Effect, copied, editable_here, escape, field_key, open_insert_commit, quit, set_null,
+    start_edit,
 };
 
 pub(super) const fn inspector_extent(state: &State) -> (usize, usize) {
@@ -146,6 +147,7 @@ pub(super) fn inspect_key(state: &mut State, key: Key) -> Vec<Effect> {
         Key::Home => inspector.to_start(),
         Key::End => inspector.to_end(),
         Key::Char('x') if inspector.is_inserting() => inspector.unset(),
+        Key::Char('x') => return set_null(state),
         Key::Char('y') => return copied(inspector.yank()),
         Key::Char('Y') => return copied(inspector.line()),
         Key::Enter | Key::Escape => escape(state),

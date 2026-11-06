@@ -257,6 +257,7 @@ const EDIT: &[Command] = &[
         "unset the field",
         Run::Inert,
     ),
+    Command::mutating(&[Stroke::key(Key::Char('x'))], "set to NULL", Run::Inert),
     EDIT_VALUE,
     COMMIT_EDITS,
     COMMIT_ROW,

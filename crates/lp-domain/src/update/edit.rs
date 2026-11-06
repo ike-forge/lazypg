@@ -19,7 +19,7 @@ pub(super) fn start_edit(state: &mut State) -> Vec<Effect> {
     }
 
     match editable(state) {
-        Ok(field) => {
+        Ok((field, _)) => {
             if let Some(Overlay::Inspect(inspector)) = &mut state.overlay {
                 inspector.start_edit(field);
             }
@@ -47,12 +47,58 @@ pub(crate) fn editable_here(state: &State) -> bool {
     state.posture().permits_mutation() && editable(state).is_ok()
 }
 
+/// Live where `x` would stage a change: the column takes `NULL` and the
+/// field does not already hold it.
+#[must_use]
+pub(crate) fn nullable_here(state: &State) -> bool {
+    let holds_null = matches!(
+        &state.overlay,
+        Some(Overlay::Inspect(inspector)) if matches!(inspector.value_at_cursor(), Some(Value::Null))
+    );
+
+    state.posture().permits_mutation() && !holds_null && matches!(editable(state), Ok((_, true)))
+}
+
+/// Typed text cannot reach `NULL` in a text column, where blank is `''`.
+pub(super) fn set_null(state: &mut State) -> Vec<Effect> {
+    if !state.posture().permits_mutation() {
+        refuse_read_only(state, "editing a value");
+        return Vec::new();
+    }
+
+    match editable(state) {
+        Ok((_, true)) => {
+            let accepted = match &mut state.overlay {
+                Some(Overlay::Inspect(inspector)) => inspector.accept_null(),
+                _ => None,
+            };
+            if let Some((at, column, edited)) = accepted {
+                stage(state, at, column, edited);
+            }
+        }
+        Ok((field, false)) => {
+            state.notify(Severity::Warning, format!("{} is NOT NULL.", field.name()));
+        }
+        Err(refusal) => raise(
+            state,
+            Message {
+                title: "Not editable".to_owned(),
+                message: refusal,
+                severity: Severity::Warning,
+            },
+        ),
+    }
+
+    Vec::new()
+}
+
 #[must_use]
 pub(crate) fn has_uncommitted(state: &State) -> bool {
     uncommitted(state).0 > 0
 }
 
-fn editable(state: &State) -> Result<Field, String> {
+/// With whether the column takes `NULL`.
+fn editable(state: &State) -> Result<(Field, bool), String> {
     let Some(Overlay::Inspect(inspector)) = &state.overlay else {
         return Err(String::new());
     };
@@ -108,7 +154,10 @@ fn editable(state: &State) -> Result<Field, String> {
             }
         });
 
-    Ok(Field::opened(column, name, &declared.data_type, value))
+    Ok((
+        Field::opened(column, name, &declared.data_type, value),
+        declared.nullable,
+    ))
 }
 
 fn row_key(state: &State, described: &crate::model::Table) -> Option<RowKey> {
@@ -163,9 +212,15 @@ pub(super) fn field_key(state: &mut State, key: Key) -> Vec<Effect> {
         return Vec::new();
     };
 
+    stage(state, at, column, edited);
+
+    Vec::new()
+}
+
+fn stage(state: &mut State, at: usize, column: usize, edited: crate::edit::Edited) {
     let row = match &state.overlay {
         Some(Overlay::Inspect(inspector)) => inspector.row(),
-        _ => return Vec::new(),
+        _ => return,
     };
     if let Some(page) = state.contents.loaded_mut() {
         page.set_edit(row, column, edited);
@@ -180,6 +235,4 @@ pub(super) fn field_key(state: &mut State, key: Key) -> Vec<Effect> {
             inspector.unmark(at);
         }
     }
-
-    Vec::new()
 }

@@ -53,6 +53,7 @@ pub(super) const COPY_LINE: Binding = Binding::new(&[key('Y')], "copy line");
 pub(super) const EDIT: Binding = Binding::new(&[key('e')], "edit");
 pub(super) const INSERT: Binding = Binding::new(&[ENTER], "insert");
 pub(super) const UNSET: Binding = Binding::new(&[key('x')], "unset");
+pub(super) const NULL: Binding = Binding::new(&[key('x')], "null");
 pub(super) const COMMIT_ROW: Binding = Binding::new(&[ctrl('s')], "commit row");
 pub(super) const INSPECT_GLOBAL: &[Binding] = &[CLOSE];
 

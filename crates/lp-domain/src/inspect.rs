@@ -269,8 +269,16 @@ impl Inspector {
 
     /// `None` while the text does not parse, which keeps what was typed.
     pub fn accept_edit(&mut self) -> Option<(usize, usize, Edited)> {
-        let field = self.field.as_ref()?;
-        let edited = field.parsed()?;
+        let edited = self.field.as_ref()?.parsed()?;
+
+        self.accept(edited)
+    }
+
+    pub fn accept_null(&mut self) -> Option<(usize, usize, Edited)> {
+        self.accept(crate::edit::null())
+    }
+
+    fn accept(&mut self, edited: Edited) -> Option<(usize, usize, Edited)> {
         let (at, column, _) = self.at_field()?;
 
         self.inspected.set(at, edited.value().clone());

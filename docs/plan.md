@@ -120,7 +120,8 @@ Every LazyCassandra module falls into one of three buckets.
 *Done for the MVP.* Cell edits, row inserts and deletes write Postgres
 literals: a value's text cast to its declared type, integers and booleans
 bare, keys refusing floats and `NULL`. A blank field is `NULL`, or `''` for
-text; an insert omits unset columns so defaults and identities apply.
+text, where `x` in the inspector stages `NULL`; an insert omits unset
+columns so defaults and identities apply.
 Several rows are one `BEGIN; …; COMMIT;`. Updates and deletes need a primary
 key. Drops and truncates stay behind typed confirmation; a schema drops
 without `CASCADE`. An integration test round-trips every type in
@@ -128,7 +129,6 @@ without `CASCADE`. An integration test round-trips every type in
 
 Still to do:
 
-- Setting a text column to `NULL` (blank is `''`).
 - Yank a row as an `INSERT`.
 - An explicit transaction mode with the open transaction visible.
 

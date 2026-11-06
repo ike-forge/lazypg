@@ -12,7 +12,7 @@ use bindings::{
     DISCARD, DONE, DROP, DROP_TYPED, DROP_YES_NO, EDIT, ENTER, EVERY_PAGE, EXPORT, EXPORT_COPY,
     EXPORT_OVERWRITE, EXPORT_ROWS, FIELD, FILTER, FORMAT, HISTORY, HISTORY_GLOBAL, HISTORY_HINT,
     INSERT, INSERT_ROW, INSPECT_GLOBAL, INSPECT_ROW, LEAVE, MOVE, NEXT_MATCH, NEXT_OPTION,
-    NEXT_PAGE, PALETTE_GLOBAL, RUN, SEARCH, SEARCH_GLOBAL, SELECT, SORT, STOP, TOGGLE, UNSET,
+    NEXT_PAGE, NULL, PALETTE_GLOBAL, RUN, SEARCH, SEARCH_GLOBAL, SELECT, SORT, STOP, TOGGLE, UNSET,
 };
 pub(crate) use bindings::{GLOBAL, THEMES, THEMES_GLOBAL};
 
@@ -254,6 +254,7 @@ fn inspect_bar(state: &State, inspector: &Inspector) -> HintBar {
         panel.push(rendered_live(&UNSET, inspector.is_set_at_cursor()));
         panel.push(rendered(&INSERT));
     } else if state.posture().permits_mutation() {
+        panel.push(rendered_live(&NULL, crate::update::nullable_here(state)));
         panel.push(rendered_live(&COMMIT_ROW, !inspector.edited().is_empty()));
     }
 

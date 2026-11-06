@@ -244,3 +244,56 @@ fn a_re_read_discards_the_uncommitted_edits() {
 
     assert_eq!(dirty_cells(&state), 0);
 }
+
+#[test]
+fn x_stages_null_where_a_blank_text_field_would_be_the_empty_string() {
+    let mut state = inspecting_row(3);
+    on_email(&mut state);
+
+    press(&mut state, Key::Char('x'));
+
+    assert_eq!(dirty_cells(&state), 1);
+    let page = state.contents.loaded().expect("a page");
+    assert_eq!(page.value(0, 2), Some(&Value::Null));
+    assert_eq!(
+        page.edits().get(0, 2).map(crate::edit::Edited::literal),
+        Some("NULL")
+    );
+}
+
+#[test]
+fn x_over_a_not_null_column_is_refused_and_stages_nothing() {
+    let mut state = inspecting_row(3);
+    let mut schema = schema_with_email();
+    if let Some(column) = schema
+        .schemas
+        .get_mut("shop")
+        .and_then(|namespace| namespace.tables.get_mut("orders"))
+        .and_then(|table| {
+            table
+                .columns
+                .iter_mut()
+                .find(|column| column.name == "email")
+        })
+    {
+        column.nullable = false;
+    }
+    let conn = current_conn(&state);
+    update(
+        &mut state,
+        Msg::SchemaLoaded {
+            conn,
+            schema: Box::new(schema),
+            took: Duration::ZERO,
+        },
+    );
+    on_email(&mut state);
+
+    press(&mut state, Key::Char('x'));
+
+    assert_eq!(dirty_cells(&state), 0);
+    assert_eq!(
+        toasted(&state),
+        Some((Severity::Warning, "email is NOT NULL."))
+    );
+}
