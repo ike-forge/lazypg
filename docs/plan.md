@@ -117,13 +117,20 @@ Every LazyCassandra module falls into one of three buckets.
 
 ## Phase 2 — Change
 
-Replaces LazyCassandra's CQL write path: literals (`literal.rs`) and cell
-parsing (`edit.rs`), plus the collection and millisecond-timestamp `Value`
-variants nothing reads any more. With Postgres literals, yank a row as an
-`INSERT`.
-Cell edit, row insert and delete (primary key required, shown as `UPDATE …
-WHERE pk = …` before commit); explicit transaction mode with a visible open
-transaction; drop and truncate behind typed confirmation.
+*Done for the MVP.* Cell edits, row inserts and deletes write Postgres
+literals: a value's text cast to its declared type, integers and booleans
+bare, keys refusing floats and `NULL`. A blank field is `NULL`, or `''` for
+text; an insert omits unset columns so defaults and identities apply.
+Several rows are one `BEGIN; …; COMMIT;`. Updates and deletes need a primary
+key. Drops and truncates stay behind typed confirmation; a schema drops
+without `CASCADE`. An integration test round-trips every type in
+`zoo.everything`. Cassandra's table health and value kinds are gone.
+
+Still to do:
+
+- Setting a text column to `NULL` (blank is `''`).
+- Yank a row as an `INSERT`.
+- An explicit transaction mode with the open transaction visible.
 
 ## Phase 3 — Understand
 

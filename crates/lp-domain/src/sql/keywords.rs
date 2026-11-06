@@ -295,6 +295,10 @@ pub(crate) fn is_keyword(word: &str) -> bool {
     lookup(KEYWORDS, word)
 }
 
+pub(crate) fn is_type(word: &str) -> bool {
+    lookup(TYPES, word)
+}
+
 pub(crate) fn is_value_word(word: &str) -> bool {
     lookup(VALUE_WORDS, word)
 }

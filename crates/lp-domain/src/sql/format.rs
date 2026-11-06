@@ -119,7 +119,11 @@ impl Layout {
             return false;
         }
 
-        !(piece.text == "(" && previous.kind == Kind::Identifier && self.binds_brackets())
+        // A type's modifier binds as a call's arguments do: `numeric(10, 2)`.
+        let typed = previous.kind == Kind::Keyword && keywords::is_type(&previous.text);
+
+        !(piece.text == "("
+            && (typed || (previous.kind == Kind::Identifier && self.binds_brackets())))
     }
 
     /// `count(id)` and `INSERT INTO orders (id)` are the same pieces; the
@@ -199,8 +203,9 @@ fn tight_after(text: &str) -> bool {
     matches!(text, "(" | "[" | "{" | "." | ":")
 }
 
+/// `[` for a subscript, an array type and `ARRAY[…]`.
 fn tight_before(text: &str) -> bool {
-    matches!(text, ")" | "]" | "}" | "." | "," | ";" | ":")
+    matches!(text, ")" | "[" | "]" | "}" | "." | "," | ";" | ":")
 }
 
 /// Its own list: type names like `TEXT` are keywords that must never break a
@@ -396,6 +401,14 @@ mod tests {
         assert_eq!(
             formatted("begin; update t set a = 1 returning a; commit;"),
             "BEGIN;\n\nUPDATE t\nSET a = 1\nRETURNING a;\n\nCOMMIT;"
+        );
+    }
+
+    #[test]
+    fn a_bracket_hugs_what_it_subscripts_or_types() {
+        assert_eq!(
+            formatted("select a[1], '{x}'::text[] from t"),
+            "SELECT a[1], '{x}'::TEXT[]\nFROM t"
         );
     }
 }
