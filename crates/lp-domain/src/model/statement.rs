@@ -97,17 +97,18 @@ impl Statement {
             return Self::delete_row(keyspace, table, only);
         }
 
-        let mut sql = "BEGIN BATCH\n".to_owned();
+        // One transaction: a failure part-way commits none of them.
+        let mut sql = "BEGIN;\n".to_owned();
         for key in keys {
             let _ = writeln!(
                 sql,
-                "  DELETE FROM {}.{} WHERE {};",
+                "DELETE FROM {}.{} WHERE {};",
                 quoted(keyspace),
                 quoted(table),
                 restriction(key)
             );
         }
-        sql.push_str("APPLY BATCH");
+        sql.push_str("COMMIT;");
 
         Self {
             sql,
@@ -161,18 +162,19 @@ impl Statement {
             return Self::update_row(keyspace, table, sets, key);
         }
 
-        let mut sql = "BEGIN BATCH\n".to_owned();
+        // One transaction: a failure part-way commits none of them.
+        let mut sql = "BEGIN;\n".to_owned();
         for (sets, key) in rows {
             let _ = writeln!(
                 sql,
-                "  UPDATE {}.{} SET {} WHERE {};",
+                "UPDATE {}.{} SET {} WHERE {};",
                 quoted(keyspace),
                 quoted(table),
                 assignments(sets),
                 restriction(key)
             );
         }
-        sql.push_str("APPLY BATCH");
+        sql.push_str("COMMIT;");
 
         Self {
             sql,
@@ -211,21 +213,64 @@ fn assignments(sets: &[(String, String)]) -> String {
 }
 
 /// The allowlist is the whole gate: an unknown verb counts as mutating.
-const READING: &[&str] = &["SELECT", "USE", "DESCRIBE", "DESC", "LIST"];
+/// `BEGIN`, `START` and `SET` are not here: `BEGIN READ WRITE` and
+/// `SET default_transaction_read_only` would undo the read-only session that
+/// backs a read-only posture (architecture.md §4).
+const READING: &[&str] = &[
+    "ABORT",
+    "COMMIT",
+    "END",
+    "FETCH",
+    "RELEASE",
+    "ROLLBACK",
+    "SAVEPOINT",
+    "SELECT",
+    "SHOW",
+    "TABLE",
+    "VALUES",
+    "WITH",
+];
 
-/// Gated by posture and typed confirmation. `DROP` covers every object it can
-/// name.
-const DESTRUCTIVE: &[&str] = &["DROP", "TRUNCATE"];
+/// Gated by posture and typed confirmation. `DO` and `CALL` run code that may
+/// do anything, so they are confirmed as if they dropped something.
+const DESTRUCTIVE: &[&str] = &["CALL", "DO", "DROP", "TRUNCATE"];
 
-/// `ALTER TABLE … ADD` is a schema change whichever clause spells it.
-const SCHEMA: &[&str] = &["CREATE", "ALTER", "GRANT", "REVOKE"];
+const CATALOG: &[&str] = &[
+    "ALTER", "ANALYZE", "CLUSTER", "COMMENT", "CREATE", "GRANT", "REFRESH", "REINDEX", "REVOKE",
+    "VACUUM",
+];
 
-fn kind_of_verb(verb: &str) -> StatementKind {
+/// A word anywhere in a read that makes it a write: a data-modifying `WITH`,
+/// `SELECT … FOR UPDATE`, a function that changes settings.
+const WRITING: &[&str] = &["DELETE", "INSERT", "MERGE", "SET_CONFIG", "UPDATE"];
+
+fn kind_of_statement(words: &[String]) -> StatementKind {
+    let Some(verb) = words.first().map(String::as_str) else {
+        return StatementKind::Write;
+    };
+    let writes = || words.iter().any(|word| WRITING.contains(&word.as_str()));
+
+    if verb == "EXPLAIN" {
+        // `EXPLAIN ANALYZE` runs what it explains; a plain one runs nothing.
+        let analyzes = words
+            .iter()
+            .any(|word| word == "ANALYZE" || word == "ANALYSE");
+        return if analyzes && writes() {
+            StatementKind::Write
+        } else {
+            StatementKind::Read
+        };
+    }
+
     if READING.contains(&verb) {
-        StatementKind::Read
+        if writes() {
+            StatementKind::Write
+        } else {
+            StatementKind::Read
+        }
     } else if DESTRUCTIVE.contains(&verb) {
         StatementKind::Destructive
-    } else if SCHEMA.contains(&verb) {
+    } else if CATALOG.contains(&verb) {
         StatementKind::Catalog
     } else {
         // Includes every verb this table has not learned.
@@ -243,11 +288,12 @@ const fn severity(kind: StatementKind) -> u8 {
     }
 }
 
-/// An empty buffer classifies as `Write`, like an unknown verb.
+/// The most restricted statement decides. An empty buffer classifies as
+/// `Write`, like an unknown verb.
 fn kind_of(sql: &str) -> StatementKind {
-    crate::sql::opening_words(sql)
+    crate::sql::statement_words(sql)
         .iter()
-        .map(|verb| kind_of_verb(verb))
+        .map(|words| kind_of_statement(words))
         .max_by_key(|kind| severity(*kind))
         .unwrap_or(StatementKind::Write)
 }
@@ -315,7 +361,7 @@ mod tests {
             assert_eq!(
                 Statement::typed(sql).kind,
                 StatementKind::Destructive,
-                "{sql} must not reach the cluster without confirmation"
+                "{sql} must not reach the server without confirmation"
             );
         }
     }
@@ -342,21 +388,23 @@ mod tests {
     fn a_leading_comment_does_not_hide_the_verb() {
         for sql in [
             "-- what this does\nSELECT * FROM shop.orders",
-            "// what this does\nSELECT * FROM shop.orders",
-            "/* what this does */ SELECT * FROM shop.orders",
+            "/* what /* nested */ this does */ SELECT * FROM shop.orders",
         ] {
             assert_eq!(Statement::typed(sql).kind, StatementKind::Read, "{sql}");
         }
     }
 
     #[test]
-    fn reading_the_schema_and_the_session_is_not_a_mutation() {
+    fn a_query_and_ending_a_transaction_is_not_a_mutation() {
         for sql in [
-            "USE shop",
-            "DESCRIBE TABLES",
-            "desc keyspace shop",
-            "LIST ROLES",
-            "LIST ALL PERMISSIONS",
+            "VALUES (1), (2)",
+            "TABLE shop.orders",
+            "SHOW search_path",
+            "WITH recent AS (SELECT 1) SELECT * FROM recent",
+            "EXPLAIN SELECT * FROM shop.orders",
+            "EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM shop.orders",
+            "COMMIT",
+            "ROLLBACK",
         ] {
             assert!(
                 !Statement::typed(sql).mutates(),
@@ -366,12 +414,60 @@ mod tests {
     }
 
     #[test]
+    fn what_could_lift_a_read_only_session_is_a_write() {
+        for sql in [
+            "BEGIN READ WRITE",
+            "BEGIN",
+            "START TRANSACTION READ WRITE",
+            "SET default_transaction_read_only = off",
+            "SET SESSION CHARACTERISTICS AS TRANSACTION READ WRITE",
+            "RESET ALL",
+            "SELECT set_config('default_transaction_read_only', 'off', false)",
+        ] {
+            assert_eq!(Statement::typed(sql).kind, StatementKind::Write, "{sql}");
+        }
+    }
+
+    #[test]
+    fn a_read_that_writes_on_the_way_is_a_write() {
+        for sql in [
+            "WITH gone AS (DELETE FROM shop.orders RETURNING *) SELECT count(*) FROM gone",
+            "SELECT * FROM shop.orders FOR UPDATE",
+            "EXPLAIN ANALYZE UPDATE shop.orders SET total = 0",
+            "EXPLAIN (ANALYZE) INSERT INTO shop.orders VALUES (1)",
+        ] {
+            assert_eq!(Statement::typed(sql).kind, StatementKind::Write, "{sql}");
+        }
+        assert_eq!(
+            Statement::typed("EXPLAIN UPDATE shop.orders SET total = 0").kind,
+            StatementKind::Read,
+            "without ANALYZE the update is only planned"
+        );
+    }
+
+    #[test]
+    fn a_dollar_quoted_body_hides_no_statement_from_the_classifier() {
+        assert_eq!(
+            Statement::typed("SELECT $$ ; DROP TABLE x $$").kind,
+            StatementKind::Read,
+            "the body is a string, not a second statement"
+        );
+        assert_eq!(
+            Statement::typed("DO $$ BEGIN DELETE FROM t; END $$").kind,
+            StatementKind::Destructive,
+            "a block runs code, so it is confirmed"
+        );
+    }
+
+    #[test]
     fn every_verb_that_writes_rows_is_a_write() {
         for sql in [
             "INSERT INTO shop.orders (id) VALUES (1)",
             "UPDATE shop.orders SET total = 1 WHERE id = 1",
             "DELETE FROM shop.orders WHERE id = 1",
-            "BEGIN BATCH INSERT INTO shop.orders (id) VALUES (1); APPLY BATCH",
+            "MERGE INTO shop.orders USING src ON true WHEN MATCHED THEN DELETE",
+            "COPY shop.orders FROM STDIN",
+            "LOCK TABLE shop.orders",
         ] {
             assert_eq!(Statement::typed(sql).kind, StatementKind::Write, "{sql}");
         }
@@ -381,14 +477,16 @@ mod tests {
     fn every_verb_that_changes_schema_or_permissions_is_a_schema_change() {
         for sql in [
             "CREATE TABLE shop.orders (id int PRIMARY KEY)",
-            "CREATE KEYSPACE shop WITH replication = {}",
+            "CREATE SCHEMA shop",
             "CREATE INDEX ON shop.orders (total)",
             "CREATE MATERIALIZED VIEW shop.v AS SELECT * FROM shop.orders",
             "CREATE ROLE reader",
             "ALTER TABLE shop.orders ADD note text",
-            "ALTER KEYSPACE shop WITH durable_writes = true",
-            "GRANT SELECT ON KEYSPACE shop TO reader",
-            "REVOKE MODIFY ON KEYSPACE shop FROM reader",
+            "COMMENT ON TABLE shop.orders IS 'x'",
+            "GRANT SELECT ON ALL TABLES IN SCHEMA shop TO reader",
+            "REVOKE SELECT ON shop.orders FROM reader",
+            "VACUUM shop.orders",
+            "REFRESH MATERIALIZED VIEW shop.v",
         ] {
             assert_eq!(Statement::typed(sql).kind, StatementKind::Catalog, "{sql}");
         }
@@ -398,18 +496,19 @@ mod tests {
     fn every_verb_that_removes_something_is_destructive() {
         for sql in [
             "DROP TABLE shop.orders",
-            "DROP KEYSPACE shop",
+            "DROP SCHEMA shop CASCADE",
             "DROP INDEX shop.orders_total",
             "DROP MATERIALIZED VIEW shop.v",
             "DROP TYPE shop.address",
             "DROP ROLE reader",
             "TRUNCATE shop.orders",
             "TRUNCATE TABLE shop.orders",
+            "CALL shop.purge()",
         ] {
             assert_eq!(
                 Statement::typed(sql).kind,
                 StatementKind::Destructive,
-                "{sql} must not reach the cluster without confirmation"
+                "{sql} must not reach the server without confirmation"
             );
         }
     }
@@ -541,10 +640,10 @@ mod tests {
         ];
         assert_eq!(
             Statement::update_rows("shop", "orders", &two).sql,
-            "BEGIN BATCH\n  \
-             UPDATE \"shop\".\"orders\" SET \"note\" = 'x' WHERE \"id\" = 8f14e45f;\n  \
+            "BEGIN;\n\
+             UPDATE \"shop\".\"orders\" SET \"note\" = 'x' WHERE \"id\" = 8f14e45f;\n\
              UPDATE \"shop\".\"orders\" SET \"qty\" = 7 WHERE \"id\" = c9f0f895;\n\
-             APPLY BATCH"
+             COMMIT;"
         );
     }
 
@@ -591,10 +690,10 @@ mod tests {
         let two = vec![key(), vec![("id".to_owned(), "c9f0f895".to_owned())]];
         assert_eq!(
             Statement::delete_rows("shop", "orders", &two).sql,
-            "BEGIN BATCH\n  \
-             DELETE FROM \"shop\".\"orders\" WHERE \"id\" = 8f14e45f;\n  \
+            "BEGIN;\n\
+             DELETE FROM \"shop\".\"orders\" WHERE \"id\" = 8f14e45f;\n\
              DELETE FROM \"shop\".\"orders\" WHERE \"id\" = c9f0f895;\n\
-             APPLY BATCH"
+             COMMIT;"
         );
     }
 }

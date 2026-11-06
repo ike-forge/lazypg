@@ -79,7 +79,7 @@ fn n_abandons_the_drop() {
     let effects = press(&mut state, Key::Char('n'));
 
     assert!(state.overlay.is_none());
-    assert!(effects.is_empty(), "nothing reaches the cluster");
+    assert!(effects.is_empty(), "nothing reaches the server");
     assert!(state.dropping.is_none());
 }
 
@@ -334,7 +334,7 @@ fn a_failed_drop_reloads_nothing_and_says_why() {
     assert!(
         matches!(&state.overlay, Some(Overlay::Message(message))
             if message.severity == Severity::Danger && message.message.contains("no route")),
-        "the cluster's own reason is what is raised"
+        "the server's own reason is what is raised"
     );
 }
 
@@ -468,8 +468,8 @@ fn several_rows_delete_as_one_batch() {
     let effects = press(&mut state, Key::Char('y'));
 
     let sql = deleted_cql(&effects).expect("a statement");
-    assert!(sql.starts_with("BEGIN BATCH\n"), "{sql}");
-    assert!(sql.ends_with("APPLY BATCH"), "{sql}");
+    assert!(sql.starts_with("BEGIN;\n"), "{sql}");
+    assert!(sql.ends_with("COMMIT;"), "{sql}");
     assert_eq!(sql.matches("DELETE FROM").count(), 2, "{sql}");
 }
 

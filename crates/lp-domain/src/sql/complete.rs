@@ -960,7 +960,7 @@ mod tests {
     #[test]
     fn a_select_list_leads_with_the_columns_even_where_it_names_no_table() {
         let schema = schema();
-        let completion = suggest(&typed("SELECT to"), Some(&schema), Some("shop")).expect("offers");
+        let completion = suggest(&typed("SELECT i"), Some(&schema), Some("shop")).expect("offers");
 
         assert_eq!(
             completion.candidates().first().map(|c| c.kind),
@@ -971,7 +971,7 @@ mod tests {
             completion
                 .candidates()
                 .iter()
-                .any(|candidate| candidate.text == "TO"),
+                .any(|candidate| candidate.text == "IS"),
             "and the grammar is still reachable behind them"
         );
     }
@@ -1219,9 +1219,9 @@ mod tests {
 
     #[test]
     fn a_with_clause_offers_the_options_it_takes() {
-        let offered = offers("CREATE TABLE shop.t (id uuid) WITH comp", Some("shop"));
+        let offered = offers("CREATE TABLE shop.t (id uuid) WITH (fill", Some("shop"));
 
-        assert_eq!(offered, ["compaction".to_owned(), "compression".to_owned()]);
+        assert_eq!(offered, ["fillfactor".to_owned()]);
     }
 
     #[test]
@@ -1234,27 +1234,6 @@ mod tests {
             completion.candidates().first().map(|c| c.kind),
             Some(CandidateKind::Table),
             "a FROM clause wants a table, and a keyword starting with `ord` is noise there"
-        );
-    }
-
-    #[test]
-    fn a_cursor_after_use_offers_keyspaces_only() {
-        let schema = schema();
-        // Only the `Expect::Schema` branch leaves schemas alone.
-        let completion = suggest(&typed("USE se"), Some(&schema), Some("shop")).expect("offers");
-
-        assert!(
-            completion
-                .candidates()
-                .iter()
-                .all(|candidate| candidate.kind == CandidateKind::Schema),
-            "USE takes a keyspace and nothing else"
-        );
-        assert!(
-            completion
-                .candidates()
-                .iter()
-                .any(|candidate| candidate.text == "secrets")
         );
     }
 

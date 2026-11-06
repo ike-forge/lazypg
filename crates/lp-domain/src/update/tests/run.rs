@@ -287,7 +287,7 @@ fn a_destructive_statement_is_refused_until_confirmation_exists() {
 
     assert!(
         effects.is_empty(),
-        "nothing reaches the cluster without the confirmation vision.md §4 principle 6 requires"
+        "nothing reaches the server without the confirmation vision.md §4 principle 6 requires"
     );
     assert_eq!(state.contents.outstanding(), None);
     assert!(
@@ -321,12 +321,13 @@ fn every_mutating_statement_typed_by_hand_is_refused_and_says_why() {
         "INSERT INTO shop.orders (id) VALUES (1)",
         "UPDATE shop.orders SET total = 1 WHERE id = 1",
         "DELETE FROM shop.orders WHERE id = 1",
-        "BEGIN BATCH INSERT INTO shop.orders (id) VALUES (1); APPLY BATCH",
+        "BEGIN READ WRITE",
+        "SET default_transaction_read_only = off",
         "CREATE TABLE shop.new (id int PRIMARY KEY)",
-        "CREATE KEYSPACE other WITH replication = {}",
+        "CREATE SCHEMA other",
         "ALTER TABLE shop.orders ADD note text",
-        "GRANT SELECT ON KEYSPACE shop TO reader",
-        "REVOKE MODIFY ON KEYSPACE shop FROM reader",
+        "GRANT SELECT ON shop.orders TO reader",
+        "REVOKE SELECT ON shop.orders FROM reader",
         "DROP TABLE shop.orders",
         "TRUNCATE shop.orders",
         "-- innocent\nDROP KEYSPACE shop",
@@ -336,7 +337,7 @@ fn every_mutating_statement_typed_by_hand_is_refused_and_says_why() {
 
         let effects = run_query(&mut state);
 
-        assert!(effects.is_empty(), "{sql} reached the cluster");
+        assert!(effects.is_empty(), "{sql} reached the server");
         assert!(
             matches!(&state.overlay, Some(Overlay::Message(message))
                 if message.title == "Read-only connection"),

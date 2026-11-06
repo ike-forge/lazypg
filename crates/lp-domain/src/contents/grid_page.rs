@@ -416,7 +416,7 @@ mod tests {
         assert_eq!(
             drawn(&panel, 0),
             ["Bob", "Ada", "Cleo"],
-            "and then the order the cluster returned"
+            "and then the order the server returned"
         );
         assert_eq!(panel.loaded().and_then(GridPage::sort), None);
     }

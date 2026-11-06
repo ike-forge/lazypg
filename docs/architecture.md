@@ -63,6 +63,15 @@ as mutating on a read-only connection never becomes an `Effect`. Postgres
 adds a second rail: read-only sessions set `default_transaction_read_only =
 on`, so a CTE with a `DELETE` the lexer misses is refused by the server.
 
+The two rails guard each other. A session can lift its own default with
+`SET`, `BEGIN READ WRITE`, `START TRANSACTION` or `set_config(…)`, so the
+domain classifies those as writes; `EXPLAIN ANALYZE` executes what it
+explains and is classified by it. Classification reads every word of every
+statement the lexer splits, so a `;` in a string or a dollar-quoted body
+hides nothing. A function that writes, called from a `SELECT`, is the
+server's rail alone; a read-only role is the only rail that holds against
+everything.
+
 ## 5. Ports
 
 | Port | Responsibility |

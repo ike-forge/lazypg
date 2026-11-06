@@ -72,7 +72,7 @@ fn enter_inspects_the_row_as_the_grid_draws_it() {
     else {
         panic!("the row is up");
     };
-    assert_eq!(*number, 1, "the gutter's number, not the cluster's order");
+    assert_eq!(*number, 1, "the gutter's number, not the server's order");
     assert_eq!(values[0], Value::Text("r2c0".to_owned()));
 }
 

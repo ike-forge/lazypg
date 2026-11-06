@@ -209,6 +209,19 @@ struct Machine {
     /// Not `verb != Unread`: a stray identifier or `)` after `;` reaches no
     /// `keyword()`, and would look like the placeholder a trailing `;` opens.
     has_content: bool,
+    after: After,
+}
+
+/// What the last word was, where it decides the next one.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+enum After {
+    #[default]
+    Other,
+    /// A bare name next is its alias: `FROM shop.orders o`.
+    Table,
+    /// `PRIMARY` or `FOREIGN`, so `key` is grammar, not a column. `key` is no
+    /// keyword: columns are called that.
+    KeyWord,
 }
 
 impl Machine {
@@ -244,24 +257,35 @@ impl Machine {
     }
 
     fn keyword(&mut self, word: &str) {
-        // A batch's wrapper words change nothing; nested statements resolve as
-        // standalone.
-        if matches!(word, "BEGIN" | "BATCH" | "APPLY" | "UNLOGGED" | "COUNTER") {
-            return;
-        }
+        self.after = if matches!(word, "PRIMARY" | "FOREIGN") {
+            After::KeyWord
+        } else {
+            After::Other
+        };
 
         if self.verb == Verb::Unread {
-            if word == "SELECT"
+            // `EXPLAIN` and its options name nothing; what follows is read as
+            // if it stood alone.
+            if matches!(word, "EXPLAIN" | "ANALYZE" | "ANALYSE" | "VERBOSE") {
+                return;
+            }
+
+            if matches!(word, "SELECT" | "WITH" | "TABLE" | "VALUES")
                 && let Some(scope) = self.scopes.last_mut()
             {
                 scope.kind = Statement::Select;
             }
 
             self.verb = match word {
-                "SELECT" | "INSERT" | "UPDATE" | "DELETE" | "TRUNCATE" | "USE" | "DROP" => {
-                    Verb::Data
+                "SELECT" | "INSERT" | "UPDATE" | "DELETE" | "TRUNCATE" | "DROP" | "TABLE"
+                | "MERGE" | "VALUES" => Verb::Data,
+                // A leading `WITH` names its queries, as an alias does.
+                "WITH" => {
+                    self.verb = Verb::Data;
+                    self.expect = self.enter(Expect::Alias);
+                    return;
                 }
-                "CREATE" | "ALTER" => Verb::Catalog,
+                "CREATE" | "ALTER" | "COMMENT" => Verb::Catalog,
                 _ => Verb::Uncovered,
             };
         }
@@ -276,16 +300,19 @@ impl Machine {
         }
 
         self.expect = match word {
-            // `GRANT … ON` never reaches here: `GRANT` is uncovered.
-            "FROM" | "INTO" | "UPDATE" | "TRUNCATE" | "TABLE" | "ON" => {
+            // A join's `ON` takes its condition; elsewhere (`CREATE INDEX …
+            // ON t`) it names a table. `GRANT … ON` never reaches here:
+            // `GRANT` is uncovered.
+            "ON" if self.verb == Verb::Data => self.enter(Expect::Column),
+            "FROM" | "INTO" | "UPDATE" | "TRUNCATE" | "TABLE" | "ON" | "JOIN" => {
                 if let Some(scope) = self.scopes.last_mut() {
                     scope.table_clause = true;
                 }
                 self.enter(Expect::Table)
             }
-            "USE" | "KEYSPACE" | "SCHEMA" => self.enter(Expect::Schema),
-            "SELECT" | "DELETE" | "WHERE" | "SET" | "BY" | "TOKEN" | "PRIMARY" | "RENAME"
-            | "DROP" => self.enter(Expect::Column),
+            "SCHEMA" => self.enter(Expect::Schema),
+            "SELECT" | "DELETE" | "WHERE" | "SET" | "BY" | "PRIMARY" | "RENAME" | "DROP"
+            | "HAVING" | "RETURNING" | "USING" => self.enter(Expect::Column),
             // `AND` continues the open clause: in `WITH` it chains options.
             "AND" => {
                 let base = self.base;
@@ -296,7 +323,7 @@ impl Machine {
                 self.enter(Expect::Column)
             }
             "WITH" => self.enter(Expect::Property),
-            "VALUES" | "USING" | "LIMIT" | "IN" | "CONTAINS" => self.enter(Expect::Value),
+            "VALUES" | "LIMIT" | "OFFSET" | "IN" | "LIKE" | "ILIKE" => self.enter(Expect::Value),
             // Before a pending table or keyspace name, `IF [NOT] EXISTS`
             // modifies it and opens no clause.
             "IF" if !matches!(self.expect, Expect::Table | Expect::Schema) => {
@@ -318,7 +345,11 @@ impl Machine {
             match character {
                 '(' => {
                     if self.expect == Expect::Column {
-                        if let Some(index) = self.last_identifier {
+                        // Only a name read as a column: `PRIMARY KEY (` names
+                        // no function.
+                        if let Some(index) = self.last_identifier
+                            && self.roles[index] == Some(Role::Column)
+                        {
                             self.roles[index] = Some(Role::Function);
                         }
                     } else if self.expect == Expect::Table {
@@ -331,7 +362,10 @@ impl Machine {
                     }
                 }
                 ')' => self.alternating = false,
-                ',' => self.expect = self.base,
+                ',' => {
+                    self.expect = self.base;
+                    self.after = After::Other;
+                }
                 ';' => self.end_statement(),
                 '=' | '<' | '>' | '!' => self.expect = Expect::Value,
                 _ => {}
@@ -342,6 +376,11 @@ impl Machine {
     fn identifier(&mut self, text: &str) -> Option<Role> {
         let name = fold(text);
 
+        let after = std::mem::take(&mut self.after);
+        if after == After::KeyWord && name == "key" {
+            return None;
+        }
+
         match self.expect {
             Expect::Schema => {
                 self.record(Name {
@@ -350,9 +389,14 @@ impl Machine {
                 });
                 Some(Role::Schema)
             }
+            Expect::Table if after == After::Table && !self.dot_before => {
+                self.pending_keyspace = None;
+                Some(Role::Alias)
+            }
             Expect::Table => {
-                // Only an adjacent `.` qualifies: `FROM shop orders` stays two
-                // names.
+                self.after = After::Table;
+                // Only an adjacent `.` qualifies: `FROM shop orders` is a
+                // table and its alias.
                 let qualified = self.pending_keyspace.take().filter(|_| self.dot_before);
 
                 if let Some((index, keyspace)) = qualified {
@@ -385,7 +429,10 @@ impl Machine {
                 self.expect = self.base;
                 Some(Role::Alias)
             }
-            Expect::Keyword | Expect::Value | Expect::Nothing => None,
+            // `c.id = o.cid`: past a comparison a name is a column, as SQL
+            // compares columns as readily as values.
+            Expect::Value => Some(Role::Column),
+            Expect::Keyword | Expect::Nothing => None,
         }
     }
 
@@ -412,6 +459,7 @@ impl Machine {
         self.pending_keyspace = None;
         self.last_identifier = None;
         self.has_content = false;
+        self.after = After::Other;
     }
 
     fn finish(mut self, pieces: usize) -> Analysis {
@@ -543,7 +591,7 @@ mod tests {
                 keyspace: Some("shop".to_owned()),
                 table: "orders".to_owned()
             }],
-            "CQL allows space around the dot"
+            "SQL allows space around the dot"
         );
 
         assert_eq!(
@@ -564,17 +612,11 @@ mod tests {
 
         assert_eq!(
             qualified("SELECT * FROM shop orders"),
-            vec![
-                Name {
-                    keyspace: None,
-                    table: "shop".to_owned()
-                },
-                Name {
-                    keyspace: None,
-                    table: "orders".to_owned()
-                }
-            ],
-            "two bare names in a row are not fused"
+            vec![Name {
+                keyspace: None,
+                table: "shop".to_owned()
+            }],
+            "two bare names in a row are a table and its alias, not one name"
         );
     }
 
@@ -705,35 +747,6 @@ mod tests {
     }
 
     #[test]
-    fn use_takes_a_keyspace_and_nothing_else() {
-        assert_eq!(
-            roles("USE shop"),
-            vec![("shop".to_owned(), Some(Role::Schema))]
-        );
-    }
-
-    #[test]
-    fn a_batch_resolves_each_statement_it_nests() {
-        assert_eq!(
-            roles(
-                "BEGIN BATCH \
-                 INSERT INTO shop.orders (id) VALUES (1); \
-                 UPDATE shop.customers SET name = 'a' WHERE id = 2; \
-                 APPLY BATCH"
-            ),
-            vec![
-                ("shop".to_owned(), Some(Role::Schema)),
-                ("orders".to_owned(), Some(Role::Table)),
-                ("id".to_owned(), Some(Role::Column)),
-                ("shop".to_owned(), Some(Role::Schema)),
-                ("customers".to_owned(), Some(Role::Table)),
-                ("name".to_owned(), Some(Role::Column)),
-                ("id".to_owned(), Some(Role::Column)),
-            ]
-        );
-    }
-
-    #[test]
     fn a_select_list_alias_is_not_a_column() {
         assert_eq!(
             roles("SELECT id AS number FROM t"),
@@ -791,6 +804,8 @@ mod tests {
                 ("orders".to_owned(), Some(Role::Table)),
                 ("id".to_owned(), Some(Role::Column)),
                 ("total".to_owned(), Some(Role::Column)),
+                // A name to the lexer, grammar to the resolver.
+                ("KEY".to_owned(), None),
                 ("id".to_owned(), Some(Role::Column)),
             ]
         );
@@ -811,10 +826,12 @@ mod tests {
     #[test]
     fn a_with_clause_names_options_rather_than_columns() {
         assert_eq!(
-            roles("CREATE KEYSPACE shop WITH replication = {'class': 'SimpleStrategy'}"),
+            roles("CREATE TABLE shop.t (id int) WITH (fillfactor = 70)"),
             vec![
                 ("shop".to_owned(), Some(Role::Schema)),
-                ("replication".to_owned(), Some(Role::Property)),
+                ("t".to_owned(), Some(Role::Table)),
+                ("id".to_owned(), Some(Role::Column)),
+                ("fillfactor".to_owned(), Some(Role::Property)),
             ]
         );
     }
@@ -838,32 +855,20 @@ mod tests {
             ]
         );
         assert_eq!(
-            roles("DROP KEYSPACE shop"),
+            roles("DROP SCHEMA shop"),
             vec![("shop".to_owned(), Some(Role::Schema))]
         );
     }
 
     #[test]
-    fn a_chained_with_option_stays_a_property_rather_than_reopening_a_condition_list() {
+    fn a_list_of_storage_parameters_stays_properties_past_the_comma() {
         assert_eq!(
-            roles("CREATE TABLE t (id uuid) WITH comment = 'x' AND compaction = {'class': 'X'}"),
+            roles("CREATE TABLE t (id uuid) WITH (fillfactor = 70, autovacuum_enabled = false)"),
             vec![
                 ("t".to_owned(), Some(Role::Table)),
                 ("id".to_owned(), Some(Role::Column)),
-                ("comment".to_owned(), Some(Role::Property)),
-                ("compaction".to_owned(), Some(Role::Property)),
-            ],
-            "the map literal's keys carry no role either"
-        );
-        assert_eq!(
-            roles(
-                "ALTER KEYSPACE k WITH durable_writes = true \
-                 AND replication = {'class': 'SimpleStrategy'}"
-            ),
-            vec![
-                ("k".to_owned(), Some(Role::Schema)),
-                ("durable_writes".to_owned(), Some(Role::Property)),
-                ("replication".to_owned(), Some(Role::Property)),
+                ("fillfactor".to_owned(), Some(Role::Property)),
+                ("autovacuum_enabled".to_owned(), Some(Role::Property)),
             ]
         );
     }
@@ -1029,11 +1034,6 @@ mod tests {
     }
 
     #[test]
-    fn a_cursor_after_use_expects_a_keyspace() {
-        assert_eq!(context("USE |").expects, Expect::Schema);
-    }
-
-    #[test]
     fn a_cursor_in_an_insert_column_list_expects_a_column() {
         let at = context("INSERT INTO shop.orders (i|");
 
@@ -1095,5 +1095,68 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn a_join_names_its_tables_and_their_aliases_and_its_condition_columns() {
+        assert_eq!(
+            roles("SELECT o.id FROM shop.orders o JOIN shop.customer AS c ON c.id = o.cid"),
+            vec![
+                ("o".to_owned(), Some(Role::Column)),
+                ("id".to_owned(), Some(Role::Column)),
+                ("shop".to_owned(), Some(Role::Schema)),
+                ("orders".to_owned(), Some(Role::Table)),
+                ("o".to_owned(), Some(Role::Alias)),
+                ("shop".to_owned(), Some(Role::Schema)),
+                ("customer".to_owned(), Some(Role::Table)),
+                ("c".to_owned(), Some(Role::Alias)),
+                ("c".to_owned(), Some(Role::Column)),
+                ("id".to_owned(), Some(Role::Column)),
+                ("o".to_owned(), Some(Role::Column)),
+                ("cid".to_owned(), Some(Role::Column)),
+            ]
+        );
+    }
+
+    #[test]
+    fn explain_is_transparent_and_a_cte_names_its_query() {
+        let scanned = pieces("EXPLAIN SELECT * FROM shop.orders");
+        let analysis = resolve(&scanned);
+        assert_eq!(analysis.statement_at(0), Statement::Select);
+        assert_eq!(analysis.tables_at(scanned.len() - 1).len(), 1);
+
+        assert_eq!(
+            roles("WITH recent AS (SELECT id FROM shop.orders) SELECT id FROM recent"),
+            vec![
+                ("recent".to_owned(), Some(Role::Alias)),
+                ("id".to_owned(), Some(Role::Column)),
+                ("shop".to_owned(), Some(Role::Schema)),
+                ("orders".to_owned(), Some(Role::Table)),
+                ("id".to_owned(), Some(Role::Column)),
+                ("recent".to_owned(), Some(Role::Table)),
+            ]
+        );
+    }
+
+    #[test]
+    fn returning_and_group_by_take_columns() {
+        assert_eq!(
+            roles("DELETE FROM t WHERE a = 1 RETURNING b"),
+            vec![
+                ("t".to_owned(), Some(Role::Table)),
+                ("a".to_owned(), Some(Role::Column)),
+                ("b".to_owned(), Some(Role::Column)),
+            ]
+        );
+        assert_eq!(
+            roles("SELECT a, count(*) FROM t GROUP BY a HAVING count(*) > 1"),
+            vec![
+                ("a".to_owned(), Some(Role::Column)),
+                ("count".to_owned(), Some(Role::Function)),
+                ("t".to_owned(), Some(Role::Table)),
+                ("a".to_owned(), Some(Role::Column)),
+                ("count".to_owned(), Some(Role::Function)),
+            ]
+        );
     }
 }

@@ -30,9 +30,6 @@ struct Layout {
     line: String,
     /// A clause keyword inside brackets is not a clause.
     depth: usize,
-    /// Batch members are indented, so statement boundaries show without reading
-    /// for `;`.
-    batched: bool,
     /// A blank line between statements.
     separate: bool,
     previous: Option<Piece>,
@@ -44,20 +41,11 @@ impl Layout {
         // does.
         let piece = &Piece {
             kind: piece.kind,
-            text: Self::written(piece),
+            text: self.written(piece),
         };
 
         if std::mem::take(&mut self.separate) {
             self.lines.push(String::new());
-        }
-
-        // The indent was written when the last member's `;` wrapped; take it
-        // back.
-        if piece.text == "APPLY" {
-            self.batched = false;
-            if self.blank() {
-                self.line.clear();
-            }
         }
 
         if self.breaks_before(piece) {
@@ -75,12 +63,20 @@ impl Layout {
             self.wrap(false);
         }
 
-        self.separate = piece.text == ";" && !self.batched;
+        self.separate = piece.text == ";";
     }
 
     /// A name's case is load-bearing, and a literal's case is its value.
-    fn written(piece: &Piece) -> String {
-        if piece.kind == Kind::Keyword {
+    /// `key` is a name to the lexer, since columns are called that, but after
+    /// `PRIMARY` or `FOREIGN` it is grammar.
+    fn written(&self, piece: &Piece) -> String {
+        let after_key_word = self
+            .previous
+            .as_ref()
+            .is_some_and(|previous| matches!(previous.text.as_str(), "PRIMARY" | "FOREIGN"));
+
+        if piece.kind == Kind::Keyword || (after_key_word && piece.text.eq_ignore_ascii_case("key"))
+        {
             piece.text.to_ascii_uppercase()
         } else {
             piece.text.clone()
@@ -92,7 +88,7 @@ impl Layout {
         self.line.trim_start().is_empty()
     }
 
-    /// Compound clauses (`INSERT INTO`, `PER PARTITION LIMIT`) stay whole.
+    /// Compound clauses (`INSERT INTO`, `LEFT JOIN`) stay whole.
     fn breaks_before(&self, piece: &Piece) -> bool {
         if self.blank() || self.depth > 0 || piece.kind != Kind::Keyword {
             return false;
@@ -135,15 +131,6 @@ impl Layout {
     }
 
     fn track(&mut self, piece: &Piece) {
-        if piece.text == "BATCH"
-            && self
-                .previous
-                .as_ref()
-                .is_some_and(|previous| previous.text == "BEGIN")
-        {
-            self.batched = true;
-        }
-
         match piece.text.as_str() {
             "(" | "[" | "{" => self.depth += 1,
             ")" | "]" | "}" => self.depth = self.depth.saturating_sub(1),
@@ -161,7 +148,7 @@ impl Layout {
         }
 
         self.lines.push(std::mem::take(&mut self.line));
-        for _ in 0..usize::from(self.batched) + usize::from(indented) {
+        if indented {
             self.line.push_str(INDENT);
         }
     }
@@ -175,20 +162,25 @@ impl Layout {
 
 /// Only pairs whose second word would open a clause alone.
 const COMPOUND: &[(&str, &str)] = &[
-    ("AGGREGATE", "IF"),
-    ("COLUMNFAMILY", "IF"),
     ("CREATE", "OR"),
+    ("CROSS", "JOIN"),
     ("DELETE", "FROM"),
-    ("FUNCTION", "IF"),
-    ("INDEX", "IF"),
+    ("DO", "UPDATE"),
+    ("EXCEPT", "ALL"),
+    ("FOR", "UPDATE"),
+    ("FULL", "JOIN"),
+    ("FULL", "OUTER"),
+    ("INNER", "JOIN"),
     ("INSERT", "INTO"),
-    ("KEYSPACE", "IF"),
-    ("PARTITION", "LIMIT"),
-    ("ROLE", "IF"),
-    ("TABLE", "IF"),
-    ("TYPE", "IF"),
-    ("USER", "IF"),
-    ("VIEW", "IF"),
+    ("INTERSECT", "ALL"),
+    ("LEFT", "JOIN"),
+    ("LEFT", "OUTER"),
+    ("NATURAL", "JOIN"),
+    ("NATURAL", "LEFT"),
+    ("OUTER", "JOIN"),
+    ("RIGHT", "JOIN"),
+    ("RIGHT", "OUTER"),
+    ("UNION", "ALL"),
 ];
 
 const DEFINES: &[&str] = &["ALTER", "CREATE", "DROP", "INSERT"];
@@ -202,21 +194,54 @@ fn ends_a_line(piece: &Piece) -> bool {
     piece.text == ";" || (piece.kind == Kind::Comment && !piece.text.starts_with("/*"))
 }
 
+/// `:` for the `::` of a cast.
 fn tight_after(text: &str) -> bool {
-    matches!(text, "(" | "[" | "{" | ".")
+    matches!(text, "(" | "[" | "{" | "." | ":")
 }
 
 fn tight_before(text: &str) -> bool {
-    matches!(text, ")" | "]" | "}" | "." | "," | ";")
+    matches!(text, ")" | "]" | "}" | "." | "," | ";" | ":")
 }
 
-/// Its own list: type names like `TEXT` and `MAP` are keywords that must never
-/// break a line.
+/// Its own list: type names like `TEXT` are keywords that must never break a
+/// line. `ON` stays with its join, `IF` with its `NOT EXISTS`.
 fn is_clause(text: &str) -> bool {
     const CLAUSES: &[&str] = &[
-        "ALLOW", "ALTER", "AND", "APPLY", "BEGIN", "CREATE", "DELETE", "DROP", "FROM", "GRANT",
-        "GROUP", "IF", "INSERT", "INTO", "LIMIT", "OR", "ORDER", "PER", "REVOKE", "SELECT", "SET",
-        "TRUNCATE", "UPDATE", "USE", "USING", "VALUES", "WHERE", "WITH",
+        "ALTER",
+        "AND",
+        "CREATE",
+        "CROSS",
+        "DELETE",
+        "DROP",
+        "EXCEPT",
+        "FROM",
+        "FULL",
+        "GRANT",
+        "GROUP",
+        "HAVING",
+        "INNER",
+        "INSERT",
+        "INTERSECT",
+        "JOIN",
+        "LEFT",
+        "LIMIT",
+        "NATURAL",
+        "OFFSET",
+        "OR",
+        "ORDER",
+        "RETURNING",
+        "REVOKE",
+        "RIGHT",
+        "SELECT",
+        "SET",
+        "TRUNCATE",
+        "UNION",
+        "UPDATE",
+        "USING",
+        "VALUES",
+        "WHERE",
+        "WINDOW",
+        "WITH",
     ];
 
     debug_assert!(
@@ -270,28 +295,12 @@ mod tests {
     }
 
     #[test]
-    fn a_batch_indents_its_members_and_not_its_brackets() {
-        assert_eq!(
-            formatted(
-                "BEGIN BATCH UPDATE t SET a = 1 WHERE id = 7; DELETE FROM t WHERE id = 8; APPLY BATCH"
-            ),
-            "BEGIN BATCH\n  UPDATE t\n  SET a = 1\n  WHERE id = 7;\n  DELETE FROM t\n  WHERE id = 8;\nAPPLY BATCH"
-        );
-    }
-
-    #[test]
-    fn a_conjunction_inside_a_batch_is_indented_under_its_member() {
-        assert_eq!(
-            formatted("BEGIN BATCH UPDATE t SET a = 1 WHERE id = 7 AND at = 8; APPLY BATCH"),
-            "BEGIN BATCH\n  UPDATE t\n  SET a = 1\n  WHERE id = 7\n    AND at = 8;\nAPPLY BATCH"
-        );
-    }
-
-    #[test]
     fn a_compound_clause_stays_on_one_line() {
         assert_eq!(
-            formatted("SELECT * FROM t PER PARTITION LIMIT 1 ORDER BY a DESC ALLOW FILTERING"),
-            "SELECT *\nFROM t\nPER PARTITION LIMIT 1\nORDER BY a DESC\nALLOW FILTERING"
+            formatted(
+                "select o.id from shop.orders o left outer join shop.customer c on c.id = o.customer_id union all select 1 for update"
+            ),
+            "SELECT o.id\nFROM shop.orders o\nLEFT OUTER JOIN shop.customer c ON c.id = o.customer_id\nUNION ALL\nSELECT 1 FOR UPDATE"
         );
     }
 
@@ -330,16 +339,6 @@ mod tests {
     }
 
     #[test]
-    fn a_batch_is_one_unit_between_its_brackets() {
-        assert_eq!(
-            formatted(
-                "BEGIN BATCH UPDATE t SET a = 1; DELETE FROM t WHERE id = 8; APPLY BATCH; SELECT 1"
-            ),
-            "BEGIN BATCH\n  UPDATE t\n  SET a = 1;\n  DELETE FROM t\n  WHERE id = 8;\nAPPLY BATCH;\n\nSELECT 1"
-        );
-    }
-
-    #[test]
     fn a_line_comment_closes_its_line_and_keeps_what_follows_off_it() {
         assert_eq!(
             formatted("SELECT 1 -- why\nFROM t"),
@@ -367,9 +366,9 @@ mod tests {
     fn a_create_table_keeps_its_definition_together() {
         assert_eq!(
             formatted(
-                "create table if not exists shop.orders (id uuid primary key, total int) with comment = 'x'"
+                "create table if not exists shop.orders (id uuid primary key, total int) with (fillfactor = 70)"
             ),
-            "CREATE TABLE IF NOT EXISTS shop.orders (id UUID PRIMARY KEY, total INT)\nWITH comment = 'x'"
+            "CREATE TABLE IF NOT EXISTS shop.orders (id UUID PRIMARY KEY, total INT)\nWITH (fillfactor = 70)"
         );
     }
 
@@ -378,5 +377,25 @@ mod tests {
         let laid_out = "SELECT *\nFROM shop.orders\nWHERE id = 7\n  AND total > 10\nLIMIT 200";
 
         assert_eq!(formatted(laid_out), laid_out);
+    }
+
+    #[test]
+    fn a_cast_binds_tight_and_a_dollar_quoted_body_is_never_relaid() {
+        assert_eq!(
+            formatted("select a :: text from t"),
+            "SELECT a::TEXT\nFROM t"
+        );
+        assert_eq!(
+            formatted("do $$ begin  select 1; end $$"),
+            "DO $$ begin  select 1; end $$"
+        );
+    }
+
+    #[test]
+    fn a_transaction_is_three_statements() {
+        assert_eq!(
+            formatted("begin; update t set a = 1 returning a; commit;"),
+            "BEGIN;\n\nUPDATE t\nSET a = 1\nRETURNING a;\n\nCOMMIT;"
+        );
     }
 }

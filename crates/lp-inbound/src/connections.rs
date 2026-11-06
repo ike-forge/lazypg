@@ -344,7 +344,7 @@ mod tests {
 
         assert!(
             !frame.contains("prod"),
-            "a truncated connection name is a lie about which cluster it reaches"
+            "a truncated connection name is a lie about which server it reaches"
         );
     }
 

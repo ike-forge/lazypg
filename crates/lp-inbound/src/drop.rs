@@ -60,7 +60,7 @@ fn width(view: &DropView, frame_width: u16) -> u16 {
     needed.max(MIN_WIDTH).min(frame_width)
 }
 
-/// The last line is kept: a batch without `APPLY BATCH` is not a statement.
+/// The last line is kept: a transaction without its `COMMIT` is not the statement that runs.
 /// Only `DELETE` lines are elided, so the count reads as rows.
 fn statement(view: &DropView) -> Vec<String> {
     if view.sql.len() <= MAX_CQL_LINES {
@@ -506,7 +506,7 @@ mod tests {
         assert!(drawn.contains("This row cannot be brought back."));
         assert!(drawn.contains("Yes, delete it"));
         assert!(
-            !drawn.contains("BEGIN BATCH"),
+            !drawn.contains("BEGIN;"),
             "a batch of one is a batch the user has to read past"
         );
     }
@@ -524,9 +524,9 @@ mod tests {
     fn a_long_batch_is_elided_in_the_middle_and_says_how_much() {
         let drawn = text(&drawn(120, 30, deleting(9)));
 
-        assert!(drawn.contains("BEGIN BATCH"));
+        assert!(drawn.contains("BEGIN;"));
         assert!(drawn.contains("… and 4 more"));
-        assert!(drawn.contains("APPLY BATCH"));
+        assert!(drawn.contains("COMMIT;"));
     }
 
     fn find(buffer: &Buffer, needle: &str) -> (u16, u16) {

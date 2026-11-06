@@ -554,7 +554,7 @@ mod tests {
 
         assert!(
             rows.iter().all(|row| row.token == Token::Faint),
-            "a system keyspace and its tables are the cluster's, not the user's"
+            "a system keyspace and its tables are the server's, not the user's"
         );
     }
 

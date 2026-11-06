@@ -1,4 +1,4 @@
-//! CQL split into the runs a reader distinguishes. A scanner, not a parser: a
+//! SQL split into the runs a reader distinguishes. A scanner, not a parser: a
 //! formatter that reordered a misparsed clause would change the statement.
 
 use super::keywords;
@@ -61,20 +61,20 @@ fn run(source: &[char], at: usize) -> (Kind, usize) {
         return (Kind::Identifier, quoted(source, at, '"'));
     }
 
-    // Before words: a uuid may open with a hex letter, and its dashes would
-    // otherwise format as subtraction.
-    if first.is_ascii_hexdigit()
-        && let Some(len) = uuid(source, at)
-    {
+    // `E'…'` escapes with backslashes; `B'…'`, `X'…'` and `U&'…'` only change
+    // what the quoted text means.
+    if let Some(len) = prefixed_string(source, at) {
         return (Kind::Literal, len);
     }
 
-    if first.is_ascii_digit() {
+    if first.is_ascii_digit()
+        || (first == '.' && source.get(at + 1).is_some_and(char::is_ascii_digit))
+    {
         return (Kind::Literal, number(source, at));
     }
 
     if first.is_alphabetic() || first == '_' {
-        let len = while_matching(source, at, |c| c.is_alphanumeric() || c == '_');
+        let len = while_matching(source, at, |c| c.is_alphanumeric() || c == '_' || c == '$');
         let word: String = source[at..at + len].iter().collect();
 
         if keywords::is_value_word(&word) {
@@ -90,35 +90,47 @@ fn run(source: &[char], at: usize) -> (Kind, usize) {
         return (kind, len);
     }
 
-    // `:name` and `?` are bind markers; `$$…$$` is CQL's other string form.
-    if first == ':'
-        && at + 1 < source.len()
-        && (source[at + 1].is_alphabetic() || source[at + 1] == '_')
-    {
-        let len = while_matching(source, at + 1, |c| c.is_alphanumeric() || c == '_');
-        return (Kind::Identifier, len + 1);
-    }
-
-    if first == '$' && source.get(at + 1) == Some(&'$') {
-        return (Kind::Literal, dollar_quoted(source, at));
+    if first == '$' {
+        // `$1`: a parameter stands for a value.
+        if source.get(at + 1).is_some_and(char::is_ascii_digit) {
+            return (
+                Kind::Literal,
+                1 + while_matching(source, at + 1, |c| c.is_ascii_digit()),
+            );
+        }
+        if let Some(len) = dollar_quoted(source, at) {
+            return (Kind::Literal, len);
+        }
     }
 
     (Kind::Punctuation, 1)
 }
 
-/// An unterminated block runs to the end of the buffer.
+/// An unterminated block runs to the end of the buffer. Blocks nest, as
+/// Postgres's do.
 fn comment(source: &[char], at: usize) -> Option<usize> {
     let pair = (source[at], *source.get(at + 1)?);
 
     match pair {
-        ('-', '-') | ('/', '/') => Some(while_matching(source, at, |c| c != '\n')),
+        ('-', '-') => Some(while_matching(source, at, |c| c != '\n')),
         ('/', '*') => {
-            let mut end = at + 2;
+            let mut depth = 0_usize;
+            let mut end = at;
             while end < source.len() {
-                if source[end] == '*' && source.get(end + 1) == Some(&'/') {
-                    return Some(end + 2 - at);
+                match (source[end], source.get(end + 1)) {
+                    ('/', Some('*')) => {
+                        depth += 1;
+                        end += 2;
+                    }
+                    ('*', Some('/')) => {
+                        depth -= 1;
+                        end += 2;
+                        if depth == 0 {
+                            return Some(end - at);
+                        }
+                    }
+                    _ => end += 1,
                 }
-                end += 1;
             }
             Some(source.len() - at)
         }
@@ -145,23 +157,54 @@ fn quoted(source: &[char], at: usize, quote: char) -> usize {
     source.len() - at
 }
 
-fn dollar_quoted(source: &[char], at: usize) -> usize {
-    let mut end = at + 2;
+/// `E'it\'s'`: a backslash escapes the next character, a doubled quote still
+/// is a quote.
+fn escaped(source: &[char], at: usize) -> usize {
+    let mut end = at + 1;
 
     while end < source.len() {
-        if source[end] == '$' && source.get(end + 1) == Some(&'$') {
-            return end + 2 - at;
+        match source[end] {
+            '\\' => end += 2,
+            '\'' if source.get(end + 1) == Some(&'\'') => end += 2,
+            '\'' => return end + 1 - at,
+            _ => end += 1,
         }
-        end += 1;
     }
 
     source.len() - at
 }
 
-/// A uuid's hyphens would otherwise scan as subtractions.
+fn prefixed_string(source: &[char], at: usize) -> Option<usize> {
+    let first = source[at].to_ascii_uppercase();
+    match (first, source.get(at + 1), source.get(at + 2)) {
+        ('E', Some('\''), _) => Some(1 + escaped(source, at + 1)),
+        ('B' | 'X' | 'N', Some('\''), _) => Some(1 + quoted(source, at + 1, '\'')),
+        ('U', Some('&'), Some('\'')) => Some(2 + quoted(source, at + 2, '\'')),
+        _ => None,
+    }
+}
+
+/// `$tag$ … $tag$`, the tag empty or an identifier. `None` when the opening
+/// is not one, so a lone `$` is punctuation.
+fn dollar_quoted(source: &[char], at: usize) -> Option<usize> {
+    let tag_len = while_matching(source, at + 1, |c| c.is_alphanumeric() || c == '_');
+    if source.get(at + 1 + tag_len) != Some(&'$')
+        || source.get(at + 1).is_some_and(char::is_ascii_digit)
+    {
+        return None;
+    }
+    let delimiter = &source[at..at + tag_len + 2];
+    let body = at + delimiter.len();
+
+    let close = (body..source.len()).find(|&end| source[end..].starts_with(delimiter));
+    Some(close.map_or(source.len() - at, |end| end + delimiter.len() - at))
+}
+
+/// `0x`, `0o` and `0b` integers and `_` separators are Postgres 16's; an older
+/// server rejects them, which is its error to report.
 fn number(source: &[char], at: usize) -> usize {
-    if source[at] == '0' && matches!(source.get(at + 1), Some('x' | 'X')) {
-        return while_matching(source, at + 2, char::is_alphanumeric) + 2;
+    if source[at] == '0' && matches!(source.get(at + 1), Some('x' | 'X' | 'o' | 'O' | 'b' | 'B')) {
+        return while_matching(source, at + 2, |c| c.is_alphanumeric() || c == '_') + 2;
     }
 
     let mut end = at;
@@ -175,7 +218,12 @@ fn number(source: &[char], at: usize) -> usize {
                 .get(end + 1)
                 .is_some_and(|next| next.is_ascii_digit() || matches!(next, '+' | '-'));
 
-        if !(character.is_ascii_digit() || character == '.' || exponent_sign || exponent) {
+        if !(character.is_ascii_digit()
+            || character == '.'
+            || character == '_'
+            || exponent_sign
+            || exponent)
+        {
             break;
         }
 
@@ -183,37 +231,6 @@ fn number(source: &[char], at: usize) -> usize {
     }
 
     end - at
-}
-
-fn uuid(source: &[char], at: usize) -> Option<usize> {
-    const GROUPS: [usize; 5] = [8, 4, 4, 4, 12];
-    let mut end = at;
-
-    for (index, group) in GROUPS.iter().enumerate() {
-        if index > 0 {
-            if source.get(end) != Some(&'-') {
-                return None;
-            }
-            end += 1;
-        }
-
-        for _ in 0..*group {
-            if !source.get(end)?.is_ascii_hexdigit() {
-                return None;
-            }
-            end += 1;
-        }
-    }
-
-    // A longer word starting with a uuid is a word.
-    if source
-        .get(end)
-        .is_some_and(|c| c.is_alphanumeric() || *c == '_' || *c == '-')
-    {
-        return None;
-    }
-
-    Some(end - at)
 }
 
 fn while_matching(source: &[char], at: usize, matches: impl Fn(char) -> bool) -> usize {
@@ -330,30 +347,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn a_uuid_is_one_literal_and_not_three_subtractions() {
-        assert_eq!(
-            kinds("123e4567-e89b-12d3-a456-426614174000"),
-            vec![(
-                Kind::Literal,
-                "123e4567-e89b-12d3-a456-426614174000".to_owned()
-            )]
-        );
-    }
-
     /// Version 1 puts the timestamp's high nibbles first, so `now()` uuids
     /// often open with a letter.
-    #[test]
-    fn a_uuid_opening_with_a_hex_letter_is_one_literal_too() {
-        assert_eq!(
-            kinds("c1000000-0000-4000-8000-000000000002"),
-            vec![(
-                Kind::Literal,
-                "c1000000-0000-4000-8000-000000000002".to_owned()
-            )]
-        );
-    }
-
     #[test]
     fn a_name_spelled_in_hex_letters_is_still_a_name() {
         assert_eq!(kinds_only("deadbeef"), vec![Kind::Identifier]);
@@ -389,15 +384,74 @@ mod tests {
     }
 
     #[test]
-    fn a_bind_marker_names_a_value_the_way_a_column_does() {
+    fn a_multibyte_name_is_one_piece() {
+        assert_eq!(kinds("café"), vec![(Kind::Identifier, "café".to_owned())]);
+    }
+
+    #[test]
+    fn an_escape_string_ends_at_the_first_quote_no_backslash_escapes() {
         assert_eq!(
-            kinds(":since"),
-            vec![(Kind::Identifier, ":since".to_owned())]
+            kinds(r"E'it\'s' x"),
+            [
+                (Kind::Literal, r"E'it\'s'".to_owned()),
+                (Kind::Identifier, "x".to_owned()),
+            ]
         );
     }
 
     #[test]
-    fn a_multibyte_name_is_one_piece() {
-        assert_eq!(kinds("café"), vec![(Kind::Identifier, "café".to_owned())]);
+    fn a_dollar_quoted_body_is_one_literal_whatever_it_holds() {
+        let body = "$fn$ BEGIN RETURN 'x'; END $$ inner $$ $fn$";
+        assert_eq!(
+            kinds(&format!("{body};")),
+            [
+                (Kind::Literal, body.to_owned()),
+                (Kind::Punctuation, ";".to_owned()),
+            ]
+        );
+        assert_eq!(kinds_only("$$a;b$$"), [Kind::Literal]);
+    }
+
+    #[test]
+    fn a_parameter_is_a_value_and_a_lone_dollar_is_punctuation() {
+        assert_eq!(kinds_only("$1"), [Kind::Literal]);
+        assert_eq!(kinds_only("$"), [Kind::Punctuation]);
+    }
+
+    #[test]
+    fn a_cast_is_punctuation_then_a_type() {
+        assert_eq!(
+            kinds("1::text"),
+            [
+                (Kind::Literal, "1".to_owned()),
+                (Kind::Punctuation, ":".to_owned()),
+                (Kind::Punctuation, ":".to_owned()),
+                (Kind::Keyword, "text".to_owned()),
+            ]
+        );
+    }
+
+    #[test]
+    fn block_comments_nest_and_a_double_slash_is_no_comment() {
+        assert_eq!(
+            kinds_only("/* a /* b */ c */x"),
+            [Kind::Comment, Kind::Identifier]
+        );
+        assert_eq!(
+            kinds_only("a//b"),
+            [
+                Kind::Identifier,
+                Kind::Punctuation,
+                Kind::Punctuation,
+                Kind::Identifier,
+            ]
+        );
+    }
+
+    #[test]
+    fn a_common_column_name_is_a_name_not_grammar() {
+        for word in ["type", "key", "comment", "name", "first"] {
+            assert_eq!(kinds_only(word), [Kind::Identifier], "{word}");
+        }
     }
 }

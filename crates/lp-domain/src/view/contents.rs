@@ -673,7 +673,7 @@ mod tests {
         };
         assert_eq!(
             text,
-            "cluster rejected the statement: undefined column name total"
+            "server rejected the statement: undefined column name total"
         );
         assert_eq!(token, Some(Token::Severity(Severity::Danger)));
     }

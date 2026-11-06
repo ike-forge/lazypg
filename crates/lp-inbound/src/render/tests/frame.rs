@@ -289,7 +289,7 @@ fn a_fatal_failure_is_drawn_like_any_other_message() {
     let mut state = State::default();
     state.overlay = Some(Overlay::Fatal(Message {
         title: "Connection failed".to_owned(),
-        message: "could not reach the cluster: no route to host".to_owned(),
+        message: "could not reach the server: no route to host".to_owned(),
         severity: Severity::Danger,
     }));
 

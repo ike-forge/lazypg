@@ -27,7 +27,7 @@ async fn connecting_and_describing_fills_the_tables_panel() {
     run(&cluster, &mut state, effects).await;
 
     let PanelBody::Tree { rows, selected, .. } = &view_model(&state).panels[0].body else {
-        panic!("a described cluster lists its schemas");
+        panic!("a described server lists its schemas");
     };
     assert_eq!(
         rows.iter()
@@ -89,7 +89,7 @@ async fn pressing_l_unfolds_a_keyspace_and_the_view_model_shows_its_tables() {
     );
 
     let PanelBody::Tree { rows, selected, .. } = &view_model(&state).panels[0].body else {
-        panic!("a described cluster with tables lists a tree");
+        panic!("a described server with tables lists a tree");
     };
     assert_eq!(
         rows.iter()
@@ -131,7 +131,7 @@ async fn pressing_h_from_a_table_lands_on_its_parent_keyspace() {
     update(&mut state, Msg::Input(KeyPress::new(Key::Char('l'))));
 
     let PanelBody::Tree { selected, .. } = &view_model(&state).panels[0].body else {
-        panic!("a described cluster with tables lists a tree");
+        panic!("a described server with tables lists a tree");
     };
     assert_eq!(*selected, 1, "the second l steps into the first table");
 
@@ -142,7 +142,7 @@ async fn pressing_h_from_a_table_lands_on_its_parent_keyspace() {
     );
 
     let PanelBody::Tree { rows, selected, .. } = &view_model(&state).panels[0].body else {
-        panic!("a described cluster with tables lists a tree");
+        panic!("a described server with tables lists a tree");
     };
     assert_eq!(*selected, 0);
     assert!(
@@ -661,7 +661,7 @@ async fn deleting_the_selected_rows_re_reads_the_grid() {
         3,
         "the read, the batch, and the re-read: {ran:?}"
     );
-    assert!(ran[1].starts_with("BEGIN BATCH"), "{}", ran[1]);
+    assert!(ran[1].starts_with("BEGIN;"), "{}", ran[1]);
     assert_eq!(ran[1].matches("DELETE FROM").count(), 2, "{}", ran[1]);
     assert_eq!(
         ran[2], "SELECT * FROM shop.orders ORDER BY id",

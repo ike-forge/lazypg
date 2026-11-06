@@ -92,9 +92,14 @@ Every LazyCassandra module falls into one of three buckets.
    them, NULL drawn apart from text; every other type in Postgres's own
    text. The local sort compares numbers as numbers and keeps nulls last.
    Arrays, ranges and composites stay text until the inspector (step 6).
-4. **SQL editor.** Lexer, highlighting, statement split under the cursor,
-   run, cancel, `$EDITOR` hand-off, schema-aware completion (schemas,
-   relations, columns, keywords).
+4. **SQL editor.** *Done.* Postgres lexer (`E''` and prefixed strings,
+   `$tag$` bodies, nested comments, `$1`, `::`, PG16 numbers), keywords that
+   leave common column names (`type`, `key`, `comment`) as names, statement
+   splitting with no batch, classification by every word (see
+   architecture.md §4), a formatter for joins, set operations and
+   `RETURNING`, and a resolver that reads `JOIN … ON`, aliases, CTEs and
+   `EXPLAIN`. Multi-row writes are one `BEGIN; …; COMMIT;`. Still to do:
+   completing `alias.` to that table's columns, and a CTE's columns.
 5. **Session log and history.** Every statement LazyPg runs, including its
    own catalog queries when asked to show them.
 6. **Inspect, yank, export.** Cell inspector (pretty JSON, arrays,

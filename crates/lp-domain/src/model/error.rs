@@ -5,7 +5,7 @@ use thiserror::Error;
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum DbError {
-    #[error("could not reach the cluster: {0}")]
+    #[error("could not reach the server: {0}")]
     Unreachable(String),
 
     #[error("authentication failed: {0}")]
@@ -17,7 +17,7 @@ pub enum DbError {
     #[error("query timed out")]
     Timeout,
 
-    #[error("cluster rejected the statement: {0}")]
+    #[error("server rejected the statement: {0}")]
     Invalid(String),
 
     #[error("statement is not permitted on a read-only connection")]
@@ -27,7 +27,7 @@ pub enum DbError {
     Cancelled,
 
     /// The cluster is not told, so the write may still land.
-    #[error("cancelled before the cluster answered; it may still have been applied")]
+    #[error("cancelled before the server answered; it may still have been applied")]
     CancelledWrite,
 
     #[error("{0}")]

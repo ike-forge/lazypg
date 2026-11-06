@@ -130,7 +130,7 @@ mod tests {
     fn failure() -> Message {
         Message {
             title: "Connection failed".to_owned(),
-            message: "could not reach the cluster".to_owned(),
+            message: "could not reach the server".to_owned(),
             severity: Severity::Danger,
         }
     }
@@ -145,7 +145,7 @@ mod tests {
 
         let drawn = text(&buffer);
         assert!(drawn.contains("Connection failed"));
-        assert!(drawn.contains("could not reach the cluster"));
+        assert!(drawn.contains("could not reach the server"));
     }
 
     #[test]
@@ -200,7 +200,7 @@ mod tests {
 
     #[test]
     fn a_message_shorter_than_the_width_is_one_line() {
-        assert_eq!(wrapped_line_count("could not reach the cluster", 54), 1);
+        assert_eq!(wrapped_line_count("could not reach the server", 54), 1);
     }
 
     #[test]

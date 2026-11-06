@@ -121,7 +121,7 @@ pub enum ExportError {
     Exists,
     #[error("could not write the file: {0}")]
     Io(String),
-    #[error("the cluster stopped answering: {0}")]
+    #[error("the server stopped answering: {0}")]
     Cluster(DbError),
     #[error(
         "the result is over the {} MB clipboard limit (export.clipboard_mb); export it to a file instead",

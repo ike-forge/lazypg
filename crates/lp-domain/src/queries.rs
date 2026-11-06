@@ -661,17 +661,6 @@ mod tests {
         assert_eq!(panel.statement().as_deref(), Some("SELECT 2"));
     }
 
-    #[test]
-    fn a_batch_is_one_statement_to_step_over_and_to_run() {
-        assert_eq!(
-            stepped("BEGIN BATCH\nINSERT INTO a (id) VALUES (1);\nAPPLY BATCH;\nSELECT * FROM a"),
-            [
-                "BEGIN BATCH\nINSERT INTO a (id) VALUES (1);\nAPPLY BATCH;",
-                "SELECT * FROM a"
-            ]
-        );
-    }
-
     /// `replace` leaves the cursor past the last `;`.
     #[test]
     fn a_cursor_past_the_last_semicolon_still_names_the_statement_it_closed() {

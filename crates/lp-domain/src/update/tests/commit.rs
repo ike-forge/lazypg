@@ -22,14 +22,14 @@ fn ctrl_s_shows_the_update_it_would_run() {
 }
 
 #[test]
-fn several_edited_rows_become_one_batch() {
+fn several_edited_rows_become_one_transaction() {
     let mut state = committable(2);
 
     ctrl(&mut state, Key::Char('s'));
 
     let prompt = committing(&state).expect("the confirmation is up");
     assert!(
-        prompt.statement().sql.starts_with("BEGIN BATCH"),
+        prompt.statement().sql.starts_with("BEGIN;"),
         "{}",
         prompt.statement().sql
     );
@@ -38,15 +38,15 @@ fn several_edited_rows_become_one_batch() {
         .iter()
         .map(|line| crate::style::text(line))
         .collect();
-    assert_eq!(drawn.first().map(String::as_str), Some("BEGIN BATCH"));
-    assert_eq!(drawn.last().map(String::as_str), Some("APPLY BATCH"));
+    assert_eq!(drawn.first().map(String::as_str), Some("BEGIN;"));
+    assert_eq!(drawn.last().map(String::as_str), Some("COMMIT;"));
     assert_eq!(
         drawn
             .iter()
-            .filter(|line| line.starts_with("  UPDATE "))
+            .filter(|line| line.starts_with("UPDATE "))
             .count(),
         2,
-        "one verb per edited row, indented under the brackets"
+        "one statement per edited row, inside one transaction"
     );
 }
 
@@ -113,7 +113,7 @@ fn a_committed_write_lands_in_the_page_and_clears_the_marks() {
             .map(crate::cell::text)
             .as_deref(),
         Some("ada@example.com!"),
-        "the page holds what the cluster was sent"
+        "the page holds what the server was sent"
     );
 }
 

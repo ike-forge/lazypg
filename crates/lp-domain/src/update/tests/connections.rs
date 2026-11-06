@@ -203,7 +203,7 @@ fn a_config_naming_no_default_connects_to_nothing() {
 
     assert!(
         effects.is_empty(),
-        "no file named a cluster, so none is reached"
+        "no file named a server, so none is reached"
     );
     assert!(matches!(state.connection, ConnectionState::Unchosen));
 }

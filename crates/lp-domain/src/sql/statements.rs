@@ -1,6 +1,5 @@
-//! The buffer split into runnable statements. Unlike
-//! [`resolve`](super::resolve), a batch is one statement: the protocol sends
-//! one per request.
+//! The buffer split into runnable statements: at every `;` the lexer did not
+//! read inside a string, a quoted name, a dollar-quoted body or a comment.
 
 use super::lex::{Kind, pieces};
 
@@ -26,27 +25,18 @@ pub fn statements(text: &str) -> Vec<Span> {
     let mut at = 0;
     let mut start = None;
     let mut end = 0;
-    let mut batched = false;
 
     for piece in pieces(text) {
         let next = at + piece.text.chars().count();
 
         match piece.kind {
             Kind::Whitespace | Kind::Comment => {}
-            Kind::Punctuation if piece.text == ";" && !batched => {
+            Kind::Punctuation if piece.text == ";" => {
                 if let Some(start) = start.take() {
                     spans.push(Span { start, end: next });
                 }
             }
             _ => {
-                if piece.kind == Kind::Keyword {
-                    match piece.text.to_ascii_uppercase().as_str() {
-                        "BEGIN" => batched = true,
-                        "APPLY" => batched = false,
-                        _ => {}
-                    }
-                }
-
                 start.get_or_insert(at);
                 end = next;
             }
@@ -121,36 +111,6 @@ mod tests {
     }
 
     #[test]
-    fn a_batch_is_one_statement_however_many_semicolons_it_holds() {
-        let batch = "BEGIN BATCH \
-                     INSERT INTO a (id) VALUES (1); \
-                     INSERT INTO b (id) VALUES (2); \
-                     APPLY BATCH";
-
-        assert_eq!(split(batch), [batch]);
-    }
-
-    #[test]
-    fn a_statement_after_a_batch_is_its_own() {
-        let text = "BEGIN BATCH INSERT INTO a (id) VALUES (1); APPLY BATCH; SELECT * FROM a";
-
-        assert_eq!(
-            split(text),
-            [
-                "BEGIN BATCH INSERT INTO a (id) VALUES (1); APPLY BATCH;",
-                "SELECT * FROM a"
-            ]
-        );
-    }
-
-    #[test]
-    fn an_unterminated_batch_swallows_the_rest_of_the_buffer() {
-        let text = "BEGIN BATCH INSERT INTO a (id) VALUES (1); SELECT * FROM a";
-
-        assert_eq!(split(text), [text]);
-    }
-
-    #[test]
     fn a_semicolon_inside_a_literal_separates_nothing() {
         assert_eq!(
             split("INSERT INTO a (v) VALUES ('one; two')"),
@@ -170,5 +130,22 @@ mod tests {
 
         assert_eq!(split(text), ["SELECT 'café';", "SELECT 1"]);
         assert_eq!(statements(text)[1].start, 14);
+    }
+
+    #[test]
+    fn a_transaction_is_each_of_its_statements() {
+        assert_eq!(
+            split("BEGIN; UPDATE t SET a = 1; COMMIT;"),
+            ["BEGIN;", "UPDATE t SET a = 1;", "COMMIT;"]
+        );
+    }
+
+    #[test]
+    fn a_semicolon_in_a_function_body_splits_nothing() {
+        let create = "CREATE FUNCTION f() RETURNS int AS $body$ BEGIN RETURN 1; END $body$ LANGUAGE plpgsql;";
+        assert_eq!(
+            split(&format!("{create} SELECT f();")),
+            [create, "SELECT f();"]
+        );
     }
 }

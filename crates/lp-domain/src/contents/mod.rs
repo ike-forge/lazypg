@@ -563,7 +563,7 @@ mod tests {
         assert_eq!(
             panel.outstanding(),
             None,
-            "nothing was ever asked of the cluster"
+            "nothing was ever asked of the server"
         );
     }
 

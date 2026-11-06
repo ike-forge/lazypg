@@ -213,7 +213,7 @@ async fn a_fetched_export_asks_the_cluster_nothing() {
     assert_eq!(
         cluster.executed(),
         read,
-        "the export asked the cluster nothing beyond the panel's original read"
+        "the export asked the server nothing beyond the panel's original read"
     );
 
     let written = writer.written();
@@ -369,7 +369,7 @@ async fn a_cluster_that_fails_mid_export_leaves_no_partial_file() {
     );
     assert!(
         finished.message.contains("connection reset"),
-        "the cluster's own failure reaches the user: {finished:?}"
+        "the server's own failure reaches the user: {finished:?}"
     );
 }
 

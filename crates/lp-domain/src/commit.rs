@@ -150,7 +150,7 @@ impl Discard {
     #[must_use]
     pub fn message(&self) -> String {
         format!(
-            "{} {} in {} {} {} not been written to the cluster.",
+            "{} {} in {} {} {} not been written to the database.",
             self.cells,
             noun(self.cells, "cell", "cells"),
             self.rows,
@@ -244,7 +244,7 @@ mod tests {
     }
 
     #[test]
-    fn a_batch_indents_its_members_under_the_brackets() {
+    fn several_rows_are_one_transaction_a_statement_each() {
         let batch = CommitPrompt::opened(
             TableRef::new("shop", "orders"),
             Statement::update_rows(
@@ -268,14 +268,17 @@ mod tests {
         assert_eq!(
             drawn(&batch),
             [
-                "BEGIN BATCH",
-                "  UPDATE \"shop\".\"orders\"",
-                "  SET \"note\" = 'x'",
-                "  WHERE \"id\" = 7;",
-                "  UPDATE \"shop\".\"orders\"",
-                "  SET \"note\" = 'y'",
-                "  WHERE \"id\" = 8;",
-                "APPLY BATCH"
+                "BEGIN;",
+                "",
+                "UPDATE \"shop\".\"orders\"",
+                "SET \"note\" = 'x'",
+                "WHERE \"id\" = 7;",
+                "",
+                "UPDATE \"shop\".\"orders\"",
+                "SET \"note\" = 'y'",
+                "WHERE \"id\" = 8;",
+                "",
+                "COMMIT;"
             ]
         );
     }
@@ -284,11 +287,11 @@ mod tests {
     fn the_warning_never_says_one_rows() {
         assert_eq!(
             Discard::of(1, 1).message(),
-            "1 cell in 1 row has not been written to the cluster."
+            "1 cell in 1 row has not been written to the database."
         );
         assert_eq!(
             Discard::of(3, 2).message(),
-            "3 cells in 2 rows have not been written to the cluster."
+            "3 cells in 2 rows have not been written to the database."
         );
     }
 }

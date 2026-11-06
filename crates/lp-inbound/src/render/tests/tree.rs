@@ -215,7 +215,7 @@ fn a_dimmed_rows_icon_keeps_the_colour_of_what_it_names() {
     assert_eq!(
         buffer.cell((4, 2)).expect("inside the panel").fg,
         faint,
-        "the name it precedes stays the cluster's"
+        "the name it precedes stays the server's"
     );
 }
 

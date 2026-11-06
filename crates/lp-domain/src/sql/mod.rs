@@ -133,24 +133,35 @@ const fn token(kind: Kind, role: Option<Role>) -> Option<Token> {
 
 /// Scanned, not split: a leading comment is not a verb and a `;` in a string is
 /// not a separator. Getting either wrong lets a write past a read-only posture.
+/// Each statement's words, upper case, without literals, comments or
+/// punctuation: what classifying it reads.
 #[must_use]
-pub(crate) fn opening_words(text: &str) -> Vec<String> {
-    let mut words = Vec::new();
+pub(crate) fn statement_words(text: &str) -> Vec<Vec<String>> {
+    let mut statements: Vec<Vec<String>> = Vec::new();
     let mut open = false;
 
     for piece in lex::pieces(text) {
         match piece.kind {
-            Kind::Comment | Kind::Whitespace => {}
             Kind::Punctuation if piece.text == ";" => open = false,
-            _ if open => {}
-            _ => {
-                open = true;
-                words.push(piece.text.to_ascii_uppercase());
+            Kind::Keyword | Kind::Identifier => {
+                if !open {
+                    statements.push(Vec::new());
+                    open = true;
+                }
+                if let Some(words) = statements.last_mut() {
+                    words.push(piece.text.to_ascii_uppercase());
+                }
             }
+            // A statement opening with a literal or a bracket is still one.
+            Kind::Literal | Kind::Punctuation if !open => {
+                statements.push(Vec::new());
+                open = true;
+            }
+            _ => {}
         }
     }
 
-    words
+    statements
 }
 
 #[cfg(test)]

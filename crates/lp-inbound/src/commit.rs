@@ -293,7 +293,10 @@ mod tests {
         // Every statement line is readable, unlike a drop's elided batch.
         let (buffer, lines) = drawn(80, 14, prompt(30));
 
-        assert_eq!(lines, 92, "three clauses a verb, and both brackets");
+        assert_eq!(
+            lines, 123,
+            "three clauses and a blank line a statement, and BEGIN and COMMIT"
+        );
         assert!(
             rows(&buffer).iter().any(|row| row.contains('▐')),
             "{:#?}",
