@@ -478,3 +478,45 @@ async fn every_value_read_back_spells_a_literal_postgres_finds_and_accepts() {
         assert!(written.is_ok(), "{} = {literal}: {written:?}", column.name);
     }
 }
+
+#[tokio::test]
+async fn rows_yanked_as_inserts_recreate_themselves_in_a_copy() {
+    let db = connected(Posture::Writable, DriverConfig::default()).await;
+    let catalog = db.describe(conn()).await.expect("describes");
+    let table = &catalog.schemas["zoo"].tables["everything"];
+    let page = query(&db, "SELECT * FROM zoo.everything ORDER BY id").await;
+    assert!(!page.rows.is_empty(), "the zoo is seeded");
+    let copy = format!("yank_{}", std::process::id());
+    let inserts =
+        lp_domain::yank::inserts(&copy, table, &page.columns, &page.rows).expect("columns");
+    let write = |sql: String| Statement {
+        sql,
+        kind: StatementKind::Write,
+    };
+
+    db.execute(
+        conn(),
+        &write(format!(
+            "CREATE SCHEMA {copy}; \
+             CREATE TABLE {copy}.everything (LIKE zoo.everything INCLUDING ALL); {inserts}"
+        )),
+    )
+    .await
+    .expect("the copy takes every insert");
+    let matched = query(
+        &db,
+        &format!(
+            "SELECT count(*) FROM zoo.everything AS z \
+             JOIN {copy}.everything AS c ON z::text = c::text"
+        ),
+    )
+    .await;
+    db.execute(conn(), &write(format!("DROP SCHEMA {copy} CASCADE")))
+        .await
+        .expect("drops the copy");
+
+    assert_eq!(
+        matched.rows[0].values[0],
+        Value::Int(i64::try_from(page.rows.len()).expect("fits"))
+    );
+}

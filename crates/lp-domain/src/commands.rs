@@ -281,6 +281,11 @@ const CONTENTS: &[Command] = &[
     ),
     // Inert: it answers inside the inspector alone.
     Command::new(&[Stroke::key(Key::Char('Y'))], "copy this line", Run::Inert),
+    Command::new(
+        &[Stroke::key(Key::Char('Y'))],
+        "copy rows as INSERT",
+        Run::In(Panel::Contents),
+    ),
     Command::paging(&[Stroke::key(Key::Char('p'))], "fetch the next page"),
     Command::paging(&[Stroke::key(Key::Char('P'))], "fetch every page"),
     Command::new(

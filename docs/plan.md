@@ -125,11 +125,11 @@ columns so defaults and identities apply.
 Several rows are one `BEGIN; …; COMMIT;`. Updates and deletes need a primary
 key. Drops and truncates stay behind typed confirmation; a schema drops
 without `CASCADE`. An integration test round-trips every type in
-`zoo.everything`. Cassandra's table health and value kinds are gone.
+`zoo.everything`. `Y` on a table's grid copies the selected rows as
+`INSERT`s. Cassandra's table health and value kinds are gone.
 
 Still to do:
 
-- Yank a row as an `INSERT`.
 - An explicit transaction mode with the open transaction visible.
 
 ## Phase 3 — Understand

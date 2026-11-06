@@ -1,6 +1,6 @@
 //! What `y` copies, by panel.
 
-use crate::contents::{ContentsState, SelectionMode};
+use crate::contents::{ContentsState, SelectionMode, Subject};
 use crate::feedback::Flash;
 use crate::log::Entry;
 use crate::model::Row;
@@ -8,6 +8,7 @@ use crate::panel::Panel;
 use crate::queries::QueriesTab;
 use crate::selection::{Range, Ranges};
 use crate::state::State;
+use crate::style::Severity;
 
 use super::{Effect, collapse_selection, spanned};
 
@@ -110,6 +111,47 @@ pub(super) fn contents(state: &State) -> Option<String> {
         }
         SelectionMode::Column => Some(crate::yank::grid_columns(&drawn, &columns)),
     }
+}
+
+/// `Y` on the grid: the selected rows, or the cursor's, as `INSERT`s. Only a
+/// table's own page names the table and the declared types to cast to.
+pub(super) fn yank_inserts(state: &mut State) -> Vec<Effect> {
+    let ContentsState::Loaded { subject, page, .. } = state.contents.state() else {
+        return Vec::new();
+    };
+    let Subject::Table(table) = subject else {
+        state.notify(
+            Severity::Warning,
+            "Only a table's own rows copy as INSERT. This grid came from a typed statement.",
+        );
+        return Vec::new();
+    };
+    let Some(described) = state
+        .schema()
+        .and_then(|schema| schema.schemas.get(&table.namespace))
+        .and_then(|namespace| namespace.tables.get(&table.table))
+    else {
+        return Vec::new();
+    };
+
+    let drawn = page.drawn_rows();
+    let rows = spanned(&state.contents.rows, state.contents.cursor.index());
+    let chosen: Vec<Row> = drawn
+        .into_iter()
+        .enumerate()
+        .filter(|(at, _)| rows.contains(*at))
+        .map(|(_, row)| row)
+        .collect();
+    let Some(sql) =
+        crate::yank::inserts(&table.namespace, described, &page.page().columns, &chosen)
+    else {
+        return Vec::new();
+    };
+
+    state.flash = Some(Flash::lit(Panel::Contents, rows, Ranges::default()));
+    collapse_selection(state);
+
+    vec![Effect::Yank(sql)]
 }
 
 pub(super) fn tree_nodes(state: &State) -> Option<String> {

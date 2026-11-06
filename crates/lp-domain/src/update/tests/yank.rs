@@ -753,3 +753,65 @@ fn a_payload_of_nothing_but_delimiters_reaches_no_clipboard() {
         "a block of nulls says nothing, and an empty payload clears the clipboard"
     );
 }
+
+fn yanked(effects: &[Effect]) -> Option<&str> {
+    effects.iter().find_map(|effect| match effect {
+        Effect::Yank(copied) => Some(copied.as_str()),
+        _ => None,
+    })
+}
+
+#[test]
+fn shift_y_on_a_tables_grid_copies_the_cursors_row_as_an_insert() {
+    let mut state = editable_grid(2);
+    press(&mut state, Key::Char('j'));
+
+    let effects = press(&mut state, Key::Char('Y'));
+
+    assert_eq!(
+        yanked(&effects),
+        Some(
+            "INSERT INTO shop.orders (id, created_at, email) VALUES \
+             ('8f14e45f-0001'::uuid, '1699999999001'::timestamp, 'ada@example.com'::text);"
+        )
+    );
+}
+
+#[test]
+fn shift_y_takes_every_selected_row() {
+    let mut state = editable_grid(3);
+    press(&mut state, Key::Char('v'));
+    press(&mut state, Key::Char('j'));
+
+    let effects = press(&mut state, Key::Char('Y'));
+
+    assert_eq!(yanked(&effects).map(|sql| sql.lines().count()), Some(2));
+}
+
+#[test]
+fn shift_y_on_a_typed_statements_grid_says_why_it_copies_nothing() {
+    let mut state = editable_grid(1);
+    let query = QueryId::next();
+    state.contents.requested(
+        query,
+        Subject::Typed("SELECT * FROM shop.orders".to_owned()),
+        crate::model::Statement::typed("SELECT * FROM shop.orders"),
+    );
+    state.contents.page_ready(
+        query,
+        Page {
+            columns: vec!["email".to_owned()],
+            rows: vec![Row {
+                values: vec![Value::Text("ada@example.com".to_owned())],
+            }],
+            next: None,
+        },
+        crate::config::MaxColumnWidth::default(),
+        QueryId::next,
+    );
+
+    let effects = press(&mut state, Key::Char('Y'));
+
+    assert_eq!(yanked(&effects), None);
+    assert!(toasted(&state).is_some_and(|(severity, _)| severity == Severity::Warning));
+}

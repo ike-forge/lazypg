@@ -2,8 +2,9 @@
 //! fields are.
 
 use crate::cell;
+use crate::create::ident;
 use crate::log::Entry;
-use crate::model::{Row, Value};
+use crate::model::{ColumnDefault, Row, Table, Value};
 use crate::selection::Ranges;
 use crate::tree::Node;
 use crate::view::logs::outcome_text;
@@ -25,6 +26,61 @@ pub fn grid_row(row: &Row) -> String {
     let fields: Vec<String> = row.values.iter().map(value).collect();
 
     line(&fields)
+}
+
+/// One `INSERT` per row, a paste that recreates them. A generated column is
+/// left out, as Postgres refuses a value for it; an `ALWAYS` identity keeps
+/// its value through `OVERRIDING SYSTEM VALUE`. `None` where no column of the
+/// page is the table's to write.
+#[must_use]
+pub fn inserts(namespace: &str, table: &Table, columns: &[String], rows: &[Row]) -> Option<String> {
+    let written: Vec<(usize, &crate::model::Column)> = columns
+        .iter()
+        .enumerate()
+        .filter_map(|(at, name)| Some((at, table.column(name)?)))
+        .filter(|(_, column)| !matches!(column.default, Some(ColumnDefault::Generated(_))))
+        .collect();
+    if written.is_empty() {
+        return None;
+    }
+
+    let overriding = written.iter().any(|(_, column)| {
+        matches!(
+            column.default,
+            Some(ColumnDefault::Identity { always: true })
+        )
+    });
+    let head = format!(
+        "INSERT INTO {}.{} ({}){} VALUES",
+        ident(namespace),
+        ident(&table.name),
+        written
+            .iter()
+            .map(|(_, column)| ident(&column.name))
+            .collect::<Vec<_>>()
+            .join(", "),
+        if overriding {
+            " OVERRIDING SYSTEM VALUE"
+        } else {
+            ""
+        }
+    );
+
+    Some(
+        rows.iter()
+            .map(|row| {
+                let values: Vec<String> = written
+                    .iter()
+                    .map(|(at, column)| {
+                        let value = row.values.get(*at).unwrap_or(&Value::Null);
+                        crate::literal::of(&column.data_type, value)
+                    })
+                    .collect();
+                format!("{head} ({});", values.join(", "))
+            })
+            .collect::<Vec<_>>()
+            .join("\n"),
+    )
 }
 
 /// Raw: a lone value has no delimiter to protect. `None` for a null.
@@ -142,6 +198,80 @@ const fn part(kind: ColumnKind) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn column(name: &str, data_type: &str, default: Option<ColumnDefault>) -> crate::model::Column {
+        crate::model::Column {
+            name: name.to_owned(),
+            data_type: data_type.to_owned(),
+            nullable: true,
+            default,
+            comment: None,
+        }
+    }
+
+    fn orders() -> Table {
+        Table {
+            name: "Orders".to_owned(),
+            columns: vec![
+                column(
+                    "id",
+                    "bigint",
+                    Some(ColumnDefault::Identity { always: false }),
+                ),
+                column("note", "text", None),
+                column(
+                    "total",
+                    "numeric(10,2)",
+                    Some(ColumnDefault::Generated("1".to_owned())),
+                ),
+            ],
+            ..Table::default()
+        }
+    }
+
+    #[test]
+    fn rows_yank_as_one_insert_each_with_nulls_spelled_and_generated_columns_left_out() {
+        let columns = ["id", "note", "total"].map(str::to_owned);
+        let rows = [
+            Row {
+                values: vec![
+                    Value::Int(1),
+                    Value::Text("o'hara".to_owned()),
+                    Value::Numeric("2".to_owned()),
+                ],
+            },
+            Row {
+                values: vec![Value::Int(2), Value::Null, Value::Numeric("3".to_owned())],
+            },
+        ];
+
+        assert_eq!(
+            inserts("shop", &orders(), &columns, &rows).as_deref(),
+            Some(
+                "INSERT INTO shop.\"Orders\" (id, note) VALUES (1, 'o''hara'::text);\n\
+                 INSERT INTO shop.\"Orders\" (id, note) VALUES (2, NULL);"
+            )
+        );
+    }
+
+    #[test]
+    fn an_always_identity_keeps_its_value_by_overriding() {
+        let mut table = orders();
+        table.columns[0].default = Some(ColumnDefault::Identity { always: true });
+        let rows = [Row {
+            values: vec![Value::Int(1)],
+        }];
+
+        assert_eq!(
+            inserts("shop", &table, &["id".to_owned()], &rows).as_deref(),
+            Some("INSERT INTO shop.\"Orders\" (id) OVERRIDING SYSTEM VALUE VALUES (1);")
+        );
+    }
+
+    #[test]
+    fn a_page_holding_none_of_the_tables_writable_columns_yanks_nothing() {
+        assert_eq!(inserts("shop", &orders(), &["total".to_owned()], &[]), None);
+    }
     use crate::clock::Stamp;
     use crate::log::{Outcome, Subject};
     use crate::model::{Page, Row, Schema, Table, Value};
