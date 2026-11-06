@@ -8,7 +8,7 @@ use crate::cell;
 use crate::config::ClipboardMb;
 use crate::contents::Paging;
 use crate::contents::Subject;
-use crate::model::{CqlValue, JobId, Key, Row};
+use crate::model::{JobId, Key, Row, Value};
 use crate::style::Segment;
 use crate::update::Source;
 use crate::yank;
@@ -109,7 +109,7 @@ fn json_object(columns: &[String], row: &Row) -> String {
         .iter()
         .enumerate()
         .map(|(index, column)| {
-            let value = row.values.get(index).unwrap_or(&CqlValue::Null);
+            let value = row.values.get(index).unwrap_or(&Value::Null);
 
             format!("{}:{}", json_string(column), json_value(value))
         })
@@ -119,14 +119,13 @@ fn json_object(columns: &[String], row: &Row) -> String {
 }
 
 /// Exhaustive, so a new variant must decide its JSON type.
-fn json_value(value: &CqlValue) -> String {
+fn json_value(value: &Value) -> String {
     match value {
-        CqlValue::Null => "null".to_owned(),
-        CqlValue::Boolean(flag) => flag.to_string(),
-        CqlValue::Int(number) => number.to_string(),
+        Value::Boolean(flag) => flag.to_string(),
+        Value::Int(number) => number.to_string(),
         // JSON cannot spell NaN or infinity.
-        CqlValue::Float(number) if !number.is_finite() => "null".to_owned(),
-        CqlValue::Float(number) => {
+        Value::Float(number) if !number.is_finite() => "null".to_owned(),
+        Value::Float(number) => {
             let rendered = number.to_string();
             // `1f64.to_string()` is "1", which JSON reads back as an integer.
             if rendered.contains(['.', 'e', 'E']) {
@@ -135,14 +134,18 @@ fn json_value(value: &CqlValue) -> String {
                 format!("{rendered}.0")
             }
         }
+        // Its digits as Postgres printed them: a JSON number has no precision
+        // limit, and `NaN` and the infinities have no JSON spelling.
+        Value::Numeric(text) if text.parse::<f64>().is_ok_and(f64::is_finite) => text.clone(),
+        Value::Null | Value::Numeric(_) => "null".to_owned(),
         // No JSON type: travel as the text the grid draws.
-        CqlValue::Text(_)
-        | CqlValue::Blob(_)
-        | CqlValue::Uuid(_)
-        | CqlValue::Timestamp(_)
-        | CqlValue::List(_)
-        | CqlValue::Set(_)
-        | CqlValue::Map(_) => json_string(&cell::text(value)),
+        Value::Text(_)
+        | Value::Blob(_)
+        | Value::Uuid(_)
+        | Value::Timestamp(_)
+        | Value::List(_)
+        | Value::Set(_)
+        | Value::Map(_) => json_string(&cell::text(value)),
     }
 }
 
@@ -642,7 +645,7 @@ fn cut(label: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{CqlValue, Row};
+    use crate::model::{Row, Value};
 
     fn columns() -> Vec<String> {
         vec!["id".to_owned(), "name".to_owned()]
@@ -651,10 +654,10 @@ mod tests {
     fn rows() -> Vec<Row> {
         vec![
             Row {
-                values: vec![CqlValue::Int(1), CqlValue::Text("ada".to_owned())],
+                values: vec![Value::Int(1), Value::Text("ada".to_owned())],
             },
             Row {
-                values: vec![CqlValue::Int(2), CqlValue::Null],
+                values: vec![Value::Int(2), Value::Null],
             },
         ]
     }
@@ -683,7 +686,7 @@ mod tests {
     fn a_csv_field_holding_a_comma_is_quoted_by_the_yank_encoder() {
         let mut encoder = Encoder::new(Format::Csv);
         let row = vec![Row {
-            values: vec![CqlValue::Int(1), CqlValue::Text("last, first".to_owned())],
+            values: vec![Value::Int(1), Value::Text("last, first".to_owned())],
         }];
 
         assert_eq!(encoder.chunk(&columns(), &row), "1,\"last, first\"\n");
@@ -727,40 +730,48 @@ mod tests {
     #[test]
     fn json_strings_escape_what_json_requires() {
         assert_eq!(
-            json_value(&CqlValue::Text("a\"b\\c\nd\te\u{1}f".to_owned())),
+            json_value(&Value::Text("a\"b\\c\nd\te\u{1}f".to_owned())),
             "\"a\\\"b\\\\c\\nd\\te\\u0001f\""
         );
     }
 
     #[test]
     fn json_renders_the_scalar_types_unquoted() {
-        assert_eq!(json_value(&CqlValue::Int(-7)), "-7");
-        assert_eq!(json_value(&CqlValue::Float(1.5)), "1.5");
-        assert_eq!(json_value(&CqlValue::Boolean(true)), "true");
-        assert_eq!(json_value(&CqlValue::Null), "null");
+        assert_eq!(json_value(&Value::Int(-7)), "-7");
+        assert_eq!(json_value(&Value::Float(1.5)), "1.5");
+        assert_eq!(json_value(&Value::Boolean(true)), "true");
+        assert_eq!(json_value(&Value::Null), "null");
     }
 
     #[test]
     fn a_float_json_cannot_write_becomes_null() {
-        assert_eq!(json_value(&CqlValue::Float(f64::NAN)), "null");
-        assert_eq!(json_value(&CqlValue::Float(f64::INFINITY)), "null");
+        assert_eq!(json_value(&Value::Float(f64::NAN)), "null");
+        assert_eq!(json_value(&Value::Float(f64::INFINITY)), "null");
     }
 
     #[test]
     fn everything_without_a_json_type_travels_as_the_text_the_grid_draws() {
-        let blob = CqlValue::Blob(vec![0xde, 0xad]);
+        let blob = Value::Blob(vec![0xde, 0xad]);
 
         assert_eq!(
             json_value(&blob),
-            format!("\"{}\"", crate::cell::text(&blob))
+            "\"\\\\xdead\"",
+            "the grid's text, its backslash escaped"
         );
+    }
+
+    #[test]
+    fn a_numeric_is_a_json_number_with_every_digit_unless_json_cannot_spell_it() {
+        let digits = "3.14159265358979323846264338327950288";
+        assert_eq!(json_value(&Value::Numeric(digits.to_owned())), digits);
+        assert_eq!(json_value(&Value::Numeric("NaN".to_owned())), "null");
     }
 
     #[test]
     fn a_row_shorter_than_the_column_list_fills_the_gap_with_null() {
         let mut encoder = Encoder::new(Format::Json);
         let short = vec![Row {
-            values: vec![CqlValue::Int(1)],
+            values: vec![Value::Int(1)],
         }];
         encoder.start(&columns());
 
@@ -772,7 +783,7 @@ mod tests {
 
     #[test]
     fn a_whole_float_keeps_its_point_so_json_reads_it_back_as_a_float() {
-        assert_eq!(json_value(&CqlValue::Float(3.0)), "3.0");
+        assert_eq!(json_value(&Value::Float(3.0)), "3.0");
     }
 
     #[test]
@@ -1158,7 +1169,7 @@ mod tests {
     #[test]
     fn a_filtered_grid_offers_the_fetched_scope_even_where_the_result_ended() {
         let more = Paging::More {
-            stmt: crate::model::Statement::select_all("shop", "orders"),
+            stmt: crate::model::Statement::select_all("shop", "orders", &[]),
             cursor: crate::model::PagingState(vec![1]),
             fetch: crate::contents::Fetch::Idle,
         };

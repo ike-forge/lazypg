@@ -117,7 +117,7 @@ fn a_typed_statement_has_no_table_to_update() {
         Page {
             columns: vec!["email".to_owned()],
             rows: vec![Row {
-                values: vec![CqlValue::Text("ada@example.com".to_owned())],
+                values: vec![Value::Text("ada@example.com".to_owned())],
             }],
             next: None,
         },

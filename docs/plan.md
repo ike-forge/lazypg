@@ -86,9 +86,12 @@ Every LazyCassandra module falls into one of three buckets.
    `CREATE` rebuilt from the catalog, with indexes and comments). A schema or
    database has one tab, named for the panel. Constraints share Keys: a fifth
    tab would not fit the border at usual widths.
-3. **Contents grid.** `LIMIT/OFFSET` paging (architecture.md §6); `PgValue`
-   rendering for every type family; NULL distinct from empty; local filter
-   and sort.
+3. **Contents grid.** *Done.* `LIMIT/OFFSET` paging, table reads ordered by
+   the primary key; a keyless table past its first page says its pages may
+   shift. Values: `numeric` exact, floats and `bytea` as Postgres spells
+   them, NULL drawn apart from text; every other type in Postgres's own
+   text. The local sort compares numbers as numbers and keeps nulls last.
+   Arrays, ranges and composites stay text until the inspector (step 6).
 4. **SQL editor.** Lexer, highlighting, statement split under the cursor,
    run, cancel, `$EDITOR` hand-off, schema-aware completion (schemas,
    relations, columns, keywords).
@@ -101,6 +104,9 @@ Every LazyCassandra module falls into one of three buckets.
 
 ## Phase 2 — Change
 
+Replaces LazyCassandra's CQL write path: literals (`literal.rs`), cell
+parsing (`edit.rs`) and the `BEGIN BATCH` a multi-row delete issues, plus the
+collection and millisecond-timestamp `Value` variants nothing reads any more.
 Cell edit, row insert and delete (primary key required, shown as `UPDATE …
 WHERE pk = …` before commit); explicit transaction mode with a visible open
 transaction; drop and truncate behind typed confirmation.

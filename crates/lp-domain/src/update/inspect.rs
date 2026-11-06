@@ -2,7 +2,7 @@
 
 use crate::contents::{ContentsState, SelectionMode};
 use crate::inspect::{Inspected, Inspector};
-use crate::model::{CqlValue, Key};
+use crate::model::{Key, Value};
 use crate::overlay::Overlay;
 use crate::panel::Panel;
 use crate::state::State;
@@ -41,7 +41,7 @@ pub(crate) fn inspection(state: &State) -> Option<Inspector> {
             number: index + 1,
             columns: columns.clone(),
             values: (0..columns.len())
-                .map(|at| page.value(index, at).cloned().unwrap_or(CqlValue::Null))
+                .map(|at| page.value(index, at).cloned().unwrap_or(Value::Null))
                 .collect(),
         },
         SelectionMode::Column => return None,

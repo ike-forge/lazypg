@@ -231,7 +231,7 @@ pub(super) fn source(state: &State, form: &ExportForm) -> Option<Source> {
         // Only our limit is dropped; a typed statement's own is the user's.
         Scope::Whole | Scope::First => {
             let statement = Box::new(match subject {
-                Subject::Table(table) => Statement::select_all(&table.keyspace, &table.table),
+                Subject::Table(table) => state.browse(table),
                 Subject::Typed(cql) => Statement::typed(cql),
             });
             let limit = match form.scope() {

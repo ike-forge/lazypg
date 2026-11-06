@@ -8,7 +8,7 @@ use crate::bytes::Bytes;
 use crate::cell;
 use crate::contents::Subject;
 use crate::edit::{Edited, Field};
-use crate::model::CqlValue;
+use crate::model::Value;
 use crate::style::Segment;
 use crate::viewport::{Scroll, Span};
 
@@ -19,18 +19,18 @@ pub enum Inspected {
         /// The page column index, which edits are keyed by.
         at: usize,
         column: String,
-        value: CqlValue,
+        value: Value,
     },
     Row {
         /// One-based.
         number: usize,
         columns: Vec<String>,
-        values: Vec<CqlValue>,
+        values: Vec<Value>,
     },
 }
 
 impl Inspected {
-    fn values(&self) -> &[CqlValue] {
+    fn values(&self) -> &[Value] {
         match self {
             Self::Cell { value, .. } => std::slice::from_ref(value),
             Self::Row { values, .. } => values,
@@ -48,7 +48,7 @@ impl Inspected {
     }
 
     /// The inspector holds a copy of the page, which must follow the edit.
-    fn set(&mut self, at: usize, value: CqlValue) {
+    fn set(&mut self, at: usize, value: Value) {
         match self {
             Self::Cell { value: held, .. } if at == 0 => *held = value,
             Self::Cell { .. } => {}
@@ -99,7 +99,7 @@ impl Inspector {
     /// page.
     #[must_use]
     pub fn inserting(subject: Subject, columns: Vec<String>) -> Self {
-        let values = vec![CqlValue::Null; columns.len()];
+        let values = vec![Value::Null; columns.len()];
         let mut form = Self::opened(
             0,
             subject,
@@ -157,7 +157,7 @@ impl Inspector {
 
         if let Some(typed) = self.new_row.as_mut() {
             typed.remove(&at);
-            self.inspected.set(at, CqlValue::Null);
+            self.inspected.set(at, Value::Null);
             self.edited.retain(|marked| *marked != at);
         }
     }
@@ -193,7 +193,7 @@ impl Inspector {
                 self.edited.push(at);
             }
         } else {
-            self.inspected.set(at, CqlValue::Null);
+            self.inspected.set(at, Value::Null);
             typed.remove(&at);
             self.edited.retain(|marked| *marked != at);
         }
@@ -238,7 +238,7 @@ impl Inspector {
     }
 
     #[must_use]
-    pub fn value_at_cursor(&self) -> Option<&CqlValue> {
+    pub fn value_at_cursor(&self) -> Option<&Value> {
         self.inspected.values().get(self.field_at_cursor())
     }
 
@@ -382,12 +382,12 @@ impl Inspector {
         let (value, line) = self.at_cursor()?;
 
         match value {
-            CqlValue::Null => None,
+            Value::Null => None,
             _ => Some(line.trim_start().to_owned()),
         }
     }
 
-    fn at_cursor(&self) -> Option<(&CqlValue, String)> {
+    fn at_cursor(&self) -> Option<(&Value, String)> {
         let mut at = self.cursor;
 
         for value in self.inspected.values() {
@@ -426,9 +426,9 @@ impl Inspector {
         };
 
         let bytes = match value {
-            CqlValue::Null => return None,
-            CqlValue::Blob(bytes) => bytes.len(),
-            CqlValue::Text(text) | CqlValue::Uuid(text) => text.len(),
+            Value::Null => return None,
+            Value::Blob(bytes) => bytes.len(),
+            Value::Text(text) | Value::Uuid(text) => text.len(),
             other => cell::text(other).len(),
         };
 
@@ -439,9 +439,9 @@ impl Inspector {
 /// Control characters are dropped here, not by the renderer: wrapping reads
 /// `\n` and `\t` as whitespace, and would break where the grid draws none.
 #[must_use]
-pub fn lines(value: &CqlValue) -> Vec<String> {
+pub fn lines(value: &Value) -> Vec<String> {
     let laid = match value {
-        CqlValue::Text(text) => json(text).unwrap_or_else(|| vec![text.clone()]),
+        Value::Text(text) => json(text).unwrap_or_else(|| vec![text.clone()]),
         other => nested(other),
     };
 
@@ -450,25 +450,25 @@ pub fn lines(value: &CqlValue) -> Vec<String> {
         .collect()
 }
 
-fn nested(value: &CqlValue) -> Vec<String> {
+fn nested(value: &Value) -> Vec<String> {
     match value {
-        CqlValue::List(values) => bracketed(values.iter().map(|value| (None, value)), '[', ']'),
-        CqlValue::Set(values) => bracketed(values.iter().map(|value| (None, value)), '{', '}'),
-        CqlValue::Map(entries) => bracketed(keyed(entries), '{', '}'),
+        Value::List(values) => bracketed(values.iter().map(|value| (None, value)), '[', ']'),
+        Value::Set(values) => bracketed(values.iter().map(|value| (None, value)), '{', '}'),
+        Value::Map(entries) => bracketed(keyed(entries), '{', '}'),
         other => vec![cell::text(other)],
     }
 }
 
 fn keyed(
-    entries: &BTreeMap<String, CqlValue>,
-) -> impl ExactSizeIterator<Item = (Option<&str>, &CqlValue)> {
+    entries: &BTreeMap<String, Value>,
+) -> impl ExactSizeIterator<Item = (Option<&str>, &Value)> {
     entries
         .iter()
         .map(|(key, value)| (Some(key.as_str()), value))
 }
 
 fn bracketed<'a>(
-    entries: impl ExactSizeIterator<Item = (Option<&'a str>, &'a CqlValue)>,
+    entries: impl ExactSizeIterator<Item = (Option<&'a str>, &'a Value)>,
     open: char,
     close: char,
 ) -> Vec<String> {
@@ -608,8 +608,8 @@ mod tests {
     use super::*;
     use crate::contents::TableRef;
 
-    fn text(value: &str) -> CqlValue {
-        CqlValue::Text(value.to_owned())
+    fn text(value: &str) -> Value {
+        Value::Text(value.to_owned())
     }
 
     #[test]
@@ -666,12 +666,12 @@ mod tests {
 
     #[test]
     fn a_collection_is_one_element_to_a_line() {
-        let value = CqlValue::Map(BTreeMap::from([
+        let value = Value::Map(BTreeMap::from([
             (
                 "a".to_owned(),
-                CqlValue::List(vec![CqlValue::Int(1), CqlValue::Int(2)]),
+                Value::List(vec![Value::Int(1), Value::Int(2)]),
             ),
-            ("b".to_owned(), CqlValue::Set(Vec::new())),
+            ("b".to_owned(), Value::Set(Vec::new())),
         ]));
 
         assert_eq!(
@@ -682,14 +682,14 @@ mod tests {
 
     #[test]
     fn an_empty_collection_stays_on_one_line() {
-        assert_eq!(lines(&CqlValue::List(Vec::new())), ["[]"]);
+        assert_eq!(lines(&Value::List(Vec::new())), ["[]"]);
     }
 
     #[test]
     fn a_blob_and_a_scalar_are_drawn_as_the_grid_draws_them() {
-        assert_eq!(lines(&CqlValue::Blob(vec![0xca, 0xfe])), ["0xcafe"]);
-        assert_eq!(lines(&CqlValue::Int(7)), ["7"]);
-        assert_eq!(lines(&CqlValue::Null), ["null"]);
+        assert_eq!(lines(&Value::Blob(vec![0xca, 0xfe])), ["\\xcafe"]);
+        assert_eq!(lines(&Value::Int(7)), ["7"]);
+        assert_eq!(lines(&Value::Null), ["null"]);
     }
 
     #[test]
@@ -700,7 +700,7 @@ mod tests {
         );
     }
 
-    fn cell(value: CqlValue) -> Inspector {
+    fn cell(value: Value) -> Inspector {
         Inspector::opened(
             0,
             Subject::Table(TableRef::new("shop", "orders")),
@@ -716,10 +716,10 @@ mod tests {
     fn a_cell_is_sized_in_the_bytes_it_holds() {
         assert_eq!(cell(text("héllo")).size().as_deref(), Some("6 B"));
         assert_eq!(
-            cell(CqlValue::Blob(vec![0; 2048])).size().as_deref(),
+            cell(Value::Blob(vec![0; 2048])).size().as_deref(),
             Some("2.0 KB")
         );
-        assert_eq!(cell(CqlValue::Null).size(), None);
+        assert_eq!(cell(Value::Null).size(), None);
     }
 
     #[test]
@@ -731,9 +731,9 @@ mod tests {
                 number: 1,
                 columns: vec!["id".to_owned(), "tags".to_owned(), "note".to_owned()],
                 values: vec![
-                    CqlValue::Int(7),
-                    CqlValue::List(vec![text("a"), text("b")]),
-                    CqlValue::Null,
+                    Value::Int(7),
+                    Value::List(vec![text("a"), text("b")]),
+                    Value::Null,
                 ],
             },
         );
@@ -771,7 +771,7 @@ mod tests {
             Inspected::Row {
                 number: 3,
                 columns: vec!["id".to_owned()],
-                values: vec![CqlValue::Int(1)],
+                values: vec![Value::Int(1)],
             },
         );
         assert_eq!(crate::style::text(&row.title()), "SELECT * FROM t · row 3");
@@ -780,7 +780,7 @@ mod tests {
     #[test]
     fn a_cell_yanks_bare_and_a_row_as_one_csv_line() {
         assert_eq!(cell(text("a,b")).yank().as_deref(), Some("a,b"));
-        assert_eq!(cell(CqlValue::Null).yank(), None);
+        assert_eq!(cell(Value::Null).yank(), None);
 
         let row = Inspector::opened(
             0,
@@ -788,7 +788,7 @@ mod tests {
             Inspected::Row {
                 number: 1,
                 columns: vec!["id".to_owned(), "note".to_owned()],
-                values: vec![CqlValue::Int(1), text("a,b")],
+                values: vec![Value::Int(1), text("a,b")],
             },
         );
         assert_eq!(row.yank().as_deref(), Some(r#"1,"a,b""#));

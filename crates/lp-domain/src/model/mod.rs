@@ -18,4 +18,4 @@ pub use schema::{
     Index, PrimaryKey, RelationKind, RelationRef, Schema, SchemaKind, Sequence, Server, Table,
 };
 pub use statement::{Statement, StatementKind, UpdatedRow};
-pub use value::CqlValue;
+pub use value::{SortKey, Value};

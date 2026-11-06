@@ -496,7 +496,7 @@ fn a_new_read_drops_the_draft() {
     state.contents.requested(
         QueryId::next(),
         Subject::Table(TableRef::new("shop", "customers")),
-        crate::model::Statement::select_all("shop", "customers"),
+        crate::model::Statement::select_all("shop", "customers", &[]),
     );
 
     assert_eq!(state.contents.take_draft(), None);

@@ -4,7 +4,7 @@ use std::cmp::Ordering;
 use crate::bytes::Bytes;
 use crate::config::MaxColumnWidth;
 use crate::edit::{CommitScope, Edited, Edits};
-use crate::model::{CqlValue, Page, Row};
+use crate::model::{Page, Row, SortKey, Value};
 use crate::search::Search;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -14,10 +14,13 @@ pub enum Order {
 }
 
 impl Order {
-    fn compare(self, left: &str, right: &str) -> Ordering {
-        match self {
-            Self::Ascending => left.cmp(right),
-            Self::Descending => right.cmp(left),
+    /// Nulls stay last either way, as `NULLS LAST` would put them.
+    fn compare(self, left: &SortKey, right: &SortKey) -> Ordering {
+        match (self, left, right) {
+            (_, SortKey::Null, _) | (_, _, SortKey::Null) | (Self::Ascending, _, _) => {
+                left.compare(right)
+            }
+            (Self::Descending, _, _) => right.compare(left),
         }
     }
 }
@@ -132,8 +135,8 @@ impl GridPage {
     /// Each lands after every row it ties with, where a stable sort of the
     /// whole grid would put it.
     fn merge(&mut self, sort: Sort, added: Vec<usize>) {
-        let key = |at: usize| self.read_text(at, sort.column);
-        let mut added: Vec<(String, usize)> = added.into_iter().map(|at| (key(at), at)).collect();
+        let key = |at: usize| self.sort_key(at, sort.column);
+        let mut added: Vec<(SortKey, usize)> = added.into_iter().map(|at| (key(at), at)).collect();
         added.sort_by(|(left, _), (right, _)| sort.order.compare(left, right));
 
         let mut merged = Vec::with_capacity(self.order.len() + added.len());
@@ -165,7 +168,7 @@ impl GridPage {
     /// The edit where there is one. Every reader goes through here so they
     /// agree on what a cell says.
     #[must_use]
-    pub fn value(&self, index: usize, column: usize) -> Option<&CqlValue> {
+    pub fn value(&self, index: usize, column: usize) -> Option<&Value> {
         let at = *self.order.get(index)?;
 
         Some(match self.edits.get(at, column) {
@@ -186,7 +189,7 @@ impl GridPage {
         (0..self.order.len())
             .map(|index| Row {
                 values: (0..self.page.columns.len())
-                    .map(|column| self.value(index, column).cloned().unwrap_or(CqlValue::Null))
+                    .map(|column| self.value(index, column).cloned().unwrap_or(Value::Null))
                     .collect(),
             })
             .collect()
@@ -309,19 +312,20 @@ impl GridPage {
         self.arrange();
     }
 
-    /// Sorted by drawn text: a column holds one CQL type, so that order is
-    /// readable off the screen. Stable, so ties keep the cluster's order.
+    /// Numbers by value, the rest by drawn text: a column holds one type, so
+    /// either order reads off the screen. Stable, so ties keep the server's
+    /// order.
     fn arrange(&mut self) {
         let mut order: Vec<usize> = (0..self.page.rows.len())
             .filter(|at| self.kept(*at))
             .collect();
 
         if let Some(sort) = self.sort {
-            // Keys are rendered once: `cell::text` allocates and hex-expands
+            // Keys are built once: `cell::text` allocates and hex-expands
             // blobs.
-            let mut paired: Vec<(String, usize)> = order
+            let mut paired: Vec<(SortKey, usize)> = order
                 .into_iter()
-                .map(|at| (self.read_text(at, sort.column), at))
+                .map(|at| (self.sort_key(at, sort.column), at))
                 .collect();
             paired.sort_by(|(left, _), (right, _)| sort.order.compare(left, right));
             order = paired.into_iter().map(|(_, at)| at).collect();
@@ -331,12 +335,11 @@ impl GridPage {
     }
 
     /// As read, not as edited.
-    fn read_text(&self, at: usize, column: usize) -> String {
+    fn sort_key(&self, at: usize, column: usize) -> SortKey {
         self.page.rows[at]
             .values
             .get(column)
-            .map(crate::cell::text)
-            .unwrap_or_default()
+            .map_or(SortKey::Null, Value::sort_key)
     }
 
     /// Filters are conjunctive.
@@ -379,10 +382,7 @@ mod tests {
                     .into_iter()
                     .zip(["Berlin", "Aarhus", "Berlin"])
                     .map(|(name, city)| Row {
-                        values: vec![
-                            CqlValue::Text(name.to_owned()),
-                            CqlValue::Text(city.to_owned()),
-                        ],
+                        values: vec![Value::Text(name.to_owned()), Value::Text(city.to_owned())],
                     })
                     .collect(),
                 next,
@@ -611,7 +611,7 @@ mod tests {
             rows: values
                 .iter()
                 .map(|value| Row {
-                    values: vec![CqlValue::Text((*value).to_owned())],
+                    values: vec![Value::Text((*value).to_owned())],
                 })
                 .collect(),
             next: next.then(|| PagingState(vec![1])),
@@ -654,10 +654,7 @@ mod tests {
                     .into_iter()
                     .zip(["Berlin", "Oslo"])
                     .map(|(name, city)| Row {
-                        values: vec![
-                            CqlValue::Text(name.to_owned()),
-                            CqlValue::Text(city.to_owned()),
-                        ],
+                        values: vec![Value::Text(name.to_owned()), Value::Text(city.to_owned())],
                     })
                     .collect(),
                 next: None,
@@ -679,7 +676,7 @@ mod tests {
             Page {
                 columns: vec!["id".to_owned()],
                 rows: vec![Row {
-                    values: vec![CqlValue::Int(7)],
+                    values: vec![Value::Int(7)],
                 }],
                 next: None,
             },
@@ -698,7 +695,7 @@ mod tests {
             Page {
                 columns: vec!["id".to_owned()],
                 rows: vec![Row {
-                    values: vec![CqlValue::Text("x".repeat(20))],
+                    values: vec![Value::Text("x".repeat(20))],
                 }],
                 next: None,
             },
@@ -718,7 +715,7 @@ mod tests {
             Page {
                 columns: vec!["id".to_owned()],
                 rows: vec![Row {
-                    values: vec![CqlValue::Text("x".repeat(60))],
+                    values: vec![Value::Text("x".repeat(60))],
                 }],
                 next: None,
             },

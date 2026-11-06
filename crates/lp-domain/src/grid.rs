@@ -175,9 +175,9 @@ impl ColumnScroll {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{CqlValue, Row};
+    use crate::model::{Row, Value};
 
-    fn page(columns: &[&str], rows: &[&[CqlValue]]) -> Page {
+    fn page(columns: &[&str], rows: &[&[Value]]) -> Page {
         Page {
             columns: columns.iter().map(|name| (*name).to_owned()).collect(),
             rows: rows
@@ -195,8 +195,8 @@ mod tests {
         let page = page(
             &["id", "name"],
             &[
-                &[CqlValue::Int(1), CqlValue::Text("alice".to_owned())],
-                &[CqlValue::Int(2), CqlValue::Text("bartholomew".to_owned())],
+                &[Value::Int(1), Value::Text("alice".to_owned())],
+                &[Value::Int(2), Value::Text("bartholomew".to_owned())],
             ],
         );
 
@@ -209,21 +209,21 @@ mod tests {
 
     #[test]
     fn a_heading_wider_than_every_value_sets_the_width() {
-        let page = page(&["description"], &[&[CqlValue::Text("hi".to_owned())]]);
+        let page = page(&["description"], &[&[Value::Text("hi".to_owned())]]);
 
         assert_eq!(widths(&page, MaxColumnWidth::default()), vec![11 + MARKS]);
     }
 
     #[test]
     fn a_column_is_capped() {
-        let page = page(&["blob"], &[&[CqlValue::Text("x".repeat(100))]]);
+        let page = page(&["blob"], &[&[Value::Text("x".repeat(100))]]);
 
         assert_eq!(widths(&page, MaxColumnWidth::default()), vec![30]);
     }
 
     #[test]
     fn the_cap_is_the_configured_one() {
-        let page = page(&["blob"], &[&[CqlValue::Text("x".repeat(100))]]);
+        let page = page(&["blob"], &[&[Value::Text("x".repeat(100))]]);
         let cap = MaxColumnWidth::try_new(48).expect("in range");
 
         assert_eq!(widths(&page, cap), vec![48]);
@@ -271,7 +271,7 @@ mod tests {
 
     #[test]
     fn natural_widths_are_uncapped() {
-        let page = page(&["blob"], &[&[CqlValue::Text("x".repeat(100))]]);
+        let page = page(&["blob"], &[&[Value::Text("x".repeat(100))]]);
 
         assert_eq!(natural_widths(&page), vec![100]);
     }

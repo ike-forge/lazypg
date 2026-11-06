@@ -147,7 +147,7 @@ pub(super) fn activate(state: &mut State) -> Vec<Effect> {
 pub(super) fn read(state: &mut State, table: TableRef) -> Vec<Effect> {
     state.focus_on(Panel::Contents);
 
-    let stmt = Statement::select_all(&table.keyspace, &table.table);
+    let stmt = state.browse(&table);
     submit_into_contents(state, Subject::Table(table), stmt)
 }
 

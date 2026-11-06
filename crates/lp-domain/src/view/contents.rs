@@ -10,7 +10,7 @@ use crate::contents::{
     TableRef,
 };
 use crate::inspect::{Inspected, Inspector};
-use crate::model::{Catalog, CqlValue};
+use crate::model::{Catalog, Value};
 use crate::panel::Panel;
 use crate::search::Search;
 use crate::selection::Ranges;
@@ -133,8 +133,32 @@ pub(super) fn title(state: &State) -> Vec<Segment> {
         ContentsState::Loading { subject, .. } | ContentsState::Failed { subject, .. } => {
             named(BASE, subject, None)
         }
-        ContentsState::Loaded { subject, page, .. } => named(BASE, subject, Some(count(page))),
+        ContentsState::Loaded { subject, page, .. } => {
+            let mut segments = named(BASE, subject, Some(count(page)));
+            if pages_may_shift(state, subject) {
+                segments.push(Segment::styled(" · no key, pages may shift", Token::Muted));
+            }
+            segments
+        }
     }
+}
+
+/// `LIMIT/OFFSET` without an `ORDER BY` names no order, so a page past the
+/// first may repeat or skip rows (architecture.md §6). Said only once there is
+/// a second page.
+fn pages_may_shift(state: &State, subject: &Subject) -> bool {
+    let Subject::Table(table) = subject else {
+        return false;
+    };
+    let keyless = state
+        .schema()
+        .and_then(|catalog| catalog.schemas.get(&table.keyspace))
+        .and_then(|schema| schema.tables.get(&table.table))
+        .is_some_and(|found| found.primary_key.is_none());
+    let paged = state.contents.has_more()
+        || state.contents.row_count() > state.config.grid.page_rows.get() as usize;
+
+    keyless && paged
 }
 
 fn named(base: &str, subject: &Subject, count: Option<String>) -> Vec<Segment> {
@@ -278,7 +302,7 @@ fn grid(state: &State, subject: &Subject, grid_page: &GridPage) -> PanelBody {
 }
 
 fn grid_cell(
-    value: &CqlValue,
+    value: &Value,
     column: Option<Token>,
     search: Option<&Search>,
     dirty: bool,
@@ -286,7 +310,7 @@ fn grid_cell(
     GridCell {
         matched: search.is_some_and(|search| search.matches(&cell::text(value))),
         token: match value {
-            CqlValue::Null => Some(Token::Faint),
+            Value::Null => Some(Token::Faint),
             _ => key_token(column),
         },
         text: cell::display(value),
@@ -326,10 +350,10 @@ fn column_token(schema: Option<&Catalog>, table: Option<&TableRef>, column: &str
 pub(super) fn inspect(state: &State, inspector: &Inspector) -> InspectView {
     let table = grid_table(state, inspector.subject());
     let column = |name: &str| column_token(state.schema(), table.as_ref(), name);
-    let value = |at: usize, name: &str, value: &CqlValue| InspectValue {
+    let value = |at: usize, name: &str, value: &Value| InspectValue {
         lines: crate::inspect::lines(value),
         token: match value {
-            CqlValue::Null => Some(Token::Faint),
+            Value::Null => Some(Token::Faint),
             _ => key_token(column(name)),
         },
         dirty: inspector.edited().contains(&at),
@@ -442,7 +466,7 @@ mod tests {
         view_model(state).panels[2].title.strip()
     }
 
-    fn page_of(columns: &[&str], rows: &[&[CqlValue]]) -> Page {
+    fn page_of(columns: &[&str], rows: &[&[Value]]) -> Page {
         Page {
             columns: columns.iter().map(|name| (*name).to_owned()).collect(),
             rows: rows
@@ -672,11 +696,8 @@ mod tests {
         let state = showing(page_of(
             &["id", "email"],
             &[
-                &[
-                    CqlValue::Int(1),
-                    CqlValue::Text("ada@example.com".to_owned()),
-                ],
-                &[CqlValue::Int(2), CqlValue::Null],
+                &[Value::Int(1), Value::Text("ada@example.com".to_owned())],
+                &[Value::Int(2), Value::Null],
             ],
         ));
 
@@ -704,10 +725,7 @@ mod tests {
 
     #[test]
     fn a_null_is_faint_so_it_cannot_be_read_as_the_word() {
-        let state = showing(page_of(
-            &["id", "email"],
-            &[&[CqlValue::Int(1), CqlValue::Null]],
-        ));
+        let state = showing(page_of(&["id", "email"], &[&[Value::Int(1), Value::Null]]));
 
         let PanelBody::Grid { rows, .. } = contents_body(&state) else {
             panic!("a loaded page draws a grid");
@@ -764,7 +782,7 @@ mod tests {
             query,
             page_of(
                 &["id", "at", "total"],
-                &[&[CqlValue::Int(1), CqlValue::Int(2), CqlValue::Int(3)]],
+                &[&[Value::Int(1), Value::Int(2), Value::Int(3)]],
             ),
             crate::config::MaxColumnWidth::default(),
             QueryId::next,
@@ -787,7 +805,7 @@ mod tests {
     fn a_typed_select_over_one_table_colours_its_key_columns() {
         let state = showing_typed(
             "select * from shop.orders",
-            page_of(&["id", "total"], &[&[CqlValue::Int(1), CqlValue::Int(2)]]),
+            page_of(&["id", "total"], &[&[Value::Int(1), Value::Int(2)]]),
         );
 
         let PanelBody::Grid { columns, .. } = contents_body(&state) else {
@@ -802,7 +820,7 @@ mod tests {
     fn a_trailing_semicolon_still_colours_the_grid() {
         let state = showing_typed(
             "select * from shop.orders;",
-            page_of(&["id", "total"], &[&[CqlValue::Int(1), CqlValue::Int(2)]]),
+            page_of(&["id", "total"], &[&[Value::Int(1), Value::Int(2)]]),
         );
 
         let PanelBody::Grid { columns, .. } = contents_body(&state) else {
@@ -817,7 +835,7 @@ mod tests {
     fn an_aliased_column_claims_nothing_about_the_table() {
         let state = showing_typed(
             "select id as number from shop.orders",
-            page_of(&["number"], &[&[CqlValue::Int(1)]]),
+            page_of(&["number"], &[&[Value::Int(1)]]),
         );
 
         let PanelBody::Grid { columns, .. } = contents_body(&state) else {
@@ -835,7 +853,7 @@ mod tests {
         let state = showing_typed(
             "begin batch insert into shop.orders (id) values (1); \
              insert into shop.customers (id) values (2); apply batch",
-            page_of(&["id"], &[&[CqlValue::Int(1)]]),
+            page_of(&["id"], &[&[Value::Int(1)]]),
         );
 
         let PanelBody::Grid { columns, .. } = contents_body(&state) else {
@@ -850,7 +868,7 @@ mod tests {
         let state = showing_typed_in(
             "shop",
             "select * from orders",
-            page_of(&["id"], &[&[CqlValue::Int(1)]]),
+            page_of(&["id"], &[&[Value::Int(1)]]),
         );
 
         let PanelBody::Grid { columns, .. } = contents_body(&state) else {
@@ -862,7 +880,7 @@ mod tests {
 
     #[test]
     fn a_typed_statement_naming_no_table_colours_nothing() {
-        let state = showing_typed("select 1", page_of(&["1"], &[&[CqlValue::Int(1)]]));
+        let state = showing_typed("select 1", page_of(&["1"], &[&[Value::Int(1)]]));
 
         let PanelBody::Grid { columns, .. } = contents_body(&state) else {
             panic!("a loaded page is a grid");
@@ -873,7 +891,7 @@ mod tests {
 
     #[test]
     fn a_page_whose_table_is_gone_claims_nothing_about_its_shape() {
-        let mut state = showing(page_of(&["id"], &[&[CqlValue::Int(1)]]));
+        let mut state = showing(page_of(&["id"], &[&[Value::Int(1)]]));
         state.connection = ConnectionState::Connected(Connection {
             id: ConnId::next(),
             name: crate::config::ConnectionName::try_new("local").expect("a valid name"),
@@ -930,7 +948,7 @@ mod tests {
             query,
             page_of(
                 &["id", "at", "total"],
-                &[&[CqlValue::Int(1), CqlValue::Int(2), CqlValue::Int(3)]],
+                &[&[Value::Int(1), Value::Int(2), Value::Int(3)]],
             ),
             crate::config::MaxColumnWidth::default(),
             QueryId::next,
@@ -953,7 +971,7 @@ mod tests {
 
     #[test]
     fn a_page_whose_table_is_gone_paints_no_key_colour_on_its_values() {
-        let mut state = showing(page_of(&["id"], &[&[CqlValue::Int(1)]]));
+        let mut state = showing(page_of(&["id"], &[&[Value::Int(1)]]));
         state.connection = ConnectionState::Connected(Connection {
             id: ConnId::next(),
             name: crate::config::ConnectionName::try_new("local").expect("a valid name"),
@@ -969,11 +987,8 @@ mod tests {
 
     #[test]
     fn the_title_counts_the_rows_and_gets_the_singular_right() {
-        let one = showing(page_of(&["id"], &[&[CqlValue::Int(1)]]));
-        let two = showing(page_of(
-            &["id"],
-            &[&[CqlValue::Int(1)], &[CqlValue::Int(2)]],
-        ));
+        let one = showing(page_of(&["id"], &[&[Value::Int(1)]]));
+        let two = showing(page_of(&["id"], &[&[Value::Int(1)], &[Value::Int(2)]]));
 
         assert_eq!(contents_title(&one), "Table contents — shop.orders (1 row)");
         assert_eq!(
@@ -987,14 +1002,8 @@ mod tests {
         let mut state = showing(page_of(
             &["id", "email"],
             &[
-                &[
-                    CqlValue::Int(1),
-                    CqlValue::Text("ali@example.com".to_owned()),
-                ],
-                &[
-                    CqlValue::Int(2),
-                    CqlValue::Text("bob@example.com".to_owned()),
-                ],
+                &[Value::Int(1), Value::Text("ali@example.com".to_owned())],
+                &[Value::Int(2), Value::Text("bob@example.com".to_owned())],
             ],
         ));
         let before = match contents_body(&state) {
@@ -1027,10 +1036,7 @@ mod tests {
 
     #[test]
     fn a_matched_null_is_still_a_null() {
-        let mut state = showing(page_of(
-            &["id", "email"],
-            &[&[CqlValue::Int(1), CqlValue::Null]],
-        ));
+        let mut state = showing(page_of(&["id", "email"], &[&[Value::Int(1), Value::Null]]));
 
         state.apply_search(Searched::Contents, Search::new("null"));
 
@@ -1058,10 +1064,7 @@ mod tests {
     fn no_search_flags_nothing() {
         let state = showing(page_of(
             &["id", "email"],
-            &[&[
-                CqlValue::Int(1),
-                CqlValue::Text("ali@example.com".to_owned()),
-            ]],
+            &[&[Value::Int(1), Value::Text("ali@example.com".to_owned())]],
         ));
 
         let PanelBody::Grid { rows, .. } = contents_body(&state) else {
@@ -1073,10 +1076,7 @@ mod tests {
 
     #[test]
     fn the_grid_selection_is_projected_from_the_panels_cursor() {
-        let mut state = showing(page_of(
-            &["id"],
-            &[&[CqlValue::Int(1)], &[CqlValue::Int(2)]],
-        ));
+        let mut state = showing(page_of(&["id"], &[&[Value::Int(1)], &[Value::Int(2)]]));
         state.contents.cursor.down(2);
 
         let PanelBody::Grid { selected, .. } = contents_body(&state) else {
@@ -1089,7 +1089,7 @@ mod tests {
     fn a_grid_carries_the_width_of_every_column() {
         let state = showing(page_of(
             &["id", "name"],
-            &[&[CqlValue::Int(1), CqlValue::Text("alice".to_owned())]],
+            &[&[Value::Int(1), Value::Text("alice".to_owned())]],
         ));
 
         let PanelBody::Grid { columns, .. } = contents_body(&state) else {
@@ -1108,7 +1108,7 @@ mod tests {
     fn a_grid_names_the_selected_cell_and_the_first_column_drawn() {
         let mut state = showing(page_of(
             &["id", "name"],
-            &[&[CqlValue::Int(1), CqlValue::Text("alice".to_owned())]],
+            &[&[Value::Int(1), Value::Text("alice".to_owned())]],
         ));
         state.contents.column.go_to(1, 2);
 
@@ -1129,8 +1129,8 @@ mod tests {
 
     #[test]
     fn the_gutter_is_as_wide_as_the_last_row_number() {
-        let rows: Vec<Vec<CqlValue>> = (0..12).map(|i| vec![CqlValue::Int(i)]).collect();
-        let borrowed: Vec<&[CqlValue]> = rows.iter().map(Vec::as_slice).collect();
+        let rows: Vec<Vec<Value>> = (0..12).map(|i| vec![Value::Int(i)]).collect();
+        let borrowed: Vec<&[Value]> = rows.iter().map(Vec::as_slice).collect();
         let state = showing(page_of(&["id"], &borrowed));
 
         let PanelBody::Grid { gutter, .. } = contents_body(&state) else {
@@ -1144,11 +1144,7 @@ mod tests {
     fn a_grid_names_the_range_on_each_axis() {
         let mut state = showing(page_of(
             &["id"],
-            &[
-                &[CqlValue::Int(1)],
-                &[CqlValue::Int(2)],
-                &[CqlValue::Int(3)],
-            ],
+            &[&[Value::Int(1)], &[Value::Int(2)], &[Value::Int(3)]],
         ));
         state.contents.rows.start(0);
         state.contents.rows.stop(2);
@@ -1172,10 +1168,7 @@ mod tests {
 
     #[test]
     fn row_mode_projects_no_columns_range_even_when_one_is_held() {
-        let mut state = showing(page_of(
-            &["id", "name"],
-            &[&[CqlValue::Int(1), CqlValue::Int(2)]],
-        ));
+        let mut state = showing(page_of(&["id", "name"], &[&[Value::Int(1), Value::Int(2)]]));
         state.contents.mode = SelectionMode::Row;
         state.contents.rows.start(0);
         state.contents.rows.stop(0);
@@ -1198,8 +1191,8 @@ mod tests {
         let mut state = showing(page_of(
             &["id", "name"],
             &[
-                &[CqlValue::Int(1), CqlValue::Int(2)],
-                &[CqlValue::Int(3), CqlValue::Int(4)],
+                &[Value::Int(1), Value::Int(2)],
+                &[Value::Int(3), Value::Int(4)],
             ],
         ));
         state.contents.mode = SelectionMode::Column;
@@ -1222,17 +1215,14 @@ mod tests {
     #[test]
     fn a_row_projects_one_field_per_column_under_a_capped_name_column() {
         let long = "a_column_name_longer_than_the_thirty_cell_cap";
-        let state = showing(page_of(
-            &["id", long],
-            &[&[CqlValue::Int(7), CqlValue::Null]],
-        ));
+        let state = showing(page_of(&["id", long], &[&[Value::Int(7), Value::Null]]));
         let inspector = Inspector::opened(
             0,
             Subject::Table(TableRef::new("shop", "orders")),
             Inspected::Row {
                 number: 1,
                 columns: vec!["id".to_owned(), long.to_owned()],
-                values: vec![CqlValue::Int(7), CqlValue::Null],
+                values: vec![Value::Int(7), Value::Null],
             },
         );
 
@@ -1270,14 +1260,14 @@ mod tests {
 
     #[test]
     fn a_cell_projects_its_value_laid_out_and_its_size() {
-        let state = showing(page_of(&["note"], &[&[CqlValue::Text("[1,2]".to_owned())]]));
+        let state = showing(page_of(&["note"], &[&[Value::Text("[1,2]".to_owned())]]));
         let inspector = Inspector::opened(
             0,
             Subject::Table(TableRef::new("shop", "orders")),
             Inspected::Cell {
                 at: 0,
                 column: "note".to_owned(),
-                value: CqlValue::Text("[1,2]".to_owned()),
+                value: Value::Text("[1,2]".to_owned()),
             },
         );
 
@@ -1295,7 +1285,7 @@ mod tests {
     }
 
     fn ids(count: usize) -> Page {
-        page_of(&["id"], &vec![&[CqlValue::Int(1)][..]; count])
+        page_of(&["id"], &vec![&[Value::Int(1)][..]; count])
     }
 
     fn footer_of(state: &State) -> Option<Footer> {
@@ -1404,8 +1394,8 @@ mod tests {
         let mut state = showing(page_of(
             &["name"],
             &[
-                &[CqlValue::Text("a".to_owned())],
-                &[CqlValue::Text("b".to_owned())],
+                &[Value::Text("a".to_owned())],
+                &[Value::Text("b".to_owned())],
             ],
         ));
         state.contents.set_filter(0, Search::new("a"));
@@ -1451,5 +1441,56 @@ mod tests {
         };
 
         assert_eq!((rows.len(), total, offset), (5, 20, 3));
+    }
+
+    fn paged_keyless(key: bool, more: bool) -> State {
+        let mut schema = crate::tree::tests_support::schema_of(&[("shop", &["orders"])]);
+        if !key {
+            schema
+                .schemas
+                .get_mut("shop")
+                .unwrap()
+                .tables
+                .get_mut("orders")
+                .unwrap()
+                .primary_key = None;
+        }
+        let mut state = super::super::tests_support::connected(schema);
+        let query = QueryId::next();
+        state.contents.requested(
+            query,
+            Subject::Table(TableRef::new("shop", "orders")),
+            crate::model::Statement::select_all("shop", "orders", &[]),
+        );
+        let mut page = page_of(&["id"], &[&[Value::Int(1)]]);
+        if more {
+            page.next = Some(crate::model::PagingState(vec![0]));
+        }
+        state.contents.page_ready(
+            query,
+            page,
+            crate::config::MaxColumnWidth::default(),
+            QueryId::next,
+        );
+        state
+    }
+
+    fn flagged(state: &State) -> bool {
+        title_segments(state)
+            .iter()
+            .any(|segment| segment.text.contains("pages may shift"))
+    }
+
+    #[test]
+    fn a_keyless_table_past_its_first_page_says_its_pages_may_shift() {
+        assert!(flagged(&paged_keyless(false, true)));
+        assert!(
+            !flagged(&paged_keyless(false, false)),
+            "one page cannot shift"
+        );
+        assert!(
+            !flagged(&paged_keyless(true, true)),
+            "a key orders the pages"
+        );
     }
 }

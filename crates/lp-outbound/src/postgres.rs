@@ -15,7 +15,7 @@ use lp_domain::config::{ConnectionConfig, DriverConfig, PageSize, SslMode};
 use lp_domain::contents::TableRef;
 use lp_domain::health::Health;
 use lp_domain::model::{
-    Catalog, ConnId, CqlValue, DbError, Page, PagingState, Row, Statement, StatementKind,
+    Catalog, ConnId, DbError, Page, PagingState, Row, Statement, StatementKind, Value,
 };
 use lp_domain::ports::{Cluster, SecretResolver as _};
 use lp_domain::posture::Posture;
@@ -376,23 +376,24 @@ fn page(messages: Vec<SimpleQueryMessage>, types: Option<&[Type]>) -> Page {
     }
 }
 
-fn value(text: Option<&str>, ty: Option<&Type>) -> CqlValue {
+fn value(text: Option<&str>, ty: Option<&Type>) -> Value {
     let Some(text) = text else {
-        return CqlValue::Null;
+        return Value::Null;
     };
-    let as_text = || CqlValue::Text(text.to_owned());
+    let as_text = || Value::Text(text.to_owned());
 
     match ty {
-        Some(&Type::BOOL) => CqlValue::Boolean(text == "t"),
+        Some(&Type::BOOL) => Value::Boolean(text == "t"),
         Some(&Type::INT2 | &Type::INT4 | &Type::INT8 | &Type::OID) => {
-            text.parse().map_or_else(|_| as_text(), CqlValue::Int)
+            text.parse().map_or_else(|_| as_text(), Value::Int)
         }
-        // `numeric` stays text: it is arbitrary precision.
         Some(&Type::FLOAT4 | &Type::FLOAT8) => {
-            text.parse().map_or_else(|_| as_text(), CqlValue::Float)
+            text.parse().map_or_else(|_| as_text(), Value::Float)
         }
-        Some(&Type::BYTEA) => hex(text).map_or_else(as_text, CqlValue::Blob),
-        Some(&Type::UUID) => CqlValue::Uuid(text.to_owned()),
+        // Text: it is arbitrary precision.
+        Some(&Type::NUMERIC) => Value::Numeric(text.to_owned()),
+        Some(&Type::BYTEA) => hex(text).map_or_else(as_text, Value::Blob),
+        Some(&Type::UUID) => Value::Uuid(text.to_owned()),
         _ => as_text(),
     }
 }
@@ -551,32 +552,27 @@ mod tests {
 
     #[test]
     fn values_take_their_column_type_and_fall_back_to_text() {
-        assert_eq!(value(None, Some(&Type::INT4)), CqlValue::Null);
-        assert_eq!(value(Some("t"), Some(&Type::BOOL)), CqlValue::Boolean(true));
-        assert_eq!(value(Some("-7"), Some(&Type::INT8)), CqlValue::Int(-7));
+        assert_eq!(value(None, Some(&Type::INT4)), Value::Null);
+        assert_eq!(value(Some("t"), Some(&Type::BOOL)), Value::Boolean(true));
+        assert_eq!(value(Some("-7"), Some(&Type::INT8)), Value::Int(-7));
         assert_eq!(
             value(Some("\\xdeadbeef"), Some(&Type::BYTEA)),
-            CqlValue::Blob(vec![0xde, 0xad, 0xbe, 0xef])
+            Value::Blob(vec![0xde, 0xad, 0xbe, 0xef])
         );
         assert_eq!(
             value(Some("\\x"), Some(&Type::BYTEA)),
-            CqlValue::Blob(Vec::new())
+            Value::Blob(Vec::new())
         );
         assert_eq!(
             value(Some("3.14159265358979323846"), Some(&Type::NUMERIC)),
-            CqlValue::Text("3.14159265358979323846".to_owned())
+            Value::Numeric("3.14159265358979323846".to_owned())
         );
-        assert!(
-            matches!(value(Some("NaN"), Some(&Type::FLOAT8)), CqlValue::Float(f) if f.is_nan())
-        );
+        assert!(matches!(value(Some("NaN"), Some(&Type::FLOAT8)), Value::Float(f) if f.is_nan()));
         assert_eq!(
             value(Some("Infinity"), Some(&Type::FLOAT8)),
-            CqlValue::Float(f64::INFINITY)
+            Value::Float(f64::INFINITY)
         );
-        assert_eq!(
-            value(Some("{1,2}"), None),
-            CqlValue::Text("{1,2}".to_owned())
-        );
+        assert_eq!(value(Some("{1,2}"), None), Value::Text("{1,2}".to_owned()));
     }
 
     #[test]

@@ -17,7 +17,7 @@ use crate::grid;
 use crate::inspect::{Inspected, Inspector};
 use crate::jobs::ExportJob;
 use crate::line::Line;
-use crate::model::{CqlValue, Key, Modifiers, Row, StatementKind};
+use crate::model::{Key, Modifiers, Row, StatementKind, Value};
 use crate::panel::Panel;
 use crate::pointer::Mark;
 use crate::pointer::{Click, Pointer, Press, Wheel};
@@ -258,7 +258,7 @@ fn grid_of_rows(columns: usize, rows: usize, width: usize) -> State {
             columns: (0..columns).map(|i| format!("c{i}")).collect(),
             rows: (0..rows)
                 .map(|_| Row {
-                    values: (0..columns).map(|_| CqlValue::Int(1)).collect(),
+                    values: (0..columns).map(|_| Value::Int(1)).collect(),
                 })
                 .collect(),
             next: None,
@@ -296,7 +296,7 @@ fn page_of(rows: usize) -> Page {
         columns: vec!["id".to_owned()],
         rows: vec![
             crate::model::Row {
-                values: vec![crate::model::CqlValue::Null],
+                values: vec![crate::model::Value::Null],
             };
             rows
         ],
@@ -330,7 +330,7 @@ fn grid_of_named_cells(columns: usize, rows: usize) -> State {
             rows: (0..rows)
                 .map(|r| Row {
                     values: (0..columns)
-                        .map(|c| CqlValue::Text(format!("r{r}c{c}")))
+                        .map(|c| Value::Text(format!("r{r}c{c}")))
                         .collect(),
                 })
                 .collect(),
@@ -381,7 +381,7 @@ fn populated(focus: Panel) -> State {
                     columns: vec!["id".to_owned(), "name".to_owned(), "email".to_owned()],
                     rows: vec![
                         Row {
-                            values: vec![CqlValue::Null, CqlValue::Null, CqlValue::Null],
+                            values: vec![Value::Null, Value::Null, Value::Null],
                         };
                         20
                     ],
@@ -480,9 +480,9 @@ fn deletable(rows: usize) -> State {
         &["id", "created_at", "email"],
         |index| {
             vec![
-                CqlValue::Uuid(format!("8f14e45f-000{index}")),
-                CqlValue::Timestamp(1_699_999_999_000 + i64::try_from(index).unwrap_or_default()),
-                CqlValue::Text("ada@example.com".to_owned()),
+                Value::Uuid(format!("8f14e45f-000{index}")),
+                Value::Timestamp(1_699_999_999_000 + i64::try_from(index).unwrap_or_default()),
+                Value::Text("ada@example.com".to_owned()),
             ]
         },
         Posture::Writable,
@@ -492,7 +492,7 @@ fn deletable(rows: usize) -> State {
 fn grid_over(
     rows: usize,
     columns: &[&str],
-    values: impl Fn(usize) -> Vec<CqlValue>,
+    values: impl Fn(usize) -> Vec<Value>,
     posture: Posture,
 ) -> State {
     let mut state = connected(posture);
@@ -573,7 +573,7 @@ fn contents_showing_more(rows: usize) -> State {
     state.contents.requested(
         query,
         Subject::Table(TableRef::new("shop", "orders")),
-        Statement::select_all("shop", "orders"),
+        Statement::select_all("shop", "orders", &[]),
     );
     state.contents.page_ready(
         query,
@@ -637,11 +637,11 @@ fn editable_grid_at(rows: usize, posture: Posture) -> State {
             rows: (0..rows)
                 .map(|index| Row {
                     values: vec![
-                        CqlValue::Uuid(format!("8f14e45f-000{index}")),
-                        CqlValue::Timestamp(
+                        Value::Uuid(format!("8f14e45f-000{index}")),
+                        Value::Timestamp(
                             1_699_999_999_000 + i64::try_from(index).unwrap_or_default(),
                         ),
-                        CqlValue::Text("ada@example.com".to_owned()),
+                        Value::Text("ada@example.com".to_owned()),
                     ],
                 })
                 .collect(),

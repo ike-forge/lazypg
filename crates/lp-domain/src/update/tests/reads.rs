@@ -25,7 +25,7 @@ fn a_stated_column_width_is_the_grids_cap() {
             page: Box::new(Page {
                 columns: vec!["note".to_owned()],
                 rows: vec![crate::model::Row {
-                    values: vec![crate::model::CqlValue::Text("x".repeat(100))],
+                    values: vec![crate::model::Value::Text("x".repeat(100))],
                 }],
                 next: None,
             }),
@@ -158,11 +158,19 @@ fn enter_on_a_table_reads_it() {
             Effect::ExecutePaged {
                 conn,
                 query,
-                stmt: Box::new(Statement::select_all("shop", "orders")),
+                stmt: Box::new(Statement::select_all(
+                    "shop",
+                    "orders",
+                    &["id".to_owned(), "created_at".to_owned()]
+                )),
                 page_size: crate::config::PageSize::try_new(200).expect("in range"),
                 cursor: None,
             },
-            Effect::RecordHistory(Box::new(Statement::select_all("shop", "orders"))),
+            Effect::RecordHistory(Box::new(Statement::select_all(
+                "shop",
+                "orders",
+                &["id".to_owned(), "created_at".to_owned()]
+            ))),
         ]
     );
     assert!(state.in_flight.contains_key(&query));

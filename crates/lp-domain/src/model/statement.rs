@@ -38,11 +38,19 @@ impl Statement {
         self.kind.mutates()
     }
 
-    /// Unbounded: the grid pages it and export streams it.
+    /// Unbounded: the grid pages it and export streams it. Ordered by the
+    /// key when there is one, so `LIMIT/OFFSET` pages neither repeat nor skip
+    /// a row (architecture.md §6).
     #[must_use]
-    pub fn select_all(keyspace: &str, table: &str) -> Self {
+    pub fn select_all(schema: &str, table: &str, key: &[String]) -> Self {
+        let ident = crate::create::ident;
+        let mut cql = format!("SELECT * FROM {}.{}", ident(schema), ident(table));
+        if !key.is_empty() {
+            let columns: Vec<String> = key.iter().map(|column| ident(column)).collect();
+            cql = format!("{cql} ORDER BY {}", columns.join(", "));
+        }
         Self {
-            cql: format!("SELECT * FROM {}.{}", quoted(keyspace), quoted(table)),
+            cql,
             kind: StatementKind::Read,
         }
     }
@@ -249,18 +257,27 @@ mod tests {
     use super::*;
 
     #[test]
-    fn selecting_a_table_quotes_both_halves_of_its_name() {
+    fn selecting_a_table_quotes_only_what_postgres_would_fold_and_orders_by_its_key() {
         assert_eq!(
-            Statement::select_all("shop", "orders_by_customer").cql,
-            "SELECT * FROM \"shop\".\"orders_by_customer\""
+            Statement::select_all("shop", "orders", &[]).cql,
+            "SELECT * FROM shop.orders"
+        );
+        assert_eq!(
+            Statement::select_all(
+                "Edge Cases",
+                "Mixed Case",
+                &["Id".to_owned(), "line".to_owned()]
+            )
+            .cql,
+            "SELECT * FROM \"Edge Cases\".\"Mixed Case\" ORDER BY \"Id\", line"
         );
     }
 
     #[test]
     fn a_name_that_is_not_all_lower_case_survives_the_round_trip() {
-        // Unquoted, CQL would fold this to `myks`.
+        // Unquoted, Postgres would fold this to `myks`.
         assert_eq!(
-            Statement::select_all("MyKs", "Orders").cql,
+            Statement::select_all("MyKs", "Orders", &[]).cql,
             "SELECT * FROM \"MyKs\".\"Orders\""
         );
     }
@@ -272,7 +289,7 @@ mod tests {
 
     #[test]
     fn selecting_is_a_read_and_so_survives_a_read_only_connection() {
-        assert!(!Statement::select_all("shop", "orders").mutates());
+        assert!(!Statement::select_all("shop", "orders", &[]).mutates());
     }
 
     #[test]

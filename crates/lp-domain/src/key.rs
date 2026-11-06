@@ -42,9 +42,9 @@ pub fn columns(table: &Table) -> Vec<(&str, &str)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::CqlValue;
+    use crate::model::Value;
 
-    fn row(values: Vec<CqlValue>) -> Row {
+    fn row(values: Vec<Value>) -> Row {
         Row { values }
     }
 
@@ -54,9 +54,9 @@ mod tests {
             &[("id", "int"), ("placed", "date")],
             &["placed".to_owned(), "note".to_owned(), "id".to_owned()],
             &row(vec![
-                CqlValue::Text("2026-01-01".to_owned()),
-                CqlValue::Text("x".to_owned()),
-                CqlValue::Int(7),
+                Value::Text("2026-01-01".to_owned()),
+                Value::Text("x".to_owned()),
+                Value::Int(7),
             ]),
         );
 
@@ -78,7 +78,7 @@ mod tests {
             RowKey::of(
                 &[("id", "int")],
                 &["note".to_owned()],
-                &row(vec![CqlValue::Text("x".to_owned())])
+                &row(vec![Value::Text("x".to_owned())])
             ),
             None
         );
@@ -90,7 +90,7 @@ mod tests {
             RowKey::of(
                 &[("total", "double")],
                 &["total".to_owned()],
-                &row(vec![CqlValue::Float(0.5)])
+                &row(vec![Value::Float(0.5)])
             ),
             None,
             "a re-spelled float is a row this program might not find"

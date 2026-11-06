@@ -4,7 +4,7 @@ use crate::contents::{ContentsState, Subject, TableRef};
 use crate::drop::{DropPrompt, Target};
 use crate::jobs::Dropping;
 use crate::log::{Outcome, Trace};
-use crate::model::{DbError, Key, QueryId, Row, Statement};
+use crate::model::{DbError, Key, QueryId, Row};
 use crate::overlay::{Message, Overlay};
 use crate::panel::Panel;
 use crate::state::State;
@@ -232,7 +232,7 @@ pub(super) fn finish_drop(
     match dropped.target() {
         Target::Rows { table, .. } => {
             let table = table.clone();
-            let stmt = Statement::select_all(&table.keyspace, &table.table);
+            let stmt = state.browse(&table);
 
             submit_into_contents(state, Subject::Table(table), stmt)
         }

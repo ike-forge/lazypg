@@ -372,7 +372,7 @@ fn exporting_the_whole_table_asks_for_it_without_a_limit() {
     assert_eq!(
         *source,
         Source::Whole {
-            statement: Box::new(Statement::typed("SELECT * FROM \"shop\".\"orders\"")),
+            statement: Box::new(Statement::typed("SELECT * FROM shop.orders")),
             limit: None,
         }
     );

@@ -4,7 +4,7 @@ use lp_domain::clock::Stamp;
 use lp_domain::config::{ClipboardMb, PageSize};
 use lp_domain::export::{Button, Confirm, Destination, Format, Stop};
 use lp_domain::geometry::Geometry;
-use lp_domain::model::{CqlValue, DbError, Key, KeyPress, Page, PagingState, Row};
+use lp_domain::model::{DbError, Key, KeyPress, Page, PagingState, Row, Value};
 use lp_domain::overlay::{Message, Overlay};
 use lp_domain::posture::Posture;
 use lp_domain::style::Severity;
@@ -23,8 +23,8 @@ fn full_page(count: usize) -> Page {
         rows: (0..count)
             .map(|i| Row {
                 values: vec![
-                    CqlValue::Uuid(format!("id-{i}")),
-                    CqlValue::Text(format!("user{i}@example.com")),
+                    Value::Uuid(format!("id-{i}")),
+                    Value::Text(format!("user{i}@example.com")),
                 ],
             })
             .collect(),
@@ -39,8 +39,8 @@ fn page(rows: &[(&str, &str)]) -> Page {
             .iter()
             .map(|(id, email)| Row {
                 values: vec![
-                    CqlValue::Uuid((*id).to_owned()),
-                    CqlValue::Text((*email).to_owned()),
+                    Value::Uuid((*id).to_owned()),
+                    Value::Text((*email).to_owned()),
                 ],
             })
             .collect(),

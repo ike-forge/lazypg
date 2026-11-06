@@ -8,8 +8,8 @@ use lp_domain::config::{
     ConnectionConfig, ConnectionName, Credential, DriverConfig, Millis, PageSize, SslMode,
 };
 use lp_domain::model::{
-    ColumnDefault, ConnId, ConstraintKind, CqlValue, DbError, Page, RelationKind, RelationRef,
-    Statement, StatementKind,
+    ColumnDefault, ConnId, ConstraintKind, DbError, Page, RelationKind, RelationRef, Statement,
+    StatementKind, Value,
 };
 use lp_domain::ports::Cluster;
 use lp_domain::posture::Posture;
@@ -276,24 +276,24 @@ async fn every_type_in_the_zoo_reads_back() {
         page.rows[row].values[i].clone()
     };
 
-    assert_eq!(cell(0, "b"), CqlValue::Boolean(true));
-    assert_eq!(cell(0, "i8"), CqlValue::Int(i64::MAX));
+    assert_eq!(cell(0, "b"), Value::Boolean(true));
+    assert_eq!(cell(0, "i8"), Value::Int(i64::MAX));
     assert_eq!(
         cell(0, "n"),
-        CqlValue::Text("3.14159265358979323846264338327950288".to_owned())
+        Value::Numeric("3.14159265358979323846264338327950288".to_owned())
     );
-    assert!(matches!(cell(0, "f8"), CqlValue::Float(f) if f.is_nan()));
-    assert_eq!(cell(0, "by"), CqlValue::Blob(vec![0xde, 0xad, 0xbe, 0xef]));
-    assert!(matches!(cell(0, "u"), CqlValue::Uuid(u) if u.len() == 36));
-    assert_eq!(cell(0, "md"), CqlValue::Text("{{1,2},{3,4}}".to_owned()));
-    assert_eq!(cell(0, "p"), CqlValue::Text("(1.5,2.5)".to_owned()));
-    assert_eq!(cell(0, "jb"), CqlValue::Text(r#"{"b": [1, 2]}"#.to_owned()));
+    assert!(matches!(cell(0, "f8"), Value::Float(f) if f.is_nan()));
+    assert_eq!(cell(0, "by"), Value::Blob(vec![0xde, 0xad, 0xbe, 0xef]));
+    assert!(matches!(cell(0, "u"), Value::Uuid(u) if u.len() == 36));
+    assert_eq!(cell(0, "md"), Value::Text("{{1,2},{3,4}}".to_owned()));
+    assert_eq!(cell(0, "p"), Value::Text("(1.5,2.5)".to_owned()));
+    assert_eq!(cell(0, "jb"), Value::Text(r#"{"b": [1, 2]}"#.to_owned()));
 
-    assert_eq!(cell(1, "b"), CqlValue::Null);
-    assert_eq!(cell(1, "by"), CqlValue::Blob(Vec::new()));
-    assert_eq!(cell(1, "t"), CqlValue::Text("multi\nline\ttab".to_owned()));
-    assert_eq!(cell(1, "f8"), CqlValue::Float(f64::INFINITY));
-    assert_eq!(cell(1, "d"), CqlValue::Text("infinity".to_owned()));
+    assert_eq!(cell(1, "b"), Value::Null);
+    assert_eq!(cell(1, "by"), Value::Blob(Vec::new()));
+    assert_eq!(cell(1, "t"), Value::Text("multi\nline\ttab".to_owned()));
+    assert_eq!(cell(1, "f8"), Value::Float(f64::INFINITY));
+    assert_eq!(cell(1, "d"), Value::Text("infinity".to_owned()));
 }
 
 #[tokio::test]
@@ -313,7 +313,7 @@ async fn reads_page_by_offset_until_the_last_row() {
         rows += page.rows.len();
         pages += 1;
         if pages == 2 {
-            assert_eq!(page.rows[0].values[0], CqlValue::Int(7_001 / 3 + 1));
+            assert_eq!(page.rows[0].values[0], Value::Int(7_001 / 3 + 1));
         }
         match page.next {
             Some(next) => cursor = Some(next),
@@ -381,7 +381,7 @@ async fn sleeping(db: &Postgres) -> i64 {
     .rows[0]
         .values[0]
     {
-        CqlValue::Int(n) => n,
+        Value::Int(n) => n,
         ref other => panic!("{other:?}"),
     }
 }
@@ -416,7 +416,7 @@ async fn aborting_a_query_cancels_it_on_the_server() {
     // The connection survives its cancelled query.
     assert_eq!(
         query(&db, "SELECT 1").await.rows[0].values[0],
-        CqlValue::Int(1)
+        Value::Int(1)
     );
 }
 

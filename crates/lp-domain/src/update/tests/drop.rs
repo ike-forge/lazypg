@@ -490,13 +490,13 @@ fn d_is_inert_where_the_rows_cannot_be_addressed() {
     let missing_key_column = grid_over(
         2,
         &["email"],
-        |_| vec![CqlValue::Text("ada@example.com".to_owned())],
+        |_| vec![Value::Text("ada@example.com".to_owned())],
         Posture::Writable,
     );
     let unspellable_value = grid_over(
         2,
         &["id", "created_at"],
-        |_| vec![CqlValue::Uuid("8f14e45f".to_owned()), CqlValue::Null],
+        |_| vec![Value::Uuid("8f14e45f".to_owned()), Value::Null],
         Posture::Writable,
     );
 
@@ -524,10 +524,7 @@ fn d_is_inert_over_a_grid_filled_by_a_typed_statement() {
         Page {
             columns: vec!["id".to_owned(), "created_at".to_owned()],
             rows: vec![Row {
-                values: vec![
-                    CqlValue::Uuid("8f14e45f".to_owned()),
-                    CqlValue::Timestamp(0),
-                ],
+                values: vec![Value::Uuid("8f14e45f".to_owned()), Value::Timestamp(0)],
             }],
             next: None,
         },
@@ -559,12 +556,7 @@ fn a_delete_is_refused_on_a_read_only_connection() {
     let mut state = grid_over(
         2,
         &["id", "created_at"],
-        |_| {
-            vec![
-                CqlValue::Uuid("8f14e45f".to_owned()),
-                CqlValue::Timestamp(0),
-            ]
-        },
+        |_| vec![Value::Uuid("8f14e45f".to_owned()), Value::Timestamp(0)],
         Posture::ReadOnly,
     );
 
@@ -623,7 +615,7 @@ fn a_completed_delete_re_reads_the_grid_rather_than_the_schema() {
     );
     assert_eq!(
         deleted_cql(&effects).as_deref(),
-        Some("SELECT * FROM \"shop\".\"orders\""),
+        Some("SELECT * FROM shop.orders ORDER BY id, created_at"),
         "the grid is re-read so the rows stop being drawn"
     );
     assert_eq!(

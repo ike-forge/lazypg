@@ -33,9 +33,7 @@ fn showing_rows(count: usize) -> State {
             columns: vec!["id".to_owned()],
             rows: (0..count)
                 .map(|i| Row {
-                    values: vec![CqlValue::Int(
-                        i64::try_from(i).expect("the fixture is small"),
-                    )],
+                    values: vec![Value::Int(i64::try_from(i).expect("the fixture is small"))],
                 })
                 .collect(),
             next: None,
@@ -60,7 +58,7 @@ fn showing_columns(columns: usize) -> State {
             columns: (0..columns).map(|i| format!("c{i}")).collect(),
             rows: vec![Row {
                 values: (0..columns)
-                    .map(|i| CqlValue::Int(i64::try_from(i).expect("the fixture is small")))
+                    .map(|i| Value::Int(i64::try_from(i).expect("the fixture is small")))
                     .collect(),
             }],
             next: None,

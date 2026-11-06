@@ -208,10 +208,7 @@ fn the_grid_is_drawn_from_the_column_the_viewport_names() {
 fn marked_grid() -> State {
     let mut state = showing(page_of(
         &["id", "name"],
-        &[
-            &[CqlValue::Int(1), text("ada")],
-            &[CqlValue::Int(2), text("bob")],
-        ],
+        &[&[Value::Int(1), text("ada")], &[Value::Int(2), text("bob")]],
     ));
     state.contents.cycle_sort(1);
     state.contents.set_filter(0, Search::new("1"));
@@ -439,10 +436,7 @@ fn a_truncated_column_widens_to_fill_the_panel() {
     let body = "Row after row of the same plain prose. ".repeat(40);
     let mut state = showing(page_of(
         &["id", "body"],
-        &[
-            &[CqlValue::Int(1), text(&body)],
-            &[CqlValue::Int(2), text(&body)],
-        ],
+        &[&[Value::Int(1), text(&body)], &[Value::Int(2), text(&body)]],
     ));
     state.geometry = geometry_of(80, 12, &state);
     state.contents.mode = SelectionMode::Column;

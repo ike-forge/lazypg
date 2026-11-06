@@ -284,7 +284,7 @@ fn wrapped(value: &InspectValue, width: usize, hang: usize) -> Vec<Vec<String>> 
 mod tests {
     use lp_domain::contents::{Subject, TableRef};
     use lp_domain::inspect::{Inspected, Inspector};
-    use lp_domain::model::CqlValue;
+    use lp_domain::model::Value;
     use lp_domain::overlay::Overlay;
     use lp_domain::state::State;
     use lp_domain::view::{OverlayView, view_model};
@@ -352,7 +352,7 @@ mod tests {
             .collect()
     }
 
-    fn cell(value: CqlValue) -> Inspected {
+    fn cell(value: Value) -> Inspected {
         Inspected::Cell {
             at: 0,
             column: "spec".to_owned(),
@@ -365,7 +365,7 @@ mod tests {
         let (buffer, lines) = drawn(
             40,
             12,
-            cell(CqlValue::Text(r#"{"a":1,"b":[true]}"#.to_owned())),
+            cell(Value::Text(r#"{"a":1,"b":[true]}"#.to_owned())),
         );
 
         assert_eq!(
@@ -394,8 +394,8 @@ mod tests {
                 number: 4,
                 columns: vec!["id".to_owned(), "tags".to_owned()],
                 values: vec![
-                    CqlValue::Int(7),
-                    CqlValue::List(vec![CqlValue::Text("x".to_owned())]),
+                    Value::Int(7),
+                    Value::List(vec![Value::Text("x".to_owned())]),
                 ],
             },
         );
@@ -423,7 +423,7 @@ mod tests {
             Inspected::Row {
                 number: 1,
                 columns: vec!["note".to_owned()],
-                values: vec![CqlValue::List(vec![CqlValue::Text(
+                values: vec![Value::List(vec![Value::Text(
                     "one two three four five six".to_owned(),
                 )])],
             },
@@ -445,7 +445,7 @@ mod tests {
 
     #[test]
     fn a_value_longer_than_the_body_gets_a_scrollbar() {
-        let value = CqlValue::List((0..40).map(CqlValue::Int).collect());
+        let value = Value::List((0..40).map(Value::Int).collect());
 
         let (buffer, lines) = drawn(40, 12, cell(value));
 
@@ -463,7 +463,7 @@ mod tests {
         state.overlay = Some(Overlay::Inspect(Inspector::opened(
             0,
             Subject::Table(TableRef::new("shop", "orders")),
-            cell(CqlValue::List(vec![CqlValue::Int(1), CqlValue::Int(2)])),
+            cell(Value::List(vec![Value::Int(1), Value::Int(2)])),
         )));
         let mut terminal = Terminal::new(TestBackend::new(80, 24)).expect("a backend");
         let mut geometry = None;
@@ -489,7 +489,7 @@ mod tests {
             Inspected::Row {
                 number: 1,
                 columns: vec!["note".to_owned()],
-                values: vec![CqlValue::List(vec![CqlValue::Text(
+                values: vec![Value::List(vec![Value::Text(
                     "one two three four five six".to_owned(),
                 )])],
             },
@@ -524,7 +524,7 @@ mod tests {
         let mut inspector = Inspector::opened(
             0,
             Subject::Table(TableRef::new("shop", "orders")),
-            cell(CqlValue::Text("ada".to_owned())),
+            cell(Value::Text("ada".to_owned())),
         );
         let mut field = lp_domain::edit::Field::opened(0, "spec", "int", "ada".to_owned());
         field.line_mut().insert('!');
@@ -558,7 +558,7 @@ mod tests {
             Inspector::opened(
                 0,
                 Subject::Table(TableRef::new("shop", "orders")),
-                cell(CqlValue::Text("ada".to_owned())),
+                cell(Value::Text("ada".to_owned())),
             )
             .with_edited(vec![0]),
         ));

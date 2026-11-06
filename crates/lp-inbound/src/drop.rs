@@ -467,14 +467,14 @@ mod tests {
     }
 
     fn deleting(count: usize) -> DropPrompt {
-        use lp_domain::model::{CqlValue, Row};
+        use lp_domain::model::{Row, Value};
 
         let columns = vec!["id".to_owned(), "placed".to_owned()];
         let rows: Vec<Row> = (0..count)
             .map(|index| Row {
                 values: vec![
-                    CqlValue::Uuid(format!("8f14e45f-000{index}")),
-                    CqlValue::Text(format!("2026-01-0{}", index + 1)),
+                    Value::Uuid(format!("8f14e45f-000{index}")),
+                    Value::Text(format!("2026-01-0{}", index + 1)),
                 ],
             })
             .collect();

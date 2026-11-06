@@ -6,20 +6,20 @@ use std::collections::BTreeMap;
 
 use crate::line::Line;
 use crate::literal;
-use crate::model::CqlValue;
+use crate::model::Value;
 
 /// [`parse`] is the only constructor, so the drawn value and the literal cannot
 /// drift.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Edited {
-    value: CqlValue,
+    value: Value,
     literal: String,
 }
 
 impl Edited {
     /// Also what a clean cell is compared against.
     #[must_use]
-    pub const fn value(&self) -> &CqlValue {
+    pub const fn value(&self) -> &Value {
         &self.value
     }
 
@@ -72,15 +72,15 @@ pub fn parse(data_type: &str, text: &str) -> Option<Edited> {
     let (value, literal) = match literal::normalised(data_type).as_str() {
         // Not validated beyond being text: the cluster owns those formats.
         "text" | "varchar" | "ascii" | "inet" | "date" | "time" | "timestamp" => {
-            (CqlValue::Text(text.to_owned()), literal::quoted(text))
+            (Value::Text(text.to_owned()), literal::quoted(text))
         }
         "uuid" | "timeuuid" => {
             let uuid = text.trim().to_ascii_lowercase();
-            is_uuid(&uuid).then(|| (CqlValue::Uuid(uuid.clone()), uuid))?
+            is_uuid(&uuid).then(|| (Value::Uuid(uuid.clone()), uuid))?
         }
         "tinyint" | "smallint" | "int" | "bigint" => {
             let number: i64 = text.trim().parse().ok()?;
-            (CqlValue::Int(number), number.to_string())
+            (Value::Int(number), number.to_string())
         }
         // Verbatim: an `f64` round trip would rewrite `1.50` and `1e3`, and
         // lose wide `varint` and `decimal`.
@@ -90,7 +90,7 @@ pub fn parse(data_type: &str, text: &str) -> Option<Edited> {
             if !parsed.is_finite() {
                 return None;
             }
-            (CqlValue::Float(parsed), number.to_owned())
+            (Value::Float(parsed), number.to_owned())
         }
         "boolean" => {
             let flag = match text.trim().to_ascii_lowercase().as_str() {
@@ -98,12 +98,12 @@ pub fn parse(data_type: &str, text: &str) -> Option<Edited> {
                 "false" => false,
                 _ => return None,
             };
-            (CqlValue::Boolean(flag), flag.to_string())
+            (Value::Boolean(flag), flag.to_string())
         }
         "blob" => {
             let bytes = hex(text.trim())?;
-            let literal = crate::cell::text(&CqlValue::Blob(bytes.clone()));
-            (CqlValue::Blob(bytes), literal)
+            let literal = crate::cell::text(&Value::Blob(bytes.clone()));
+            (Value::Blob(bytes), literal)
         }
         _ => return None,
     };
@@ -305,7 +305,7 @@ impl Field {
 mod tests {
     use super::*;
 
-    fn parsed(data_type: &str, text: &str) -> Option<(CqlValue, String)> {
+    fn parsed(data_type: &str, text: &str) -> Option<(Value, String)> {
         parse(data_type, text).map(|edited| (edited.value, edited.literal))
     }
 
@@ -313,7 +313,7 @@ mod tests {
     fn text_is_quoted_and_an_embedded_quote_doubled() {
         assert_eq!(
             parsed("text", "o'hara"),
-            Some((CqlValue::Text("o'hara".to_owned()), "'o''hara'".to_owned()))
+            Some((Value::Text("o'hara".to_owned()), "'o''hara'".to_owned()))
         );
     }
 
@@ -321,7 +321,7 @@ mod tests {
     fn an_empty_text_is_a_value_rather_than_a_refusal() {
         assert_eq!(
             parsed("varchar", ""),
-            Some((CqlValue::Text(String::new()), "''".to_owned()))
+            Some((Value::Text(String::new()), "''".to_owned()))
         );
     }
 
@@ -331,7 +331,7 @@ mod tests {
         assert_eq!(
             parsed("date", "2026-01-01"),
             Some((
-                CqlValue::Text("2026-01-01".to_owned()),
+                Value::Text("2026-01-01".to_owned()),
                 "'2026-01-01'".to_owned()
             ))
         );
@@ -341,7 +341,7 @@ mod tests {
     fn an_integer_is_bare_and_a_non_integer_is_refused() {
         assert_eq!(
             parsed("int", " -7 "),
-            Some((CqlValue::Int(-7), "-7".to_owned()))
+            Some((Value::Int(-7), "-7".to_owned()))
         );
         assert_eq!(parsed("bigint", "7.5"), None);
         assert_eq!(parsed("int", "seven"), None);
@@ -353,11 +353,11 @@ mod tests {
         // Unlike `literal::of`: the text is the user's, so no `f64` round trip.
         assert_eq!(
             parsed("decimal", "1.50"),
-            Some((CqlValue::Float(1.5), "1.50".to_owned()))
+            Some((Value::Float(1.5), "1.50".to_owned()))
         );
         assert_eq!(
             parsed("double", "1e3"),
-            Some((CqlValue::Float(1000.0), "1e3".to_owned()))
+            Some((Value::Float(1000.0), "1e3".to_owned()))
         );
         assert_eq!(parsed("float", "nan"), None);
         assert_eq!(parsed("varint", "inf"), None);
@@ -368,7 +368,7 @@ mod tests {
         assert_eq!(
             parsed("uuid", "8F14E45F-CEEA-467A-9575-9C6D7E0D9F3C"),
             Some((
-                CqlValue::Uuid("8f14e45f-ceea-467a-9575-9c6d7e0d9f3c".to_owned()),
+                Value::Uuid("8f14e45f-ceea-467a-9575-9c6d7e0d9f3c".to_owned()),
                 "8f14e45f-ceea-467a-9575-9c6d7e0d9f3c".to_owned()
             ))
         );
@@ -380,7 +380,7 @@ mod tests {
     fn a_boolean_is_folded_and_nothing_else_is_one() {
         assert_eq!(
             parsed("boolean", "TRUE"),
-            Some((CqlValue::Boolean(true), "true".to_owned()))
+            Some((Value::Boolean(true), "true".to_owned()))
         );
         assert_eq!(parsed("boolean", "1"), None);
     }
@@ -389,14 +389,11 @@ mod tests {
     fn a_blob_takes_the_form_the_grid_draws_it_in() {
         assert_eq!(
             parsed("blob", "0x000FFF"),
-            Some((
-                CqlValue::Blob(vec![0x00, 0x0f, 0xff]),
-                "0x000fff".to_owned()
-            ))
+            Some((Value::Blob(vec![0x00, 0x0f, 0xff]), "\\x000fff".to_owned()))
         );
         assert_eq!(
             parsed("blob", "0x"),
-            Some((CqlValue::Blob(Vec::new()), "0x".to_owned()))
+            Some((Value::Blob(Vec::new()), "\\x".to_owned()))
         );
         assert_eq!(parsed("blob", "000fff"), None, "the marker is not optional");
         assert_eq!(parsed("blob", "0x0ff"), None, "half a byte is not a byte");
@@ -404,10 +401,7 @@ mod tests {
 
     #[test]
     fn a_declaration_keeps_its_meaning_through_case_and_a_frozen_wrapper() {
-        assert_eq!(
-            parsed("  INT ", "7"),
-            Some((CqlValue::Int(7), "7".to_owned()))
-        );
+        assert_eq!(parsed("  INT ", "7"), Some((Value::Int(7), "7".to_owned())));
         assert!(editable("frozen<uuid>"));
     }
 

@@ -12,7 +12,7 @@ fn y_yanks_a_grid_row() {
             page: Box::new(Page {
                 columns: vec!["id".to_owned(), "name".to_owned()],
                 rows: vec![Row {
-                    values: vec![CqlValue::Int(7), CqlValue::Text("ada".to_owned())],
+                    values: vec![Value::Int(7), Value::Text("ada".to_owned())],
                 }],
                 next: None,
             }),
@@ -46,10 +46,10 @@ fn a_yanked_row_carries_every_column_of_the_page() {
             ],
             rows: vec![Row {
                 values: vec![
-                    CqlValue::Text("v0".to_owned()),
-                    CqlValue::Text("v1".to_owned()),
-                    CqlValue::Text("v2".to_owned()),
-                    CqlValue::Text("v3".to_owned()),
+                    Value::Text("v0".to_owned()),
+                    Value::Text("v1".to_owned()),
+                    Value::Text("v2".to_owned()),
+                    Value::Text("v3".to_owned()),
                 ],
             }],
             next: None,
@@ -90,7 +90,7 @@ fn the_column_follow_draws_by_the_widths_the_grid_is_drawn_at() {
         Page {
             columns: vec!["id".to_owned(), "body".to_owned()],
             rows: vec![Row {
-                values: vec![CqlValue::Int(1), CqlValue::Text("x".repeat(500))],
+                values: vec![Value::Int(1), Value::Text("x".repeat(500))],
             }],
             next: None,
         },
@@ -382,7 +382,7 @@ fn y_on_a_null_cell_raises_no_effect() {
             page: Box::new(Page {
                 columns: vec!["id".to_owned()],
                 rows: vec![Row {
-                    values: vec![CqlValue::Null],
+                    values: vec![Value::Null],
                 }],
                 next: None,
             }),
@@ -434,7 +434,7 @@ fn y_in_column_mode_on_a_column_of_one_null_yanks_nothing() {
             page: Box::new(Page {
                 columns: vec!["id".to_owned()],
                 rows: vec![Row {
-                    values: vec![CqlValue::Null],
+                    values: vec![Value::Null],
                 }],
                 next: None,
             }),
@@ -463,7 +463,7 @@ fn y_on_a_cell_holding_the_empty_string_raises_no_effect() {
             page: Box::new(Page {
                 columns: vec!["name".to_owned()],
                 rows: vec![Row {
-                    values: vec![CqlValue::Text(String::new())],
+                    values: vec![Value::Text(String::new())],
                 }],
                 next: None,
             }),
@@ -732,7 +732,7 @@ fn a_payload_of_nothing_but_delimiters_reaches_no_clipboard() {
             columns: vec!["a".to_owned(), "b".to_owned()],
             rows: vec![
                 Row {
-                    values: vec![CqlValue::Null, CqlValue::Null],
+                    values: vec![Value::Null, Value::Null],
                 };
                 2
             ],

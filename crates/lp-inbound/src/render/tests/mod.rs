@@ -7,8 +7,7 @@ use lp_domain::feedback::Flash;
 use lp_domain::geometry::Geometry;
 use lp_domain::grid::{BAR, COLUMN_SPACING};
 use lp_domain::model::{
-    Catalog, Column, ConnId, CqlValue, Index, Key, Page, PrimaryKey, QueryId, Schema, Statement,
-    Table,
+    Catalog, Column, ConnId, Index, Key, Page, PrimaryKey, QueryId, Schema, Statement, Table, Value,
 };
 use lp_domain::overlay::{Message, Overlay};
 use lp_domain::panel::Panel;
@@ -191,7 +190,7 @@ fn showing(page: Page) -> State {
     state.contents.requested(
         query,
         Subject::Table(TableRef::new("shop", "orders")),
-        lp_domain::model::Statement::select_all("shop", "orders"),
+        lp_domain::model::Statement::select_all("shop", "orders", &[]),
     );
     state.contents.page_ready(
         query,
@@ -202,7 +201,7 @@ fn showing(page: Page) -> State {
     state
 }
 
-fn page_of(columns: &[&str], rows: &[&[CqlValue]]) -> Page {
+fn page_of(columns: &[&str], rows: &[&[Value]]) -> Page {
     Page {
         columns: columns.iter().map(|name| (*name).to_owned()).collect(),
         rows: rows
@@ -215,8 +214,8 @@ fn page_of(columns: &[&str], rows: &[&[CqlValue]]) -> Page {
     }
 }
 
-fn text(value: &str) -> CqlValue {
-    CqlValue::Text(value.to_owned())
+fn text(value: &str) -> Value {
+    Value::Text(value.to_owned())
 }
 
 /// Sets the cursor and its viewport together, as `update` does.

@@ -1,7 +1,7 @@
 //! One page of a result set, carrying the cursor for the next: nothing assumes
 //! the whole result fits in memory.
 
-use crate::model::value::CqlValue;
+use crate::model::value::Value;
 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Page {
@@ -13,7 +13,7 @@ pub struct Page {
 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Row {
-    pub values: Vec<CqlValue>,
+    pub values: Vec<Value>,
 }
 
 /// Opaque: never interpreted, only handed back.

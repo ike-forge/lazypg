@@ -4,7 +4,7 @@ use crate::contents::{ContentsState, Subject};
 use crate::edit::Field;
 use crate::key;
 use crate::key::RowKey;
-use crate::model::{CqlValue, Key};
+use crate::model::{Key, Value};
 use crate::overlay::{Message, Overlay};
 use crate::state::State;
 use crate::style::Severity;
@@ -103,7 +103,7 @@ fn editable(state: &State) -> Result<Field, String> {
         .map_or_else(String::new, |value| {
             match value {
                 // A null starts empty: `null` is not what the cell holds.
-                CqlValue::Null => String::new(),
+                Value::Null => String::new(),
                 other => crate::cell::text(other),
             }
         });

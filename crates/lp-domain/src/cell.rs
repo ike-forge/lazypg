@@ -1,7 +1,7 @@
-//! One [`CqlValue`] as the text a grid draws. In the domain, so every renderer
+//! One [`Value`] as the text a grid draws. In the domain, so every renderer
 //! agrees and it tests without a cluster.
 
-use crate::model::CqlValue;
+use crate::model::Value;
 use unicode_normalization::UnicodeNormalization;
 use unicode_width::UnicodeWidthChar;
 
@@ -12,19 +12,19 @@ const HEX: [char; 16] = [
 /// Public for the adapter: a value nested in a tuple or UDT renders as it would
 /// alone.
 #[must_use]
-pub fn text(value: &CqlValue) -> String {
+pub fn text(value: &Value) -> String {
     match value {
         // Told apart from the text "null" by the faint token, not the text.
-        CqlValue::Null => "null".to_owned(),
-        CqlValue::Boolean(value) => value.to_string(),
-        CqlValue::Int(value) => value.to_string(),
-        CqlValue::Float(value) => value.to_string(),
-        CqlValue::Text(value) | CqlValue::Uuid(value) => value.clone(),
-        CqlValue::Blob(bytes) => hex(bytes),
-        CqlValue::Timestamp(millis) => millis.to_string(),
-        CqlValue::List(values) => sequence(values, '[', ']'),
-        CqlValue::Set(values) => sequence(values, '{', '}'),
-        CqlValue::Map(entries) => map(entries),
+        Value::Null => "null".to_owned(),
+        Value::Boolean(value) => value.to_string(),
+        Value::Int(value) => value.to_string(),
+        Value::Float(value) => float(*value),
+        Value::Text(value) | Value::Uuid(value) | Value::Numeric(value) => value.clone(),
+        Value::Blob(bytes) => hex(bytes),
+        Value::Timestamp(millis) => millis.to_string(),
+        Value::List(values) => sequence(values, '[', ']'),
+        Value::Set(values) => sequence(values, '{', '}'),
+        Value::Map(entries) => map(entries),
     }
 }
 
@@ -38,7 +38,7 @@ pub fn text(value: &CqlValue) -> String {
 /// differently from the terminal, so the wrap lands off and every line below
 /// shifts. NFC first, so a decomposed accent survives as one character.
 #[must_use]
-pub fn display(value: &CqlValue) -> String {
+pub fn display(value: &Value) -> String {
     text(value)
         .nfc()
         .map(visible)
@@ -63,10 +63,21 @@ fn visible(character: char) -> char {
     }
 }
 
-/// The form `cqlsh` prints and CQL accepts back.
+/// Postgres's spellings of the values Rust spells `NaN`, `inf` and `-inf`.
+fn float(value: f64) -> String {
+    if value.is_nan() {
+        "NaN".to_owned()
+    } else if value.is_infinite() {
+        if value > 0.0 { "Infinity" } else { "-Infinity" }.to_owned()
+    } else {
+        value.to_string()
+    }
+}
+
+/// `bytea_output = hex`, the form Postgres prints and accepts back.
 fn hex(bytes: &[u8]) -> String {
     let mut out = String::with_capacity(2 + bytes.len() * 2);
-    out.push_str("0x");
+    out.push_str("\\x");
 
     for byte in bytes {
         out.push(HEX[usize::from(byte >> 4)]);
@@ -76,13 +87,13 @@ fn hex(bytes: &[u8]) -> String {
     out
 }
 
-fn sequence(values: &[CqlValue], open: char, close: char) -> String {
+fn sequence(values: &[Value], open: char, close: char) -> String {
     let rendered: Vec<String> = values.iter().map(text).collect();
 
     format!("{open}{}{close}", rendered.join(", "))
 }
 
-fn map(entries: &std::collections::BTreeMap<String, CqlValue>) -> String {
+fn map(entries: &std::collections::BTreeMap<String, Value>) -> String {
     let rendered: Vec<String> = entries
         .iter()
         .map(|(key, value)| format!("{key}: {}", text(value)))
@@ -98,21 +109,18 @@ mod tests {
 
     #[test]
     fn scalars_render_the_way_cqlsh_prints_them() {
-        assert_eq!(text(&CqlValue::Null), "null");
-        assert_eq!(text(&CqlValue::Boolean(true)), "true");
-        assert_eq!(text(&CqlValue::Int(-42)), "-42");
-        assert_eq!(text(&CqlValue::Float(1.5)), "1.5");
-        assert_eq!(text(&CqlValue::Text("ada".to_owned())), "ada");
-        assert_eq!(text(&CqlValue::Uuid("8f14e45f".to_owned())), "8f14e45f");
-        assert_eq!(
-            text(&CqlValue::Timestamp(1_700_000_000_000)),
-            "1700000000000"
-        );
+        assert_eq!(text(&Value::Null), "null");
+        assert_eq!(text(&Value::Boolean(true)), "true");
+        assert_eq!(text(&Value::Int(-42)), "-42");
+        assert_eq!(text(&Value::Float(1.5)), "1.5");
+        assert_eq!(text(&Value::Text("ada".to_owned())), "ada");
+        assert_eq!(text(&Value::Uuid("8f14e45f".to_owned())), "8f14e45f");
+        assert_eq!(text(&Value::Timestamp(1_700_000_000_000)), "1700000000000");
     }
 
     #[test]
     fn display_replaces_what_would_move_the_terminal() {
-        let hostile = CqlValue::Text("a\x1b[2Jb\nc\td\u{7f}e\u{202e}f\u{85}".to_owned());
+        let hostile = Value::Text("a\x1b[2Jb\nc\td\u{7f}e\u{202e}f\u{85}".to_owned());
 
         assert_eq!(
             display(&hostile),
@@ -127,68 +135,82 @@ mod tests {
     #[test]
     fn display_splits_sequences_a_terminal_may_draw_part_by_part() {
         let sequences =
-            CqlValue::Text("👩\u{200d}👩\u{200d}👧 🏴\u{e0067}\u{e0062}\u{e007f}".to_owned());
+            Value::Text("👩\u{200d}👩\u{200d}👧 🏴\u{e0067}\u{e0062}\u{e007f}".to_owned());
 
         assert_eq!(display(&sequences), "👩👩👧 🏴");
     }
 
     #[test]
     fn display_composes_a_decomposed_accent() {
-        let decomposed = CqlValue::Text("e\u{301}".to_owned());
+        let decomposed = Value::Text("e\u{301}".to_owned());
 
         assert_eq!(display(&decomposed), "\u{e9}");
     }
 
     #[test]
     fn display_drops_marks_with_no_composed_form() {
-        let stacked = CqlValue::Text("x\u{301}\u{302} \u{e01}\u{e31}".to_owned());
+        let stacked = Value::Text("x\u{301}\u{302} \u{e01}\u{e31}".to_owned());
 
         assert_eq!(display(&stacked), "x \u{e01}");
     }
 
     #[test]
     fn display_drops_zero_width_spaces() {
-        let spaced = CqlValue::Text("a\u{200b}b\u{feff}c".to_owned());
+        let spaced = Value::Text("a\u{200b}b\u{feff}c".to_owned());
 
         assert_eq!(display(&spaced), "abc");
     }
 
     #[test]
     fn display_leaves_ordinary_text_alone() {
-        let text_value = CqlValue::Text("全角 \u{e9} 👩 \u{5d1}".to_owned());
+        let text_value = Value::Text("全角 \u{e9} 👩 \u{5d1}".to_owned());
 
         assert_eq!(display(&text_value), text(&text_value));
     }
 
     #[test]
-    fn a_blob_is_a_hex_literal_cql_would_accept_back() {
-        assert_eq!(text(&CqlValue::Blob(vec![0x1f, 0x8b, 0x00])), "0x1f8b00");
-        assert_eq!(text(&CqlValue::Blob(Vec::new())), "0x");
+    fn a_bytea_is_the_hex_form_postgres_prints_and_accepts_back() {
+        assert_eq!(text(&Value::Blob(vec![0x1f, 0x8b, 0x00])), "\\x1f8b00");
+        assert_eq!(text(&Value::Blob(Vec::new())), "\\x");
+    }
+
+    #[test]
+    fn a_float_postgres_cannot_spell_as_rust_does_takes_its_own_spelling() {
+        assert_eq!(text(&Value::Float(f64::NAN)), "NaN");
+        assert_eq!(text(&Value::Float(f64::INFINITY)), "Infinity");
+        assert_eq!(text(&Value::Float(f64::NEG_INFINITY)), "-Infinity");
+        assert_eq!(text(&Value::Float(0.5)), "0.5");
+    }
+
+    #[test]
+    fn a_numeric_keeps_every_digit_postgres_printed() {
+        let digits = "3.14159265358979323846264338327950288";
+        assert_eq!(text(&Value::Numeric(digits.to_owned())), digits);
     }
 
     #[test]
     fn a_list_and_a_set_are_told_apart_by_their_brackets() {
-        let values = vec![CqlValue::Int(1), CqlValue::Int(2)];
+        let values = vec![Value::Int(1), Value::Int(2)];
 
-        assert_eq!(text(&CqlValue::List(values.clone())), "[1, 2]");
-        assert_eq!(text(&CqlValue::Set(values)), "{1, 2}");
+        assert_eq!(text(&Value::List(values.clone())), "[1, 2]");
+        assert_eq!(text(&Value::Set(values)), "{1, 2}");
     }
 
     #[test]
     fn a_map_renders_its_entries_in_key_order() {
         let entries = BTreeMap::from([
-            ("b".to_owned(), CqlValue::Int(2)),
-            ("a".to_owned(), CqlValue::Int(1)),
+            ("b".to_owned(), Value::Int(2)),
+            ("a".to_owned(), Value::Int(1)),
         ]);
 
-        assert_eq!(text(&CqlValue::Map(entries)), "{a: 1, b: 2}");
+        assert_eq!(text(&Value::Map(entries)), "{a: 1, b: 2}");
     }
 
     #[test]
     fn a_collection_renders_its_elements_rather_than_their_shape() {
-        let nested = CqlValue::List(vec![
-            CqlValue::Set(vec![CqlValue::Text("x".to_owned())]),
-            CqlValue::Null,
+        let nested = Value::List(vec![
+            Value::Set(vec![Value::Text("x".to_owned())]),
+            Value::Null,
         ]);
 
         assert_eq!(text(&nested), "[{x}, null]");
@@ -196,8 +218,8 @@ mod tests {
 
     #[test]
     fn an_empty_collection_is_still_recognisable_as_one() {
-        assert_eq!(text(&CqlValue::List(Vec::new())), "[]");
-        assert_eq!(text(&CqlValue::Set(Vec::new())), "{}");
-        assert_eq!(text(&CqlValue::Map(BTreeMap::new())), "{}");
+        assert_eq!(text(&Value::List(Vec::new())), "[]");
+        assert_eq!(text(&Value::Set(Vec::new())), "{}");
+        assert_eq!(text(&Value::Map(BTreeMap::new())), "{}");
     }
 }

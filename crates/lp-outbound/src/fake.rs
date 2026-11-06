@@ -309,13 +309,13 @@ impl Sink for FakeSink {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lp_domain::model::{CqlValue, Row};
+    use lp_domain::model::{Row, Value};
 
     fn page(id: i64, next: Option<u8>) -> Page {
         Page {
             columns: vec!["id".to_owned()],
             rows: vec![Row {
-                values: vec![CqlValue::Int(id)],
+                values: vec![Value::Int(id)],
             }],
             next: next.map(|byte| PagingState(vec![byte])),
         }

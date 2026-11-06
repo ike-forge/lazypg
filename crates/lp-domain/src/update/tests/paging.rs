@@ -35,7 +35,7 @@ fn p_fetches_the_next_page_from_where_the_last_one_left_off() {
         [Effect::ExecutePaged {
             conn,
             query,
-            stmt: Box::new(Statement::select_all("shop", "orders")),
+            stmt: Box::new(Statement::select_all("shop", "orders", &[])),
             page_size: crate::config::PageSize::try_new(200).expect("in range"),
             cursor: Some(PagingState(vec![1])),
         }],

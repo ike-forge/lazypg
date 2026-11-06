@@ -158,6 +158,21 @@ impl State {
         }
     }
 
+    /// Every read of a whole table: ordered by its key when the catalog knows
+    /// one.
+    #[must_use]
+    pub fn browse(&self, table: &crate::contents::TableRef) -> Statement {
+        let key = self
+            .schema()
+            .and_then(|catalog| catalog.schemas.get(&table.keyspace))
+            .and_then(|schema| schema.tables.get(&table.table))
+            .and_then(|found| found.primary_key.as_ref())
+            .map(|key| key.columns.clone())
+            .unwrap_or_default();
+
+        Statement::select_all(&table.keyspace, &table.table, &key)
+    }
+
     /// The one answer to "which keyspace is on screen", shared by completion
     /// and the grid.
     #[must_use]

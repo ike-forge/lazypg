@@ -17,10 +17,7 @@ fn columnar_grid(column: usize) -> State {
                 .into_iter()
                 .zip(["Berlin", "Aarhus", "Berlin"])
                 .map(|(name, city)| Row {
-                    values: vec![
-                        CqlValue::Text(name.to_owned()),
-                        CqlValue::Text(city.to_owned()),
-                    ],
+                    values: vec![Value::Text(name.to_owned()), Value::Text(city.to_owned())],
                 })
                 .collect(),
             next: None,
@@ -232,7 +229,7 @@ fn exporting_the_fetched_rows_writes_the_ones_the_grid_is_showing() {
             columns: vec!["kind".to_owned()],
             rows: (0..PAGE)
                 .map(|row| Row {
-                    values: vec![CqlValue::Text(
+                    values: vec![Value::Text(
                         if row % 2 == 0 { "keep" } else { "drop" }.to_owned(),
                     )],
                 })

@@ -3,7 +3,7 @@
 
 use crate::cell;
 use crate::log::Entry;
-use crate::model::{CqlValue, Row};
+use crate::model::{Row, Value};
 use crate::selection::Ranges;
 use crate::tree::Node;
 use crate::view::logs::outcome_text;
@@ -29,9 +29,9 @@ pub fn grid_row(row: &Row) -> String {
 
 /// Raw: a lone value has no delimiter to protect. `None` for a null.
 #[must_use]
-pub fn grid_cell(value: &CqlValue) -> Option<String> {
+pub fn grid_cell(value: &Value) -> Option<String> {
     match value {
-        CqlValue::Null => None,
+        Value::Null => None,
         value => Some(cell::text(value)),
     }
 }
@@ -124,9 +124,9 @@ fn escaped(field: &str) -> String {
 }
 
 /// A null yanks as nothing: CSV cannot tell it from the text "null".
-fn value(value: &CqlValue) -> String {
+fn value(value: &Value) -> String {
     match value {
-        CqlValue::Null => String::new(),
+        Value::Null => String::new(),
         value => cell::text(value),
     }
 }
@@ -144,7 +144,7 @@ mod tests {
     use super::*;
     use crate::clock::Stamp;
     use crate::log::{Outcome, Subject};
-    use crate::model::{CqlValue, Page, Row, Schema, Table};
+    use crate::model::{Page, Row, Schema, Table, Value};
     use crate::selection::Range;
     use crate::tree::Node;
     use crate::view::{ColumnKind, DetailRow, IdentityKind};
@@ -154,7 +154,7 @@ mod tests {
         (0..rows)
             .map(|row| Row {
                 values: (0..columns)
-                    .map(|column| CqlValue::Text(format!("r{row}c{column}")))
+                    .map(|column| Value::Text(format!("r{row}c{column}")))
                     .collect(),
             })
             .collect()
@@ -189,7 +189,7 @@ mod tests {
     #[test]
     fn a_null_yanks_as_an_empty_field() {
         let row = Row {
-            values: vec![CqlValue::Int(1), CqlValue::Null],
+            values: vec![Value::Int(1), Value::Null],
         };
 
         assert_eq!(grid_row(&row), "1,");
@@ -198,7 +198,7 @@ mod tests {
     #[test]
     fn a_text_null_yanks_as_the_word() {
         let row = Row {
-            values: vec![CqlValue::Text("null".to_owned())],
+            values: vec![Value::Text("null".to_owned())],
         };
 
         assert_eq!(grid_row(&row), "null");
@@ -210,7 +210,7 @@ mod tests {
         let page = Page {
             columns: vec!["blob".to_owned()],
             rows: vec![Row {
-                values: vec![CqlValue::Text(value.clone())],
+                values: vec![Value::Text(value.clone())],
             }],
             next: None,
         };
@@ -314,12 +314,12 @@ mod tests {
     #[test]
     fn a_cell_yanks_without_quoting() {
         assert_eq!(
-            grid_cell(&CqlValue::Text("Smith, John".to_owned())),
+            grid_cell(&Value::Text("Smith, John".to_owned())),
             Some("Smith, John".to_owned()),
             "a lone value has no delimiter to protect"
         );
         assert_eq!(
-            grid_cell(&CqlValue::Text("he said \"hi\"".to_owned())),
+            grid_cell(&Value::Text("he said \"hi\"".to_owned())),
             Some("he said \"hi\"".to_owned()),
             "nor any quote to double"
         );
@@ -330,7 +330,7 @@ mod tests {
         let long = "x".repeat(usize::from(crate::config::MaxColumnWidth::default().get()) * 2);
 
         assert_eq!(
-            grid_cell(&CqlValue::Text(long.clone())),
+            grid_cell(&Value::Text(long.clone())),
             Some(long),
             "what is drawn is a window, what is yanked is the value"
         );
@@ -339,7 +339,7 @@ mod tests {
     #[test]
     fn a_null_cell_yanks_nothing() {
         assert_eq!(
-            grid_cell(&CqlValue::Null),
+            grid_cell(&Value::Null),
             None,
             "an empty payload would ask the terminal to clear its clipboard"
         );
@@ -349,13 +349,13 @@ mod tests {
     fn a_column_yanks_every_row_in_order_and_no_heading() {
         let rows = vec![
             Row {
-                values: vec![CqlValue::Int(1), CqlValue::Text("alice".to_owned())],
+                values: vec![Value::Int(1), Value::Text("alice".to_owned())],
             },
             Row {
-                values: vec![CqlValue::Int(2), CqlValue::Text("bob".to_owned())],
+                values: vec![Value::Int(2), Value::Text("bob".to_owned())],
             },
             Row {
-                values: vec![CqlValue::Int(3), CqlValue::Text("carol".to_owned())],
+                values: vec![Value::Int(3), Value::Text("carol".to_owned())],
             },
         ];
 
@@ -371,13 +371,13 @@ mod tests {
     fn a_null_in_a_column_yanks_as_an_empty_field() {
         let rows = vec![
             Row {
-                values: vec![CqlValue::Text("alice".to_owned())],
+                values: vec![Value::Text("alice".to_owned())],
             },
             Row {
-                values: vec![CqlValue::Null],
+                values: vec![Value::Null],
             },
             Row {
-                values: vec![CqlValue::Text("carol".to_owned())],
+                values: vec![Value::Text("carol".to_owned())],
             },
         ];
 
@@ -391,7 +391,7 @@ mod tests {
     #[test]
     fn a_column_field_is_escaped_the_way_a_row_field_is() {
         let rows = vec![Row {
-            values: vec![CqlValue::Text("Smith, John".to_owned())],
+            values: vec![Value::Text("Smith, John".to_owned())],
         }];
 
         assert_eq!(
@@ -406,7 +406,7 @@ mod tests {
     fn a_row_too_short_contributes_an_empty_field() {
         let rows = vec![
             Row {
-                values: vec![CqlValue::Text("alice".to_owned())],
+                values: vec![Value::Text("alice".to_owned())],
             },
             Row { values: Vec::new() },
         ];
@@ -428,23 +428,23 @@ mod tests {
         let rows = vec![
             Row {
                 values: vec![
-                    CqlValue::Int(1),
-                    CqlValue::Text("alice".to_owned()),
-                    CqlValue::Text("x".to_owned()),
+                    Value::Int(1),
+                    Value::Text("alice".to_owned()),
+                    Value::Text("x".to_owned()),
                 ],
             },
             Row {
                 values: vec![
-                    CqlValue::Int(2),
-                    CqlValue::Text("bob".to_owned()),
-                    CqlValue::Text("y".to_owned()),
+                    Value::Int(2),
+                    Value::Text("bob".to_owned()),
+                    Value::Text("y".to_owned()),
                 ],
             },
             Row {
                 values: vec![
-                    CqlValue::Int(3),
-                    CqlValue::Text("carol".to_owned()),
-                    CqlValue::Text("z".to_owned()),
+                    Value::Int(3),
+                    Value::Text("carol".to_owned()),
+                    Value::Text("z".to_owned()),
                 ],
             },
         ];
@@ -463,10 +463,10 @@ mod tests {
     fn a_block_spanning_every_column_is_the_rows_themselves() {
         let rows = vec![
             Row {
-                values: vec![CqlValue::Int(1), CqlValue::Null],
+                values: vec![Value::Int(1), Value::Null],
             },
             Row {
-                values: vec![CqlValue::Int(2), CqlValue::Text("bob".to_owned())],
+                values: vec![Value::Int(2), Value::Text("bob".to_owned())],
             },
         ];
 
@@ -484,10 +484,10 @@ mod tests {
     fn a_column_range_yanks_one_line_per_column() {
         let rows = vec![
             Row {
-                values: vec![CqlValue::Int(1), CqlValue::Text("alice".to_owned())],
+                values: vec![Value::Int(1), Value::Text("alice".to_owned())],
             },
             Row {
-                values: vec![CqlValue::Int(2), CqlValue::Text("bob".to_owned())],
+                values: vec![Value::Int(2), Value::Text("bob".to_owned())],
             },
         ];
 
@@ -501,7 +501,7 @@ mod tests {
     #[test]
     fn a_block_ending_past_the_page_yanks_what_is_there() {
         let rows = vec![Row {
-            values: vec![CqlValue::Int(1)],
+            values: vec![Value::Int(1)],
         }];
 
         assert_eq!(

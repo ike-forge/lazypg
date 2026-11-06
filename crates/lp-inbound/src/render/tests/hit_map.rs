@@ -58,8 +58,8 @@ fn the_map_resolves_a_scrolled_tree_to_the_rows_that_were_drawn() {
 fn the_map_resolves_a_scrolled_grid_to_the_rows_that_were_drawn() {
     // Twenty rows in five force a scroll.
     let labels: Vec<String> = (0..20).map(|i| format!("row{i:02}")).collect();
-    let values: Vec<Vec<CqlValue>> = labels.iter().map(|l| vec![text(l)]).collect();
-    let rows: Vec<&[CqlValue]> = values.iter().map(Vec::as_slice).collect();
+    let values: Vec<Vec<Value>> = labels.iter().map(|l| vec![text(l)]).collect();
+    let rows: Vec<&[Value]> = values.iter().map(Vec::as_slice).collect();
     let mut state = showing(page_of(&["id"], &rows));
     select_contents(&mut state, 19, 5);
 

@@ -238,7 +238,7 @@ impl ContentsPanel {
 pub(crate) mod tests_support {
     use super::*;
     use crate::config::MaxColumnWidth;
-    use crate::model::{CqlValue, Page, PagingState, Row};
+    use crate::model::{Page, PagingState, Row, Value};
 
     pub(crate) fn rejection() -> DbError {
         DbError::Invalid("undefined column name total".to_owned())
@@ -249,7 +249,7 @@ pub(crate) mod tests_support {
             columns: vec!["id".to_owned()],
             rows: (0..rows)
                 .map(|i| Row {
-                    values: vec![CqlValue::Int(i)],
+                    values: vec![Value::Int(i)],
                 })
                 .collect(),
             next: None,
@@ -291,14 +291,14 @@ mod tests {
     use super::tests_support::*;
     use super::*;
     use crate::config::MaxColumnWidth;
-    use crate::model::{CqlValue, Page, Row};
+    use crate::model::{Page, Row, Value};
 
     fn wide_page(columns: usize) -> Page {
         Page {
             columns: (0..columns).map(|i| format!("c{i}")).collect(),
             rows: vec![Row {
                 values: (0..columns)
-                    .map(|i| CqlValue::Int(i64::try_from(i).expect("the fixture is small")))
+                    .map(|i| Value::Int(i64::try_from(i).expect("the fixture is small")))
                     .collect(),
             }],
             next: None,
@@ -315,21 +315,18 @@ mod tests {
                 columns: vec!["a".to_owned(), "b".to_owned()],
                 rows: vec![
                     Row {
+                        values: vec![Value::Text("Bob".to_owned()), Value::Text("Ali".to_owned())],
+                    },
+                    Row {
                         values: vec![
-                            CqlValue::Text("Bob".to_owned()),
-                            CqlValue::Text("Ali".to_owned()),
+                            Value::Text("Carl".to_owned()),
+                            Value::Text("Dana".to_owned()),
                         ],
                     },
                     Row {
                         values: vec![
-                            CqlValue::Text("Carl".to_owned()),
-                            CqlValue::Text("Dana".to_owned()),
-                        ],
-                    },
-                    Row {
-                        values: vec![
-                            CqlValue::Text("Eve".to_owned()),
-                            CqlValue::Text("Alison".to_owned()),
+                            Value::Text("Eve".to_owned()),
+                            Value::Text("Alison".to_owned()),
                         ],
                     },
                 ],

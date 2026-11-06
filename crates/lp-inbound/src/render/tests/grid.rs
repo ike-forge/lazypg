@@ -3,8 +3,8 @@ use super::*;
 #[test]
 fn a_stored_offset_decides_which_rows_are_drawn() {
     let labels: Vec<String> = (0..20).map(|i| format!("row{i:02}")).collect();
-    let values: Vec<Vec<CqlValue>> = labels.iter().map(|l| vec![text(l)]).collect();
-    let rows: Vec<&[CqlValue]> = values.iter().map(Vec::as_slice).collect();
+    let values: Vec<Vec<Value>> = labels.iter().map(|l| vec![text(l)]).collect();
+    let rows: Vec<&[Value]> = values.iter().map(Vec::as_slice).collect();
     let mut state = showing(page_of(&["id"], &rows));
     // The selection stays on row 0; only the viewport moves.
     state.contents.scroll.follow(12, 1);
@@ -25,8 +25,8 @@ fn a_stored_offset_decides_which_rows_are_drawn() {
 #[test]
 fn a_selection_scrolled_out_of_view_is_not_highlighted() {
     let labels: Vec<String> = (0..20).map(|i| format!("row{i:02}")).collect();
-    let values: Vec<Vec<CqlValue>> = labels.iter().map(|l| vec![text(l)]).collect();
-    let rows: Vec<&[CqlValue]> = values.iter().map(Vec::as_slice).collect();
+    let values: Vec<Vec<Value>> = labels.iter().map(|l| vec![text(l)]).collect();
+    let rows: Vec<&[Value]> = values.iter().map(Vec::as_slice).collect();
     let mut state = showing(page_of(&["id"], &rows));
     state.contents.mode = SelectionMode::Cell;
     state.contents.scroll.follow(12, 1);
@@ -95,7 +95,7 @@ fn a_tree_selection_scrolled_out_of_view_is_not_highlighted() {
 
 #[test]
 fn a_contents_title_draws_its_table_in_the_schemas_colours() {
-    let state = showing(page_of(&["id"], &[&[CqlValue::Int(1)]]));
+    let state = showing(page_of(&["id"], &[&[Value::Int(1)]]));
     let buffer = draw_state(60, 12, &state);
     let theme = Theme::default();
     let border = row(&buffer, 0);
@@ -115,7 +115,7 @@ fn a_contents_title_draws_its_table_in_the_schemas_colours() {
 
 #[test]
 fn a_titles_table_is_not_bold_under_the_focused_borders_own_weight() {
-    let state = showing(page_of(&["id"], &[&[CqlValue::Int(1)]]));
+    let state = showing(page_of(&["id"], &[&[Value::Int(1)]]));
     let buffer = draw_state(60, 12, &state);
     let border = row(&buffer, 0);
     let bold = |text: &str| {
@@ -142,8 +142,8 @@ fn a_page_is_drawn_as_a_header_over_its_rows() {
     let state = showing(page_of(
         &["id", "email"],
         &[
-            &[CqlValue::Int(1), text("ada@example.com")],
-            &[CqlValue::Int(2), text("bob@example.com")],
+            &[Value::Int(1), text("ada@example.com")],
+            &[Value::Int(2), text("bob@example.com")],
         ],
     ));
 
@@ -221,7 +221,7 @@ fn a_table_too_wide_for_the_panel_drops_columns_rather_than_squeezing_them() {
 fn the_key_columns_are_drawn_in_the_styles_that_carry_the_physical_shape() {
     let mut state = showing(page_of(
         &["id", "email", "note"],
-        &[&[CqlValue::Int(1), text("a"), text("b")]],
+        &[&[Value::Int(1), text("a"), text("b")]],
     ));
     // The crosshair's wash flattens its heading's text under the default theme,
     // so the cursor sits on a third column.
@@ -255,8 +255,8 @@ fn a_matched_cell_reads_apart_from_an_unmatched_one_on_and_off_the_selected_row(
     let mut state = showing(page_of(
         &["id", "email"],
         &[
-            &[CqlValue::Int(1), text("ali@example.com")],
-            &[CqlValue::Int(2), text("alice@example.com")],
+            &[Value::Int(1), text("ali@example.com")],
+            &[Value::Int(2), text("alice@example.com")],
         ],
     ));
     state.contents.cursor.go_to(1, 2);
@@ -301,10 +301,7 @@ fn a_null_is_faint_so_it_reads_apart_from_the_word() {
     // Off the cursor row, so its colours are not flattened.
     let mut state = showing(page_of(
         &["id", "email"],
-        &[
-            &[CqlValue::Int(1), text("a")],
-            &[CqlValue::Int(2), CqlValue::Null],
-        ],
+        &[&[Value::Int(1), text("a")], &[Value::Int(2), Value::Null]],
     ));
     state.contents.cursor.go_to(0, 2);
 
@@ -344,7 +341,7 @@ fn a_matched_null_still_carries_the_match_colour() {
     // modifier to survive `Match`'s `fg`.
     let mut state = showing(page_of(
         &["id", "value", "note"],
-        &[&[CqlValue::Int(1), CqlValue::Null, text("null")]],
+        &[&[Value::Int(1), Value::Null, text("null")]],
     ));
     state.apply_search(Searched::Contents, Search::new("null"));
 
@@ -372,10 +369,7 @@ fn a_matched_null_still_carries_the_match_colour() {
 
 #[test]
 fn the_selected_row_of_the_grid_is_the_one_the_cursor_is_on() {
-    let mut state = showing(page_of(
-        &["id"],
-        &[&[CqlValue::Int(1)], &[CqlValue::Int(2)]],
-    ));
+    let mut state = showing(page_of(&["id"], &[&[Value::Int(1)], &[Value::Int(2)]]));
     state.contents.mode = SelectionMode::Cell;
     state.contents.cursor.down(2);
 
@@ -397,8 +391,8 @@ fn row_mode_lights_the_whole_row_and_no_column() {
     let mut state = showing(page_of(
         &["id", "name"],
         &[
-            &[CqlValue::Int(1), text("alice")],
-            &[CqlValue::Int(2), text("bob")],
+            &[Value::Int(1), text("alice")],
+            &[Value::Int(2), text("bob")],
         ],
     ));
     state.contents.mode = SelectionMode::Row;
@@ -444,8 +438,8 @@ fn column_mode_lights_the_column_and_its_heading() {
     let mut state = showing(page_of(
         &["id", "name"],
         &[
-            &[CqlValue::Int(1), text("alice")],
-            &[CqlValue::Int(2), text("bob")],
+            &[Value::Int(1), text("alice")],
+            &[Value::Int(2), text("bob")],
         ],
     ));
     state.contents.mode = SelectionMode::Column;
@@ -777,8 +771,8 @@ fn column_mode_lights_nothing_when_its_cursor_is_off_the_columns_drawn() {
 #[test]
 fn a_heading_is_unwashed_once_the_crosshair_scrolls_out_of_view() {
     let labels: Vec<String> = (0..20).map(|i| format!("row{i:02}")).collect();
-    let values: Vec<Vec<CqlValue>> = labels.iter().map(|l| vec![text(l)]).collect();
-    let rows: Vec<&[CqlValue]> = values.iter().map(Vec::as_slice).collect();
+    let values: Vec<Vec<Value>> = labels.iter().map(|l| vec![text(l)]).collect();
+    let rows: Vec<&[Value]> = values.iter().map(Vec::as_slice).collect();
     let mut state = showing(page_of(&["id"], &rows));
     state.contents.mode = SelectionMode::Cell;
 
@@ -814,7 +808,7 @@ fn a_heading_is_unwashed_once_the_crosshair_scrolls_out_of_view() {
 #[test]
 fn a_key_columns_heading_keeps_its_colour_under_the_wash() {
     let theme = Theme::of(&ThemeChoice::Ported(Ported::CatppuccinMocha));
-    let mut state = showing(page_of(&["id", "email"], &[&[CqlValue::Int(1), text("a")]]));
+    let mut state = showing(page_of(&["id", "email"], &[&[Value::Int(1), text("a")]]));
     state.contents.mode = SelectionMode::Cell;
 
     let buffer = draw_state_with(60, 12, &state, theme);
@@ -845,8 +839,8 @@ fn the_crosshair_leaves_a_flavours_column_colours_alone() {
     let mut state = showing(page_of(
         &["id", "value"],
         &[
-            &[CqlValue::Int(1), CqlValue::Int(2)],
-            &[CqlValue::Int(3), CqlValue::Null],
+            &[Value::Int(1), Value::Int(2)],
+            &[Value::Int(3), Value::Null],
         ],
     ));
     state.contents.mode = SelectionMode::Cell;
@@ -882,8 +876,8 @@ fn the_crosshair_leaves_a_flavours_column_colours_alone() {
 fn the_grid_scrolls_to_keep_the_selection_on_screen() {
     // Two header rows and four body rows, so twenty rows force a scroll.
     let labels: Vec<String> = (0..20).map(|i| format!("row{i:02}")).collect();
-    let values: Vec<Vec<CqlValue>> = labels.iter().map(|l| vec![text(l)]).collect();
-    let rows: Vec<&[CqlValue]> = values.iter().map(Vec::as_slice).collect();
+    let values: Vec<Vec<Value>> = labels.iter().map(|l| vec![text(l)]).collect();
+    let rows: Vec<&[Value]> = values.iter().map(Vec::as_slice).collect();
     let mut state = showing(page_of(&["id"], &rows));
     select_contents(&mut state, 19, 4);
 

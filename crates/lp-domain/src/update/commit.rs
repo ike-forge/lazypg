@@ -252,7 +252,7 @@ pub(super) fn finish_commit(
             format!("inserted a row into {}", table.qualified()),
         );
 
-        let stmt = Statement::select_all(&table.keyspace, &table.table);
+        let stmt = state.browse(&table);
         return submit_into_contents(state, Subject::Table(table), stmt);
     }
 

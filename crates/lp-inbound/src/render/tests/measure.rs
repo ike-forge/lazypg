@@ -24,7 +24,7 @@ fn the_frame_reports_what_each_panel_can_show() {
 
 #[test]
 fn a_grid_reports_the_rows_it_can_show_rather_than_its_height() {
-    let state = showing(page_of(&["id"], &[&[CqlValue::Int(1)]]));
+    let state = showing(page_of(&["id"], &[&[Value::Int(1)]]));
 
     let geometry = geometry_of(60, 12, &state);
 
@@ -39,7 +39,7 @@ fn a_grid_reports_the_rows_it_can_show_rather_than_its_height() {
 #[test]
 fn the_frame_reports_how_wide_the_contents_panel_is() {
     // 44 of 60 columns, 42 inside.
-    let state = showing(page_of(&["id"], &[&[CqlValue::Int(1)]]));
+    let state = showing(page_of(&["id"], &[&[Value::Int(1)]]));
 
     assert_eq!(geometry_of(60, 12, &state).grid_width(), 42);
     assert_eq!(

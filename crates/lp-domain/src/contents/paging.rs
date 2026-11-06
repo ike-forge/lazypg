@@ -1,6 +1,6 @@
 use crate::bytes::Bytes;
 use crate::config::MaxColumnWidth;
-use crate::model::{CqlValue, Page, PagingState, QueryId, Row, Statement};
+use crate::model::{Page, PagingState, QueryId, Row, Statement, Value};
 
 use super::{ContentsPanel, ContentsState, GridPage, SelectionMode};
 
@@ -76,19 +76,17 @@ impl Bytes {
 }
 
 const ROW_OVERHEAD: u64 = size_of::<Row>() as u64;
-const VALUE_OVERHEAD: u64 = size_of::<CqlValue>() as u64;
+const VALUE_OVERHEAD: u64 = size_of::<Value>() as u64;
 
-fn value_bytes(value: &CqlValue) -> u64 {
+fn value_bytes(value: &Value) -> u64 {
     let payload = match value {
-        CqlValue::Null
-        | CqlValue::Boolean(_)
-        | CqlValue::Int(_)
-        | CqlValue::Float(_)
-        | CqlValue::Timestamp(_) => 0,
-        CqlValue::Text(text) | CqlValue::Uuid(text) => text.len() as u64,
-        CqlValue::Blob(bytes) => bytes.len() as u64,
-        CqlValue::List(values) | CqlValue::Set(values) => values.iter().map(value_bytes).sum(),
-        CqlValue::Map(entries) => entries
+        Value::Null | Value::Boolean(_) | Value::Int(_) | Value::Float(_) | Value::Timestamp(_) => {
+            0
+        }
+        Value::Text(text) | Value::Uuid(text) | Value::Numeric(text) => text.len() as u64,
+        Value::Blob(bytes) => bytes.len() as u64,
+        Value::List(values) | Value::Set(values) => values.iter().map(value_bytes).sum(),
+        Value::Map(entries) => entries
             .iter()
             .map(|(key, value)| key.len() as u64 + value_bytes(value))
             .sum(),
@@ -627,11 +625,11 @@ mod tests {
     fn a_rows_estimate_counts_its_text_and_blobs_recursively() {
         let row = Row {
             values: vec![
-                CqlValue::Text("abcd".to_owned()),
-                CqlValue::Blob(vec![0; 10]),
-                CqlValue::List(vec![CqlValue::Uuid("u".repeat(36))]),
-                CqlValue::Map([("k".to_owned(), CqlValue::Int(1))].into_iter().collect()),
-                CqlValue::Null,
+                Value::Text("abcd".to_owned()),
+                Value::Blob(vec![0; 10]),
+                Value::List(vec![Value::Uuid("u".repeat(36))]),
+                Value::Map([("k".to_owned(), Value::Int(1))].into_iter().collect()),
+                Value::Null,
             ],
         };
 

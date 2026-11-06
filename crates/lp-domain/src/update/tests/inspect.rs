@@ -20,7 +20,7 @@ fn opened_long() -> State {
         Inspected::Cell {
             at: 0,
             column: "c1".to_owned(),
-            value: CqlValue::List((0..38).map(CqlValue::Int).collect()),
+            value: Value::List((0..38).map(Value::Int).collect()),
         },
     )));
     state
@@ -36,7 +36,7 @@ fn enter_in_row_mode_inspects_the_whole_row() {
             number: 3,
             columns: vec!["c0".to_owned(), "c1".to_owned(), "c2".to_owned()],
             values: ["r2c0", "r2c1", "r2c2"]
-                .map(|text| CqlValue::Text(text.to_owned()))
+                .map(|text| Value::Text(text.to_owned()))
                 .to_vec(),
         })
     );
@@ -51,7 +51,7 @@ fn enter_in_cell_mode_inspects_the_cell_under_the_cursor() {
         Some(&Inspected::Cell {
             at: 1,
             column: "c1".to_owned(),
-            value: CqlValue::Text("r2c1".to_owned()),
+            value: Value::Text("r2c1".to_owned()),
         })
     );
 }
@@ -73,7 +73,7 @@ fn enter_inspects_the_row_as_the_grid_draws_it() {
         panic!("the row is up");
     };
     assert_eq!(*number, 1, "the gutter's number, not the cluster's order");
-    assert_eq!(values[0], CqlValue::Text("r2c0".to_owned()));
+    assert_eq!(values[0], Value::Text("r2c0".to_owned()));
 }
 
 #[test]
