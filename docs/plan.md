@@ -110,7 +110,9 @@ Every LazyCassandra module falls into one of three buckets.
    JSON export writes arrays as arrays of their elements' text and embeds
    JSON as the value it is. Composites and ranges stay text. Yanking a row as
    an `INSERT` moves to Phase 2 with the literals it needs.
-7. **Posture.** Statement classification plus server-side read-only session.
+7. **Posture.** *Done* with steps 2 and 4 of Phase 0 and step 4 here:
+   statements classified by every word, and read-only sessions opened with
+   `default_transaction_read_only` (architecture.md §4).
 8. **Release.** README, screenshots, cargo-dist, Homebrew tap.
 
 ## Phase 2 — Change
