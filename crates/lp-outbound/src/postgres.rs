@@ -22,7 +22,7 @@ use lp_domain::posture::Posture;
 use tokio::sync::RwLock;
 use tokio_postgres::config::SslMode as DriverSslMode;
 use tokio_postgres::error::SqlState;
-use tokio_postgres::types::Type;
+use tokio_postgres::types::{Kind, Type};
 use tokio_postgres::{CancelToken, Client, NoTls, SimpleQueryMessage};
 use tokio_postgres_rustls::MakeRustlsConnect;
 
@@ -394,6 +394,8 @@ fn value(text: Option<&str>, ty: Option<&Type>) -> Value {
         Some(&Type::NUMERIC) => Value::Numeric(text.to_owned()),
         Some(&Type::BYTEA) => hex(text).map_or_else(as_text, Value::Blob),
         Some(&Type::UUID) => Value::Uuid(text.to_owned()),
+        Some(&Type::JSON | &Type::JSONB) => Value::Json(text.to_owned()),
+        Some(ty) if matches!(ty.kind(), Kind::Array(_)) => Value::Array(text.to_owned()),
         _ => as_text(),
     }
 }
@@ -573,6 +575,11 @@ mod tests {
             Value::Float(f64::INFINITY)
         );
         assert_eq!(value(Some("{1,2}"), None), Value::Text("{1,2}".to_owned()));
+        assert_eq!(
+            value(Some("{1,2}"), Some(&Type::INT4_ARRAY)),
+            Value::Array("{1,2}".to_owned()),
+            "only the column's type says a brace is an array"
+        );
     }
 
     #[test]

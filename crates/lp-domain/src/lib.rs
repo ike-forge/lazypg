@@ -1,6 +1,7 @@
 //! The pure core: state, the messages that change it, and the effects that
 //! change anything else. No I/O, no runtime, no terminal (architecture.md §2).
 
+pub mod array;
 pub mod bytes;
 pub mod cell;
 pub mod clock;

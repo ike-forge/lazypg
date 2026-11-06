@@ -104,16 +104,21 @@ Every LazyCassandra module falls into one of three buckets.
    kept per connection. The catalog queries are data in
    `lp_domain::introspection`, so `[log] catalog = true` lists each one as
    sent; by default they are one "Reading schema" entry.
-6. **Inspect, yank, export.** Cell inspector (pretty JSON, arrays,
-   composites), yank as value/row/`INSERT`, CSV and JSON export.
+6. **Inspect, yank, export.** *Done.* Arrays (`Value::Array`) and `json`/`jsonb`
+   (`Value::Json`) keep Postgres's text in the grid; the inspector lays an
+   array out an element a line and re-indents JSON without reordering keys;
+   JSON export writes arrays as arrays of their elements' text and embeds
+   JSON as the value it is. Composites and ranges stay text. Yanking a row as
+   an `INSERT` moves to Phase 2 with the literals it needs.
 7. **Posture.** Statement classification plus server-side read-only session.
 8. **Release.** README, screenshots, cargo-dist, Homebrew tap.
 
 ## Phase 2 — Change
 
-Replaces LazyCassandra's CQL write path: literals (`literal.rs`), cell
-parsing (`edit.rs`) and the `BEGIN BATCH` a multi-row delete issues, plus the
-collection and millisecond-timestamp `Value` variants nothing reads any more.
+Replaces LazyCassandra's CQL write path: literals (`literal.rs`) and cell
+parsing (`edit.rs`), plus the collection and millisecond-timestamp `Value`
+variants nothing reads any more. With Postgres literals, yank a row as an
+`INSERT`.
 Cell edit, row insert and delete (primary key required, shown as `UPDATE …
 WHERE pk = …` before commit); explicit transaction mode with a visible open
 transaction; drop and truncate behind typed confirmation.

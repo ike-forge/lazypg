@@ -138,6 +138,12 @@ fn json_value(value: &Value) -> String {
         // limit, and `NaN` and the infinities have no JSON spelling.
         Value::Numeric(text) if text.parse::<f64>().is_ok_and(f64::is_finite) => text.clone(),
         Value::Null | Value::Numeric(_) => "null".to_owned(),
+        // Postgres only prints valid JSON, so it is the value as written.
+        Value::Json(text) => text.clone(),
+        // A JSON array of the elements' text: the element type is not
+        // carried, so a number travels as the string Postgres printed.
+        Value::Array(text) => crate::array::parse(text)
+            .map_or_else(|| json_string(text), |elements| json_array(&elements)),
         // No JSON type: travel as the text the grid draws.
         Value::Text(_)
         | Value::Blob(_)
@@ -147,6 +153,19 @@ fn json_value(value: &Value) -> String {
         | Value::Set(_)
         | Value::Map(_) => json_string(&cell::text(value)),
     }
+}
+
+fn json_array(elements: &[crate::array::Element]) -> String {
+    let items: Vec<String> = elements
+        .iter()
+        .map(|element| match element {
+            crate::array::Element::Null => "null".to_owned(),
+            crate::array::Element::Text(text) => json_string(text),
+            crate::array::Element::Array(nested) => json_array(nested),
+        })
+        .collect();
+
+    format!("[{}]", items.join(","))
 }
 
 /// Control characters below 0x20 take the `\uXXXX` form.
@@ -1188,6 +1207,22 @@ mod tests {
             Fetched::of_drawn(&more, 200, 200),
             Fetched::Some(200),
             "and a result with pages left still is"
+        );
+    }
+
+    #[test]
+    fn an_array_exports_as_a_json_array_of_its_elements_text() {
+        assert_eq!(
+            json_value(&Value::Array(r#"{{1,NULL},{"x \"y\"",z}}"#.to_owned())),
+            r#"[["1",null],["x \"y\"","z"]]"#
+        );
+    }
+
+    #[test]
+    fn json_exports_as_the_value_it_holds_not_a_string_of_it() {
+        assert_eq!(
+            json_value(&Value::Json(r#"{"a": 1}"#.to_owned())),
+            r#"{"a": 1}"#
         );
     }
 }

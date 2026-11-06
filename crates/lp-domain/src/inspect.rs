@@ -441,7 +441,9 @@ impl Inspector {
 #[must_use]
 pub fn lines(value: &Value) -> Vec<String> {
     let laid = match value {
-        Value::Text(text) => json(text).unwrap_or_else(|| vec![text.clone()]),
+        Value::Text(text) | Value::Json(text) => json(text).unwrap_or_else(|| vec![text.clone()]),
+        Value::Array(text) => crate::array::parse(text)
+            .map_or_else(|| vec![text.clone()], |elements| array_lines(&elements)),
         other => nested(other),
     };
 
@@ -457,6 +459,33 @@ fn nested(value: &Value) -> Vec<String> {
         Value::Map(entries) => bracketed(keyed(entries), '{', '}'),
         other => vec![cell::text(other)],
     }
+}
+
+/// Braced, as Postgres writes an array; nulls bare and text unquoted, as the
+/// grid draws a cell.
+fn array_lines(elements: &[crate::array::Element]) -> Vec<String> {
+    use crate::array::Element;
+
+    if elements.is_empty() {
+        return vec!["{}".to_owned()];
+    }
+
+    let mut lines = vec!["{".to_owned()];
+    for (at, element) in elements.iter().enumerate() {
+        let mut element = match element {
+            Element::Null => vec!["null".to_owned()],
+            Element::Text(text) => vec![text.clone()],
+            Element::Array(nested) => array_lines(nested),
+        };
+        if at + 1 < elements.len()
+            && let Some(last) = element.last_mut()
+        {
+            last.push(',');
+        }
+        lines.extend(element.into_iter().map(|line| format!("  {line}")));
+    }
+    lines.push("}".to_owned());
+    lines
 }
 
 fn keyed(
@@ -792,5 +821,41 @@ mod tests {
             },
         );
         assert_eq!(row.yank().as_deref(), Some(r#"1,"a,b""#));
+    }
+
+    #[test]
+    fn an_array_is_laid_out_an_element_a_line_nested_arrays_indented() {
+        assert_eq!(
+            lines(&Value::Array(r#"{{1,2},{NULL,"a, b"}}"#.to_owned())),
+            [
+                "{",
+                "  {",
+                "    1,",
+                "    2",
+                "  },",
+                "  {",
+                "    null,",
+                "    a, b",
+                "  }",
+                "}"
+            ]
+        );
+        assert_eq!(lines(&Value::Array("{}".to_owned())), ["{}"]);
+    }
+
+    #[test]
+    fn jsonb_as_postgres_prints_it_is_laid_out_without_reordering() {
+        assert_eq!(
+            lines(&Value::Text(r#"{"b": [1, 2], "a": null}"#.to_owned())),
+            [
+                "{",
+                r#"  "b": ["#,
+                "    1,",
+                "    2",
+                "  ],",
+                r#"  "a": null"#,
+                "}"
+            ]
+        );
     }
 }

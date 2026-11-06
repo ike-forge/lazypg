@@ -83,7 +83,11 @@ fn value_bytes(value: &Value) -> u64 {
         Value::Null | Value::Boolean(_) | Value::Int(_) | Value::Float(_) | Value::Timestamp(_) => {
             0
         }
-        Value::Text(text) | Value::Uuid(text) | Value::Numeric(text) => text.len() as u64,
+        Value::Text(text)
+        | Value::Uuid(text)
+        | Value::Numeric(text)
+        | Value::Array(text)
+        | Value::Json(text) => text.len() as u64,
         Value::Blob(bytes) => bytes.len() as u64,
         Value::List(values) | Value::Set(values) => values.iter().map(value_bytes).sum(),
         Value::Map(entries) => entries

@@ -285,9 +285,10 @@ async fn every_type_in_the_zoo_reads_back() {
     assert!(matches!(cell(0, "f8"), Value::Float(f) if f.is_nan()));
     assert_eq!(cell(0, "by"), Value::Blob(vec![0xde, 0xad, 0xbe, 0xef]));
     assert!(matches!(cell(0, "u"), Value::Uuid(u) if u.len() == 36));
-    assert_eq!(cell(0, "md"), Value::Text("{{1,2},{3,4}}".to_owned()));
+    assert_eq!(cell(0, "md"), Value::Array("{{1,2},{3,4}}".to_owned()));
+    assert_eq!(cell(0, "arr"), Value::Array("{1,2,3}".to_owned()));
     assert_eq!(cell(0, "p"), Value::Text("(1.5,2.5)".to_owned()));
-    assert_eq!(cell(0, "jb"), Value::Text(r#"{"b": [1, 2]}"#.to_owned()));
+    assert_eq!(cell(0, "jb"), Value::Json(r#"{"b": [1, 2]}"#.to_owned()));
 
     assert_eq!(cell(1, "b"), Value::Null);
     assert_eq!(cell(1, "by"), Value::Blob(Vec::new()));

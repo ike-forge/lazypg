@@ -11,6 +11,13 @@ pub enum Value {
     Float(f64),
     /// `numeric`, as Postgres printed it: arbitrary precision survives.
     Numeric(String),
+    /// Any array, as Postgres printed it (`{1,2}`, `{{a,"b c"},{NULL,d}}`).
+    /// Kept as text so the grid draws Postgres's own form; the inspector and
+    /// export read its structure.
+    Array(String),
+    /// `json` or `jsonb`, as Postgres printed it: export embeds it rather than
+    /// quoting it.
+    Json(String),
     Text(String),
     Blob(Vec<u8>),
     Uuid(String),

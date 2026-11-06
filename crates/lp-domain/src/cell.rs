@@ -19,7 +19,11 @@ pub fn text(value: &Value) -> String {
         Value::Boolean(value) => value.to_string(),
         Value::Int(value) => value.to_string(),
         Value::Float(value) => float(*value),
-        Value::Text(value) | Value::Uuid(value) | Value::Numeric(value) => value.clone(),
+        Value::Text(value)
+        | Value::Uuid(value)
+        | Value::Numeric(value)
+        | Value::Array(value)
+        | Value::Json(value) => value.clone(),
         Value::Blob(bytes) => hex(bytes),
         Value::Timestamp(millis) => millis.to_string(),
         Value::List(values) => sequence(values, '[', ']'),
