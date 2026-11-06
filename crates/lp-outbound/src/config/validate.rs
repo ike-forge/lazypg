@@ -5,10 +5,10 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use lp_domain::config::{
-    Background, ClientIdentity, ClipboardMb, Config, ConnectionConfig, ConnectionName, Credential,
-    CustomTheme, Diagnostic, DriverConfig, ExportConfig, GridConfig, HistoryConfig, HistoryLimit,
-    Icons, MaxColumnWidth, Millis, Mouse, Origin, OutOfRange, PageRows, PageSize, PanelRatios, Rgb,
-    Span, SslMode, Trust,
+    Background, CatalogQueries, ClientIdentity, ClipboardMb, Config, ConnectionConfig,
+    ConnectionName, Credential, CustomTheme, Diagnostic, DriverConfig, ExportConfig, GridConfig,
+    HistoryConfig, HistoryLimit, Icons, LogConfig, MaxColumnWidth, Millis, Mouse, Origin,
+    OutOfRange, PageRows, PageSize, PanelRatios, Rgb, Span, SslMode, Trust,
 };
 use lp_domain::posture::Posture;
 use lp_domain::style::Severity;
@@ -122,6 +122,12 @@ pub(crate) fn validate(merged: Layer) -> (Config, Vec<Diagnostic>) {
         layout: layout(merged.layout, &mut report),
         grid: grid(merged.grid, &mut report),
         history: history(merged.history, &mut report),
+        log: LogConfig {
+            catalog: match merged.log.and_then(|log| log.catalog) {
+                Some(true) => CatalogQueries::Shown,
+                Some(false) | None => CatalogQueries::Hidden,
+            },
+        },
         driver: driver(merged.driver, &mut report),
         export: export(merged.export, &mut report),
         default_connection: default_connection(
@@ -908,5 +914,15 @@ mod tests {
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].severity, Severity::Warning);
         assert!(diagnostics[0].message.contains("`ssl`"));
+    }
+
+    #[test]
+    fn the_catalog_queries_are_logged_only_when_asked_for() {
+        let (unset, _) = config_of(&[""]);
+        let (shown, diagnostics) = config_of(&["[log]\ncatalog = true\n"]);
+
+        assert_eq!(unset.log.catalog, CatalogQueries::Hidden);
+        assert_eq!(shown.log.catalog, CatalogQueries::Shown);
+        assert!(diagnostics.is_empty());
     }
 }

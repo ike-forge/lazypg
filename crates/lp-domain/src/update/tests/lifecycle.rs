@@ -221,6 +221,59 @@ fn a_loaded_schema_reports_what_it_found() {
     assert!(detail.contains("schemas"), "{detail}");
 }
 
+fn loaded_with(catalog: crate::config::CatalogQueries) -> State {
+    let (mut state, conn, _effects) = started_on_default(Vec::new(), Stamp::default());
+    state.config.log.catalog = catalog;
+    update(
+        &mut state,
+        Msg::Connected {
+            conn,
+            posture: Posture::Writable,
+            took: Duration::ZERO,
+        },
+    );
+    update(
+        &mut state,
+        Msg::SchemaLoaded {
+            conn,
+            schema: Box::new(schema_of(&["shop"])),
+            took: Duration::from_millis(112),
+        },
+    );
+    state
+}
+
+#[test]
+fn the_catalog_read_is_one_entry_unless_its_queries_are_asked_for() {
+    let hidden = loaded_with(crate::config::CatalogQueries::Hidden);
+    assert_eq!(
+        hidden.log.entries().count(),
+        2,
+        "connecting, reading schema"
+    );
+
+    let shown = loaded_with(crate::config::CatalogQueries::Shown);
+    let queries: Vec<_> = shown
+        .log
+        .entries()
+        .skip(2)
+        .map(|entry| match entry.outcome() {
+            Outcome::Succeeded { detail, .. } => detail.clone(),
+            other => panic!("{other:?}"),
+        })
+        .collect();
+    assert_eq!(queries.len(), crate::introspection::ALL.len());
+    assert_eq!(queries[0], "catalog: databases");
+    assert!(
+        shown.log.entries().nth(3).is_some_and(|entry| matches!(
+            entry.subject(),
+            crate::log::Subject::Statement(segments)
+                if crate::style::text(segments).contains("pg_namespace")
+        )),
+        "each entry is the query as sent"
+    );
+}
+
 #[test]
 fn a_tick_costs_a_repaint_only_while_something_is_outstanding() {
     let mut idle = State::default();

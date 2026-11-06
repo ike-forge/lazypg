@@ -352,6 +352,20 @@ pub struct GridConfig {
     pub page_rows: PageRows,
 }
 
+/// Whether the Logs tab lists the queries the app itself sends to read the
+/// catalog. Hidden, they are one "Reading schema" entry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CatalogQueries {
+    #[default]
+    Hidden,
+    Shown,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct LogConfig {
+    pub catalog: CatalogQueries,
+}
+
 /// Zero disables the history.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct HistoryConfig {
@@ -394,6 +408,7 @@ pub struct Config {
     pub layout: PanelRatios,
     pub grid: GridConfig,
     pub history: HistoryConfig,
+    pub log: LogConfig,
     pub driver: DriverConfig,
     pub export: ExportConfig,
     pub themes: Vec<CustomTheme>,

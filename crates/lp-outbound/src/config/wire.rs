@@ -56,6 +56,7 @@ pub(crate) struct Layer {
     pub(crate) layout: Option<LayoutLayer>,
     pub(crate) grid: Option<GridLayer>,
     pub(crate) history: Option<HistoryLayer>,
+    pub(crate) log: Option<LogLayer>,
     pub(crate) driver: Option<DriverLayer>,
     pub(crate) export: Option<ExportLayer>,
     #[serde(default)]
@@ -129,6 +130,13 @@ pub(crate) struct LayoutLayer {
 pub(crate) struct GridLayer {
     pub(crate) max_column_width: Option<Located<u16>>,
     pub(crate) page_rows: Option<Located<u32>>,
+    #[serde(flatten)]
+    pub(crate) unknown: Unknown,
+}
+
+#[derive(Debug, Default, Deserialize)]
+pub(crate) struct LogLayer {
+    pub(crate) catalog: Option<bool>,
     #[serde(flatten)]
     pub(crate) unknown: Unknown,
 }

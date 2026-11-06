@@ -100,8 +100,10 @@ Every LazyCassandra module falls into one of three buckets.
    `RETURNING`, and a resolver that reads `JOIN … ON`, aliases, CTEs and
    `EXPLAIN`. Multi-row writes are one `BEGIN; …; COMMIT;`. Still to do:
    completing `alias.` to that table's columns, and a CTE's columns.
-5. **Session log and history.** Every statement LazyPg runs, including its
-   own catalog queries when asked to show them.
+5. **Session log and history.** *Done.* Every statement run is logged and
+   kept per connection. The catalog queries are data in
+   `lp_domain::introspection`, so `[log] catalog = true` lists each one as
+   sent; by default they are one "Reading schema" entry.
 6. **Inspect, yank, export.** Cell inspector (pretty JSON, arrays,
    composites), yank as value/row/`INSERT`, CSV and JSON export.
 7. **Posture.** Statement classification plus server-side read-only session.

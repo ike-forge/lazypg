@@ -90,6 +90,9 @@ fn unknown_keys(layer: &Layer, origin: &Origin) -> Vec<Diagnostic> {
     if let Some(history) = &layer.history {
         report("history.", &history.unknown);
     }
+    if let Some(log) = &layer.log {
+        report("log.", &log.unknown);
+    }
     if let Some(export) = &layer.export {
         report("export.", &export.unknown);
     }

@@ -21,6 +21,7 @@ pub mod grid;
 pub mod health;
 pub mod history;
 pub mod inspect;
+pub mod introspection;
 pub mod jobs;
 pub mod key;
 pub mod line;

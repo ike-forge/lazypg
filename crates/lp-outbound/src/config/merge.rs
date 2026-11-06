@@ -4,7 +4,9 @@
 use lp_domain::config::{Diagnostic, Origin};
 use lp_domain::style::Severity;
 
-use super::wire::{DriverLayer, ExportLayer, GridLayer, HistoryLayer, Layer, LayoutLayer, Located};
+use super::wire::{
+    DriverLayer, ExportLayer, GridLayer, HistoryLayer, Layer, LayoutLayer, Located, LogLayer,
+};
 
 /// Only a name stated twice within one file; `parse` reported the rest.
 pub(crate) fn merge(layers: Vec<Layer>) -> (Layer, Vec<Diagnostic>) {
@@ -21,6 +23,7 @@ pub(crate) fn merge(layers: Vec<Layer>) -> (Layer, Vec<Diagnostic>) {
         merged.grid = merge_grid(merged.grid, layer.grid);
         merged.driver = merge_driver(merged.driver, layer.driver);
         merged.history = merge_history(merged.history, layer.history);
+        merged.log = merge_log(merged.log, layer.log);
         merged.export = merge_export(merged.export, layer.export);
         merged.connections = union(
             merged.connections,
@@ -129,6 +132,17 @@ fn merge_history(lower: Option<HistoryLayer>, upper: Option<HistoryLayer>) -> Op
         (None, upper) => upper,
         (Some(lower), Some(upper)) => Some(HistoryLayer {
             limit: upper.limit.or(lower.limit),
+            unknown: lower.unknown,
+        }),
+    }
+}
+
+fn merge_log(lower: Option<LogLayer>, upper: Option<LogLayer>) -> Option<LogLayer> {
+    match (lower, upper) {
+        (lower, None) => lower,
+        (None, upper) => upper,
+        (Some(lower), Some(upper)) => Some(LogLayer {
+            catalog: upper.catalog.or(lower.catalog),
             unknown: lower.unknown,
         }),
     }

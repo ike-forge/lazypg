@@ -48,6 +48,11 @@
 # limit = 100   # 0..=10000; statements remembered per connection. 0 turns
 #               # the history off: nothing is read, kept or written.
 
+# The Logs tab (5) lists every statement you run. LazyPg's own reads of the
+# catalog are one "Reading schema" entry unless this lists each query.
+# [log]
+# catalog = false
+
 # ── the driver ────────────────────────────────────────────────
 # [driver]
 # page_size          = 5000    # 1..=100000; rows per round trip

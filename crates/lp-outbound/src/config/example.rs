@@ -136,6 +136,8 @@ mod tests {
         "page_rows",
         "[history]",
         "limit",
+        "[log]",
+        "catalog",
         "[driver]",
         "page_size",
         "request_timeout_ms",

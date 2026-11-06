@@ -2,9 +2,9 @@
 
 use std::time::Duration;
 
-use crate::config::{Config, ConnectionConfig};
+use crate::config::{CatalogQueries, Config, ConnectionConfig};
 use crate::connection::{Connection, ConnectionState, SchemaState};
-use crate::log::{Entry, Outcome, Trace};
+use crate::log::{Entry, Outcome, Subject as LogSubject, Trace};
 use crate::model::{Catalog, ConnId, DbError, Key};
 use crate::overlay::{Message, Overlay};
 use crate::posture::Posture;
@@ -348,6 +348,19 @@ pub(super) fn schema_loaded(
         state
             .log
             .complete(Trace::Catalog(conn), Outcome::Succeeded { detail, took });
+        if state.config.log.catalog == CatalogQueries::Shown {
+            // Sent together, so one duration for all of them.
+            for (reads, sql) in crate::introspection::ALL {
+                state.log.push(Entry::new(
+                    state.now,
+                    LogSubject::Statement(crate::sql::issued(sql)),
+                    Outcome::Succeeded {
+                        detail: format!("catalog: {reads}"),
+                        took,
+                    },
+                ));
+            }
+        }
         if let Some((tables, schema)) = state.tables_and_schema() {
             if first {
                 tables.seat_on_current_database(schema);

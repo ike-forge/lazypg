@@ -1,6 +1,10 @@
 # The docker/compose.yaml fixture. See docs/development.md.
 default_connection = "local"
 
+# Show the queries LazyPg reads the catalog with; useful while developing them.
+[log]
+catalog = true
+
 [[connections]]
 name = "local"
 host = "127.0.0.1"
