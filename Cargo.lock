@@ -888,7 +888,7 @@ checksum = "5d15f86d12da44cd8d4ec3c73984537eb7f4cadcb9776a575a0a8a05ca11005c"
 
 [[package]]
 name = "lp-app"
-version = "0.0.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -902,7 +902,7 @@ dependencies = [
 
 [[package]]
 name = "lp-domain"
-version = "0.0.0"
+version = "0.2.0"
 dependencies = [
  "async-trait",
  "serde",
@@ -913,7 +913,7 @@ dependencies = [
 
 [[package]]
 name = "lp-inbound"
-version = "0.0.0"
+version = "0.2.0"
 dependencies = [
  "crossterm",
  "lp-domain",
@@ -923,7 +923,7 @@ dependencies = [
 
 [[package]]
 name = "lp-outbound"
-version = "0.0.0"
+version = "0.2.0"
 dependencies = [
  "async-trait",
  "lp-domain",
