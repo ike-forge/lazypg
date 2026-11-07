@@ -113,7 +113,11 @@ Every LazyCassandra module falls into one of three buckets.
 7. **Posture.** *Done* with steps 2 and 4 of Phase 0 and step 4 here:
    statements classified by every word, and read-only sessions opened with
    `default_transaction_read_only` (architecture.md §4).
-8. **Release.** README, screenshots, cargo-dist, Homebrew tap.
+8. **Release.** *Ready, not yet published.* README with screenshots;
+   cargo-dist builds macOS and Linux archives and a `lazypg` formula for
+   `ike-forge/homebrew-tap`. The `Prepare release` workflow bumps the
+   version, tags `main` once CI is green and dispatches `release.yml`. The
+   first tag waits on the GitHub repository and `HOMEBREW_TAP_TOKEN`.
 
 ## Phase 2 — Change
 
