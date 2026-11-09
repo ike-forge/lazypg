@@ -396,6 +396,21 @@ fn each_wait_belongs_to_the_panel_it_will_fill() {
     );
 }
 
+#[test]
+fn reading_the_catalog_animates_objects_and_not_the_query_log() {
+    let mut state = connected(Posture::ReadOnly);
+    let conn = current_conn(&state);
+    state.log.push(crate::log::Entry::new(
+        Stamp::default(),
+        crate::log::Subject::Sentence("Reading catalog".to_owned()),
+        crate::log::Outcome::Pending {
+            trace: crate::log::Trace::Catalog(conn),
+        },
+    ));
+
+    assert_eq!(working_panels(&state), vec![Panel::Objects]);
+}
+
 fn working_panels(state: &State) -> Vec<Panel> {
     Panel::ALL
         .into_iter()
