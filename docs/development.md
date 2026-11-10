@@ -22,8 +22,8 @@ To exercise cancellation, run `SELECT pg_sleep(30);` and cancel it.
 
 ## Releasing
 
-Run the **Prepare release** workflow on `main` with a version such as
-`0.1.0`. It requires a green CI run on that commit, bumps
+Run the **Prepare release** workflow on `main` (default: next patch; pick
+`minor`/`major` or give an exact version such as `1.0.0-rc.1`). It requires a green CI run on that commit, bumps
 `[workspace.package] version`, tags `v<version>` and dispatches
 `release.yml`, which builds with cargo-dist and pushes `lazypg.rb` to
 `ike-forge/homebrew-tap` using the `HOMEBREW_TAP_TOKEN` secret.
